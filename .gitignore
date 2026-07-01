@@ -1,0 +1,26 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Go
+server/bin/
+server/tmp/
+server/*.exe
+server/*.test
+server/coverage.out
+
+# Node / frontend
+client/node_modules/
+client/dist/
+client/.vite/
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Local generated assets
+server/assets/images/*
+!server/assets/images/.gitkeep
