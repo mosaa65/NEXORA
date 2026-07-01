@@ -24,3 +24,6 @@ client/.vite/
 # Local generated assets
 server/assets/images/*
 !server/assets/images/.gitkeep
+
+# Local toolchains
+.tools/

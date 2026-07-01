@@ -14,6 +14,8 @@ import (
 	"nexora/server/internal/api"
 	"nexora/server/internal/config"
 	"nexora/server/internal/db"
+	"nexora/server/internal/media"
+	"nexora/server/internal/metadata"
 	"nexora/server/internal/scanner"
 	"nexora/server/internal/search"
 )
@@ -42,6 +44,22 @@ func Run() {
 		APIKey: cfg.MeiliAPIKey,
 		Index:  cfg.MeiliIndex,
 	})
+	metadataService := metadata.NewService(
+		metadata.NewTMDBClient(metadata.TMDBConfig{
+			APIKey:       cfg.TMDBAPIKey,
+			BearerToken:  cfg.TMDBBearer,
+			BaseURL:      cfg.TMDBBaseURL,
+			ImageBaseURL: cfg.TMDBImageURL,
+			ImageDir:     cfg.AssetImageDir,
+		}),
+		metadata.NewMALClient(metadata.MALConfig{
+			ClientID:    cfg.MALClientID,
+			AccessToken: cfg.MALAccessToken,
+			BaseURL:     cfg.MALBaseURL,
+			ImageDir:    cfg.AssetImageDir,
+		}),
+	)
+	mediaProcessor := media.NewProcessor(cfg.FFmpegPath, cfg.FFprobePath)
 
 	if len(cfg.MediaRoots) > 0 {
 		eventWatcher := scanner.NewEventWatcher(scannerService, cfg.WatchRecursive)
@@ -66,7 +84,7 @@ func Run() {
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           api.NewServer(cfg, repository, scannerService, searchClient),
+		Handler:           api.NewServer(cfg, repository, scannerService, searchClient, metadataService, mediaProcessor),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

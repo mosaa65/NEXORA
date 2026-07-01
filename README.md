@@ -14,14 +14,14 @@ NEXORA is a LAN-first smart media library manager for internet lounges and gamin
 Prerequisites:
 
 - Go 1.22+
-- PostgreSQL
-- Meilisearch
+- Docker Desktop, or local PostgreSQL and Meilisearch instances
 
 Environment variables can be copied from `.env.example`.
 
 ```powershell
+docker compose up -d postgres meilisearch redis
 cd server
-$env:NEXORA_DATABASE_URL="postgres://nexora:nexora@localhost:5432/nexora?sslmode=disable"
+$env:NEXORA_DATABASE_URL="postgres://nexora:nexora@localhost:15432/nexora?sslmode=disable"
 $env:NEXORA_MEILI_HOST="http://127.0.0.1:7700"
 $env:NEXORA_MEDIA_ROOTS="D:\Media;E:\Media"
 go mod tidy
@@ -35,6 +35,10 @@ go run ./cmd/api
 - `GET /api/scan?root=D:\Media`: scans video files and returns parsed metadata.
 - `POST /api/ingest?root=D:\Media`: scans video files and stores basic media records in PostgreSQL.
 - `POST /api/search/sync?limit=1000`: reads media items from PostgreSQL and indexes them into Meilisearch.
+- `POST /api/metadata/lookup`: fetches metadata from MAL/TMDB and caches images locally when provider keys are configured.
+- `POST /api/media/verify`: verifies a video with FFmpeg.
+- `POST /api/media/thumbnail`: generates a poster thumbnail with FFmpeg.
+- `GET /api/stream?path=D:\Media\Movie.mkv`: streams a local file with HTTP Range Request support.
 
 ## Phase 1 Notes
 
