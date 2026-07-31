@@ -32,6 +32,33 @@ type IngestResult struct {
 	Imported int `json:"imported"`
 }
 
+type CategorySummary struct {
+	ID         int64  `json:"id"`
+	NameAR     string `json:"name_ar"`
+	NameEN     string `json:"name_en"`
+	Slug       string `json:"slug"`
+	MediaCount int    `json:"media_count"`
+	FileCount  int    `json:"file_count"`
+}
+
+type VideoFile struct {
+	ID            int64           `json:"id"`
+	MediaItemID   int64           `json:"media_item_id"`
+	SeasonID      int64           `json:"season_id,omitempty"`
+	EpisodeNumber int             `json:"episode_number,omitempty"`
+	TitleAR       string          `json:"title_ar,omitempty"`
+	TitleEN       string          `json:"title_en,omitempty"`
+	FilePath      string          `json:"-"`
+	FileSize      int64           `json:"file_size"`
+	Duration      int             `json:"duration,omitempty"`
+	Resolution    string          `json:"resolution,omitempty"`
+	VideoCodec    string          `json:"video_codec,omitempty"`
+	AudioTracks   json.RawMessage `json:"audio_tracks,omitempty"`
+	Subtitles     json.RawMessage `json:"subtitles,omitempty"`
+	StreamURL     string          `json:"stream_url,omitempty"`
+	CreatedAt     time.Time       `json:"created_at"`
+}
+
 func (r *Repository) Health(ctx context.Context) (Health, error) {
 	if err := r.db.PingContext(ctx); err != nil {
 		return Health{CheckedAt: time.Now().UTC()}, err
@@ -139,6 +166,110 @@ func (r *Repository) ListSearchDocuments(ctx context.Context, limit int) ([]sear
 	}
 
 	return documents, nil
+}
+
+func (r *Repository) ListVideoFiles(ctx context.Context, mediaItemID int64) ([]VideoFile, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT
+			id,
+			media_item_id,
+			COALESCE(season_id, 0),
+			COALESCE(episode_number, 0),
+			COALESCE(title_ar, ''),
+			COALESCE(title_en, ''),
+			file_path,
+			file_size,
+			COALESCE(duration, 0),
+			COALESCE(resolution, ''),
+			COALESCE(video_codec, ''),
+			COALESCE(audio_tracks, '[]'::jsonb)::text,
+			COALESCE(subtitles, '[]'::jsonb)::text,
+			created_at
+		FROM video_files
+		WHERE media_item_id = $1
+		ORDER BY COALESCE(season_id, 0), COALESCE(episode_number, 0), title_en, file_path;
+	`, mediaItemID)
+	if err != nil {
+		return nil, fmt.Errorf("query video files: %w", err)
+	}
+	defer rows.Close()
+
+	files := make([]VideoFile, 0)
+	for rows.Next() {
+		var file VideoFile
+		var audioTracks, subtitles string
+		if err := rows.Scan(
+			&file.ID,
+			&file.MediaItemID,
+			&file.SeasonID,
+			&file.EpisodeNumber,
+			&file.TitleAR,
+			&file.TitleEN,
+			&file.FilePath,
+			&file.FileSize,
+			&file.Duration,
+			&file.Resolution,
+			&file.VideoCodec,
+			&audioTracks,
+			&subtitles,
+			&file.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan video file: %w", err)
+		}
+		file.AudioTracks = json.RawMessage(audioTracks)
+		file.Subtitles = json.RawMessage(subtitles)
+		files = append(files, file)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate video files: %w", err)
+	}
+
+	return files, nil
+}
+
+func (r *Repository) GetVideoFilePath(ctx context.Context, id int64) (string, error) {
+	var path string
+	if err := r.db.QueryRowContext(ctx, `SELECT file_path FROM video_files WHERE id = $1`, id).Scan(&path); err != nil {
+		return "", fmt.Errorf("get video file path: %w", err)
+	}
+	return path, nil
+}
+
+func (r *Repository) ListCategories(ctx context.Context) ([]CategorySummary, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT
+			c.id,
+			c.name_ar,
+			c.name_en,
+			c.slug,
+			COUNT(DISTINCT mi.id) AS media_count,
+			COUNT(vf.id) AS file_count
+		FROM categories c
+		LEFT JOIN media_items mi ON mi.category_id = c.id
+		LEFT JOIN video_files vf ON vf.media_item_id = mi.id
+		GROUP BY c.id
+		ORDER BY c.name_en;
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("query categories: %w", err)
+	}
+	defer rows.Close()
+
+	categories := make([]CategorySummary, 0)
+	for rows.Next() {
+		var category CategorySummary
+		var mediaCount, fileCount int64
+		if err := rows.Scan(&category.ID, &category.NameAR, &category.NameEN, &category.Slug, &mediaCount, &fileCount); err != nil {
+			return nil, fmt.Errorf("scan category: %w", err)
+		}
+		category.MediaCount = int(mediaCount)
+		category.FileCount = int(fileCount)
+		categories = append(categories, category)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate categories: %w", err)
+	}
+	return categories, nil
 }
 
 func nullableString(value sql.NullString) string {

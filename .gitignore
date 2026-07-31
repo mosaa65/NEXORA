@@ -15,6 +15,10 @@ server/coverage.out
 client/node_modules/
 client/dist/
 client/.vite/
+client/tmp/
+
+# Playwright MCP traces
+.playwright-mcp/
 
 # Local environment
 .env
@@ -27,3 +31,4 @@ server/assets/images/*
 
 # Local toolchains
 .tools/
+.codebuddy

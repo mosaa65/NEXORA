@@ -2,8 +2,9 @@ package api
 
 import (
 	"context"
-	"errors"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"io"
 	"mime"
 	"net/http"
@@ -17,6 +18,7 @@ import (
 	"nexora/server/internal/config"
 	"nexora/server/internal/db"
 	"nexora/server/internal/media"
+	"nexora/server/internal/migration"
 	"nexora/server/internal/metadata"
 	"nexora/server/internal/scanner"
 	"nexora/server/internal/search"
@@ -25,11 +27,15 @@ import (
 type repository interface {
 	Health(ctx context.Context) (db.Health, error)
 	IngestScannedFiles(ctx context.Context, files []scanner.FileInfo) (db.IngestResult, error)
+	ListCategories(ctx context.Context) ([]db.CategorySummary, error)
 	ListSearchDocuments(ctx context.Context, limit int) ([]search.MediaDocument, error)
+	ListVideoFiles(ctx context.Context, mediaItemID int64) ([]db.VideoFile, error)
+	GetVideoFilePath(ctx context.Context, id int64) (string, error)
 }
 
 type searchClient interface {
 	IndexDocuments(ctx context.Context, documents []search.MediaDocument) (search.SyncResult, error)
+	SearchDocuments(ctx context.Context, query string, limit int, filter string) (search.SearchResult, error)
 }
 
 type metadataService interface {
@@ -41,6 +47,11 @@ type mediaProcessor interface {
 	GenerateThumbnail(ctx context.Context, inputPath, outputPath string, at time.Duration) (string, error)
 }
 
+type migrationService interface {
+	Preview(ctx context.Context, root string) (migration.PreviewResult, error)
+	Copy(ctx context.Context, request migration.CopyRequest) (migration.CopyResult, error)
+}
+
 type Server struct {
 	config     config.Config
 	repository repository
@@ -48,6 +59,7 @@ type Server struct {
 	search     searchClient
 	metadata   metadataService
 	processor  mediaProcessor
+	migration  migrationService
 	mux        *http.ServeMux
 }
 
@@ -58,6 +70,7 @@ func NewServer(
 	searchClient searchClient,
 	metadataService metadataService,
 	processor mediaProcessor,
+	migrationService migrationService,
 ) http.Handler {
 	server := &Server{
 		config:     config,
@@ -66,6 +79,7 @@ func NewServer(
 		search:     searchClient,
 		metadata:   metadataService,
 		processor:  processor,
+		migration:  migrationService,
 		mux:        http.NewServeMux(),
 	}
 	server.routes()
@@ -74,13 +88,20 @@ func NewServer(
 
 func (s *Server) routes() {
 	s.mux.HandleFunc("GET /health", s.handleHealth)
+	s.mux.HandleFunc("GET /api/health", s.handleHealth)
+	s.mux.HandleFunc("GET /api/categories", s.handleCategories)
+	s.mux.HandleFunc("GET /api/search", s.handleSearch)
+	s.mux.HandleFunc("GET /api/media/{id}/files", s.handleMediaFiles)
 	s.mux.HandleFunc("GET /api/scan", s.handleScan)
 	s.mux.HandleFunc("POST /api/ingest", s.handleIngest)
 	s.mux.HandleFunc("POST /api/search/sync", s.handleSearchSync)
 	s.mux.HandleFunc("POST /api/metadata/lookup", s.handleMetadataLookup)
 	s.mux.HandleFunc("POST /api/media/verify", s.handleMediaVerify)
 	s.mux.HandleFunc("POST /api/media/thumbnail", s.handleThumbnail)
+	s.mux.HandleFunc("POST /api/migration/preview", s.handleMigrationPreview)
+	s.mux.HandleFunc("POST /api/migration/copy", s.handleMigrationCopy)
 	s.mux.HandleFunc("GET /api/stream", s.handleStream)
+	s.mux.HandleFunc("GET /api/stream/file/{id}", s.handleStreamByID)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -118,6 +139,70 @@ func (s *Server) handleScan(w http.ResponseWriter, r *http.Request) {
 		"roots": roots,
 		"count": len(files),
 		"files": files,
+	})
+}
+
+func (s *Server) handleCategories(w http.ResponseWriter, r *http.Request) {
+	categories, err := s.repository.ListCategories(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"count":      len(categories),
+		"categories": categories,
+	})
+}
+
+func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	limit := 24
+	if rawLimit := r.URL.Query().Get("limit"); rawLimit != "" {
+		parsed, err := strconv.Atoi(rawLimit)
+		if err != nil || parsed <= 0 {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "limit must be a positive integer"})
+			return
+		}
+		limit = parsed
+	}
+
+	filterParts := make([]string, 0, 2)
+	if rawType := strings.TrimSpace(r.URL.Query().Get("type")); rawType != "" {
+		filterParts = append(filterParts, `type = "`+escapeFilterValue(rawType)+`"`)
+	}
+	if rawCategory := strings.TrimSpace(r.URL.Query().Get("category")); rawCategory != "" {
+		filterParts = append(filterParts, `category_slug = "`+escapeFilterValue(rawCategory)+`"`)
+	}
+
+	result, err := s.search.SearchDocuments(r.Context(), query, limit, strings.Join(filterParts, " AND "))
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]any{"error": err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) handleMediaFiles(w http.ResponseWriter, r *http.Request) {
+	mediaID, ok := parsePositiveID(r.PathValue("id"))
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "media id must be a positive integer"})
+		return
+	}
+
+	files, err := s.repository.ListVideoFiles(r.Context(), mediaID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+	for index := range files {
+		files[index].StreamURL = "/api/stream/file/" + strconv.FormatInt(files[index].ID, 10)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"media_id": mediaID,
+		"count":    len(files),
+		"files":    files,
 	})
 }
 
@@ -245,8 +330,64 @@ func (s *Server) handleThumbnail(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]any{"thumbnailPath": outputPath})
 }
 
+func (s *Server) handleMigrationPreview(w http.ResponseWriter, r *http.Request) {
+	var request migration.PreviewRequest
+	if err := decodeJSON(r, &request); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+		return
+	}
+	if strings.TrimSpace(request.Root) == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "root is required"})
+		return
+	}
+	result, err := s.migration.Preview(r.Context(), request.Root)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) handleMigrationCopy(w http.ResponseWriter, r *http.Request) {
+	var request migration.CopyRequest
+	if err := decodeJSON(r, &request); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+		return
+	}
+	result, err := s.migration.Copy(r.Context(), request)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusCreated, result)
+}
+
 func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Query().Get("path")
+	s.serveMediaPath(w, r, path)
+}
+
+func (s *Server) handleStreamByID(w http.ResponseWriter, r *http.Request) {
+	fileID, ok := parsePositiveID(r.PathValue("id"))
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "file id must be a positive integer"})
+		return
+	}
+
+	path, err := s.repository.GetVideoFilePath(r.Context(), fileID)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, sql.ErrNoRows) {
+			status = http.StatusNotFound
+		}
+		writeJSON(w, status, map[string]any{"error": err.Error()})
+		return
+	}
+
+	s.serveMediaPath(w, r, path)
+}
+
+func (s *Server) serveMediaPath(w http.ResponseWriter, r *http.Request, path string) {
 	if !s.mediaPathAllowed(path) {
 		writeJSON(w, http.StatusForbidden, map[string]any{"error": "media path is outside configured roots"})
 		return
@@ -341,4 +482,13 @@ func safeFileName(input string) string {
 		return "thumbnail"
 	}
 	return input
+}
+
+func escapeFilterValue(input string) string {
+	return strings.ReplaceAll(input, `"`, `\"`)
+}
+
+func parsePositiveID(raw string) (int64, bool) {
+	id, err := strconv.ParseInt(raw, 10, 64)
+	return id, err == nil && id > 0
 }

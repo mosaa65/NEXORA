@@ -1,13 +1,162 @@
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700;800&family=Cairo:wght@400;500;600;700;800;900&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
   color-scheme: dark;
-  background: #080a12;
+  background:
+    radial-gradient(circle at top left, rgba(90, 50, 244, 0.16), transparent 26%),
+    radial-gradient(circle at top right, rgba(25, 183, 255, 0.12), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(236, 72, 153, 0.08), transparent 24%),
+    linear-gradient(180deg, #02030a 0%, #070912 48%, #05060b 100%);
+  --surface: rgba(10, 12, 22, 0.74);
+  --surface-border: rgba(255, 255, 255, 0.1);
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
 }
 
 body {
   margin: 0;
   min-width: 320px;
+  font-family: "Cairo", "Space Grotesk", sans-serif;
+  background:
+    radial-gradient(circle at top left, rgba(90, 50, 244, 0.18), transparent 24%),
+    radial-gradient(circle at bottom right, rgba(25, 183, 255, 0.13), transparent 28%),
+    radial-gradient(circle at center, rgba(255, 255, 255, 0.03), transparent 55%),
+    linear-gradient(180deg, #02030a 0%, #070912 52%, #05060b 100%);
+  color: rgba(255, 255, 255, 0.96);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "kern" 1, "ss01" 1;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 68px 68px;
+  mask-image: radial-gradient(circle at center, black 40%, transparent 100%);
+  opacity: 0.14;
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 20% 10%, rgba(255, 255, 255, 0.06), transparent 14%),
+    radial-gradient(circle at 80% 20%, rgba(25, 183, 255, 0.05), transparent 18%),
+    radial-gradient(circle at 50% 90%, rgba(90, 50, 244, 0.05), transparent 20%);
+  mix-blend-mode: screen;
+  opacity: 0.7;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+::selection {
+  background: rgba(25, 183, 255, 0.3);
+  color: white;
+}
+
+.glass-panel {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--surface-border);
+  border-radius: 2rem;
+  background: linear-gradient(180deg, rgba(12, 14, 24, 0.82), rgba(8, 10, 18, 0.7));
+  backdrop-filter: blur(24px);
+  box-shadow:
+    0 24px 80px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.glass-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 40%);
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.glass-panel > * {
+  position: relative;
+  z-index: 1;
+}
+
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  background: linear-gradient(180deg, rgba(25, 183, 255, 0.72), rgba(90, 50, 244, 0.72));
+  background-clip: padding-box;
+  border-radius: 999px;
+}
+
+input::placeholder {
+  color: rgba(255, 255, 255, 0.34);
+}
+
+button {
+  -webkit-tap-highlight-color: transparent;
+  font-family: inherit;
+}
+
+input,
+textarea,
+select {
+  font-family: inherit;
+}
+
+.nexora-player {
+  --plyr-color-main: #19b7ff;
+  --plyr-video-background: #000;
+  --plyr-control-radius: 8px;
+  --plyr-font-family: "Cairo", "Space Grotesk", sans-serif;
+}
+
+.nexora-player .plyr {
+  min-height: 100%;
+  background: #000;
+}
+
+.nexora-player .plyr--video {
+  border-radius: 1.5rem;
+}
+
+.nexora-player .plyr__control--overlaid {
+  background: rgba(25, 183, 255, 0.9);
+  box-shadow: 0 0 30px rgba(25, 183, 255, 0.34);
+}
+
+.nexora-player .plyr__controls {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(5, 7, 16, 0.1), rgba(5, 7, 16, 0.92));
 }

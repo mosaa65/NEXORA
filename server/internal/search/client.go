@@ -48,6 +48,15 @@ type SyncResult struct {
 	TaskUID string `json:"taskUid,omitempty"`
 }
 
+type SearchResult struct {
+	Query              string         `json:"query"`
+	EstimatedTotalHits  int            `json:"estimatedTotalHits"`
+	Hits               []MediaDocument `json:"hits"`
+	ProcessingTimeMS    int            `json:"processingTimeMs"`
+	Limit              int            `json:"limit"`
+	Filter             string         `json:"filter,omitempty"`
+}
+
 func NewClient(config Config) *Client {
 	host := strings.TrimRight(config.Host, "/")
 	if host == "" {
@@ -127,6 +136,54 @@ func (c *Client) IndexDocuments(ctx context.Context, documents []MediaDocument) 
 	}
 
 	return SyncResult{Indexed: len(documents), TaskUID: taskUID}, nil
+}
+
+func (c *Client) SearchDocuments(ctx context.Context, query string, limit int, filter string) (SearchResult, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 24
+	}
+
+	payload := map[string]any{
+		"q":                   query,
+		"limit":               limit,
+		"attributesToRetrieve": []string{"id", "title_ar", "title_en", "type", "plot_ar", "plot_en", "release_year", "rating", "poster_path", "banner_path", "genres", "category_slug", "category_ar", "category_en", "file_count"},
+	}
+	if strings.TrimSpace(filter) != "" {
+		payload["filter"] = filter
+	}
+
+	response, err := c.doJSON(ctx, http.MethodPost, "/indexes/"+url.PathEscape(c.index)+"/search", payload)
+	if err != nil {
+		return SearchResult{}, err
+	}
+	defer response.Body.Close()
+
+	body, err := io.ReadAll(io.LimitReader(response.Body, 1<<20))
+	if err != nil {
+		return SearchResult{}, err
+	}
+	if response.StatusCode >= 300 {
+		return SearchResult{}, fmt.Errorf("search meilisearch documents: status %d: %s", response.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	var raw struct {
+		Query             string         `json:"query"`
+		EstimatedTotalHits int            `json:"estimatedTotalHits"`
+		Hits              []MediaDocument `json:"hits"`
+		ProcessingTimeMS   int            `json:"processingTimeMs"`
+	}
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return SearchResult{}, err
+	}
+
+	return SearchResult{
+		Query:             raw.Query,
+		EstimatedTotalHits: raw.EstimatedTotalHits,
+		Hits:              raw.Hits,
+		ProcessingTimeMS:  raw.ProcessingTimeMS,
+		Limit:             limit,
+		Filter:            filter,
+	}, nil
 }
 
 func (c *Client) configureSettings(ctx context.Context) error {
