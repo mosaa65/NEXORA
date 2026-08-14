@@ -1,107 +1,84 @@
 import Icon from "./Icon.jsx";
 import { navigationItems } from "../data/library.js";
 
-export default function Sidebar({ activeView, categories, health, onNavigate, onOpenCategory }) {
+export default function Sidebar({ isOpen, onClose, activeView, onNavigate }) {
   return (
-    <aside className="flex h-full flex-col gap-6 rounded-[2rem] border border-white/10 bg-white/[0.06] p-4 shadow-panel backdrop-blur-2xl">
-      <div className="rounded-[1.5rem] border border-white/10 bg-[linear-gradient(145deg,rgba(90,50,244,0.36),rgba(25,183,255,0.12),rgba(255,255,255,0.03))] p-4">
-        <div className="flex items-center gap-3">
-          <div className="grid h-11 w-11 place-items-center rounded-2xl bg-black/35 text-electric shadow-neon">
-            <Icon name="spark" className="h-5 w-5" />
-          </div>
-          <div className="text-right">
-            <p className="text-xs uppercase tracking-[0.45em] text-white/55">NEXORA</p>
-            <p className="mt-1 text-lg font-bold">لوحة الوسائط</p>
-          </div>
-        </div>
-        <p className="mt-4 max-w-xs text-sm leading-6 text-white/70">
-          غرفة تحكم فخمة لشبكة وسائط محلية، مصممة للسرعة والهدوء البصري وسهولة التشغيل.
-        </p>
-      </div>
+    <>
+      {/* Mobile Backdrop */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/80 backdrop-blur-md lg:hidden"
+          onClick={onClose}
+        />
+      )}
 
-      <nav className="space-y-2">
-        {navigationItems.map((item) => {
-          const active = activeView === item.id;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => onNavigate(item.id)}
-              className={`flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left transition ${
-                active
-                  ? "border-electric/30 bg-electric/12 text-white shadow-neon"
-                  : "border-white/[0.08] bg-white/[0.03] text-white/72 hover:border-white/[0.15] hover:bg-white/[0.06]"
-              }`}
-            >
-              <Icon name={item.icon} className="h-5 w-5 shrink-0" />
-              <span className="flex-1 text-right font-medium">{item.label}</span>
-            </button>
-          );
-        })}
-      </nav>
-
-      <div className="rounded-[1.5rem] border border-white/10 bg-black/20 p-4">
-        <div className="flex items-center justify-between">
-          <div className="text-right">
-            <p className="text-xs font-semibold text-white/40">الحالة</p>
-            <p className="mt-2 text-base font-semibold">الخادم متصل</p>
-          </div>
-          <div className={`h-3 w-3 rounded-full ${health?.ok ? "bg-emerald-400 shadow-[0_0_18px_rgba(52,211,153,.75)]" : "bg-rose-400"}`} />
-        </div>
-        <div className="mt-3 space-y-2 text-sm text-white/65">
-          <div className="flex items-center justify-between">
-            <span>قاعدة البيانات</span>
-            <span className={health?.database?.databaseOk ? "text-emerald-300" : "text-rose-300"}>
-              {health?.database?.databaseOk ? "سليمة" : "بانتظار الاتصال"}
-            </span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span>المفهرس</span>
-            <span className="text-cyan-300">متزامن</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
-        <div className="flex items-center justify-between">
-          <div className="text-right">
-            <p className="text-xs font-semibold text-white/40">الأقسام</p>
-            <p className="mt-2 text-base font-semibold">{categories.length} قسم</p>
-          </div>
-          <Icon name="library" className="h-5 w-5 text-electric" />
-        </div>
-        <div className="mt-4 space-y-2">
-          {categories.slice(0, 4).map((category) => (
-            <button
-              key={category.slug}
-              type="button"
-              onClick={() => onOpenCategory(category.slug)}
-              className="flex w-full items-center justify-between rounded-2xl border border-white/[0.08] bg-black/20 px-4 py-3 text-left transition hover:border-electric/20 hover:bg-white/[0.05]"
-            >
-              <div className="text-right">
-                <p className="font-medium text-white">{category.titleAr}</p>
-                <p className="text-xs text-white/45">{category.titleEn}</p>
+      <aside
+        className={`fixed inset-y-0 right-0 z-50 flex w-72 flex-col justify-between border-l border-white/10 bg-[#0A0914] p-5 shadow-2xl transition-transform duration-300 lg:static lg:z-0 lg:w-64 xl:w-72 lg:translate-x-0 lg:border-l-0 lg:bg-[#0A0914]/90 lg:rounded-[2rem] lg:border lg:border-white/10 lg:shadow-panel ${
+          isOpen ? "translate-x-0" : "translate-x-full"
+        }`}
+      >
+        <div>
+          {/* Brand Logo Section */}
+          <div className="mb-6 flex items-center justify-between border-b border-white/10 pb-5 text-right">
+            <div className="flex items-center gap-3">
+              {/* Triangular Logo Emblem */}
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-fuchsia-600 to-purple-800 text-white shadow-lg shadow-purple-900/50">
+                <svg className="h-6 w-6 stroke-current" fill="none" viewBox="0 0 24 24" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 3L2 21h20L12 3z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9l-4 7h8l-4-7z" />
+                </svg>
               </div>
-              <div className="text-right">
-                <p className="text-sm font-semibold text-white">{category.count}</p>
-                <p className="text-[11px] font-semibold text-white/35">عنصر</p>
+              <div>
+                <h1 className="text-xl font-black text-white tracking-wide">مكتبتي</h1>
+                <p className="text-[11px] font-bold text-white/40">نظام إدارة الوسائط</p>
               </div>
-            </button>
-          ))}
-        </div>
-      </div>
+            </div>
 
-      <div className="mt-auto rounded-[1.5rem] border border-white/10 bg-[linear-gradient(145deg,rgba(10,12,22,0.9),rgba(90,50,244,0.12))] p-4">
-        <div className="flex items-center gap-3">
-          <div className="grid h-12 w-12 place-items-center rounded-2xl border border-white/10 bg-black/35 text-sm font-black text-electric shadow-neon">
-            MO
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl border border-white/10 p-2 text-white/60 hover:text-white lg:hidden"
+            >
+              ✕
+            </button>
           </div>
-          <div className="text-right">
-            <p className="text-sm font-semibold text-white">مشرف النظام</p>
-            <p className="text-xs text-white/50">إدارة المحتوى والنسخ والبحث</p>
+
+          {/* Navigation Links with REAL SVG Icons */}
+          <nav className="space-y-1.5">
+            {navigationItems.map((item) => {
+              const active = activeView === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => onNavigate(item.id)}
+                  className={`flex w-full items-center gap-3.5 rounded-2xl px-4 py-3 text-right font-bold transition duration-200 ${
+                    active
+                      ? "bg-gradient-to-r from-purple-800 via-fuchsia-700 to-purple-900 text-white shadow-lg shadow-purple-900/50 border border-fuchsia-500/30"
+                      : "text-white/65 hover:bg-white/[0.06] hover:text-white"
+                  }`}
+                >
+                  <Icon name={item.icon} className={`h-4 w-4 shrink-0 ${active ? "text-white" : "text-white/50"}`} />
+                  <span className="flex-1 text-sm">{item.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+
+        {/* User Profile Badge at Bottom */}
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-right">
+          <div className="flex items-center gap-3">
+            <div className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-tr from-purple-600 to-fuchsia-500 text-xs font-black text-white">
+              MO
+            </div>
+            <div>
+              <p className="text-xs font-bold text-white">مكتبة الاستراحة</p>
+              <p className="text-[10px] text-white/40">بث شبكي فوري LAN 100+ TB</p>
+            </div>
           </div>
         </div>
-      </div>
-    </aside>
+      </aside>
+    </>
   );
 }

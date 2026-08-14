@@ -1,78 +1,120 @@
+import { useState } from "react";
 import Icon from "./Icon.jsx";
 
 export default function TopBar({
   searchQuery,
   onSearchChange,
-  onSyncIndex,
-  onOpenView,
-  syncStatus,
-  categoriesCount,
-  isSearching,
-  backendState
+  searchResults = [],
+  onOpenMedia,
+  onQuickPlay,
+  onToggleSidebar
 }) {
-  const stateTone =
-    backendState === "online"
-      ? "bg-emerald-400/10 text-emerald-200"
-      : backendState === "offline"
-        ? "bg-rose-400/10 text-rose-200"
-        : "bg-white/10 text-white/70";
-  const statusLabel =
-    backendState === "online"
-      ? "متصل بخادم NEXORA"
-      : backendState === "offline"
-        ? "الخادم غير متاح"
-        : "جارٍ فحص الخادم...";
+  const [showSearchDropdown, setShowSearchDropdown] = useState(false);
 
   return (
-    <header className="flex flex-col gap-4 rounded-[2rem] border border-white/10 bg-white/5 p-4 shadow-panel backdrop-blur-2xl xl:flex-row xl:items-center xl:justify-between">
-      <div className="flex items-center gap-4">
-        <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${stateTone}`}>
-          <Icon name="server" className="h-6 w-6" />
-        </div>
-        <div className="text-right">
-          <p className="text-xs font-semibold text-white/45">طبقة التحكم</p>
-          <h2 className="mt-1 text-xl font-semibold text-white">
-            {statusLabel}
-          </h2>
-        </div>
-      </div>
+    <header className="sticky top-0 z-30 mb-6 flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-[#0A0914]/90 px-4 py-3 shadow-panel backdrop-blur-2xl">
+      {/* Mobile Drawer Button */}
+      <button
+        type="button"
+        onClick={onToggleSidebar}
+        className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white lg:hidden"
+        title="القائمة"
+      >
+        ☰
+      </button>
 
-      <div className="flex flex-1 flex-col gap-3 xl:flex-row xl:items-center xl:justify-end">
-        <div className="flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-black/25 px-4 py-3 xl:max-w-xl">
-          <Icon name="search" className="h-4 w-4 text-electric" />
+      {/* Search Input Box */}
+      <div className="relative flex-1 max-w-lg">
+        <div className="flex w-full items-center gap-3 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2.5 transition focus-within:border-fuchsia-500/50 focus-within:bg-black/60">
+          <Icon name="search" className="h-4 w-4 text-white/50 shrink-0" />
           <input
             value={searchQuery}
-            onChange={(event) => onSearchChange(event.target.value)}
-            placeholder="ابحث عن فيلم أو مسلسل أو اسم..."
-            className="w-full bg-transparent text-sm text-white outline-none placeholder:text-white/35"
+            onChange={(event) => {
+              onSearchChange(event.target.value);
+              setShowSearchDropdown(true);
+            }}
+            onFocus={() => setShowSearchDropdown(true)}
+            placeholder="ابحث عن أنمي، فيلم، مسلسل..."
+            className="w-full bg-transparent text-xs font-bold text-white outline-none placeholder:text-white/40 sm:text-sm text-right"
           />
-          {isSearching ? (
-            <span className="text-xs font-semibold text-white/40">بحث مباشر</span>
-          ) : (
-            <span className="text-xs font-semibold text-white/25">{categoriesCount} أقسام</span>
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => {
+                onSearchChange("");
+                setShowSearchDropdown(false);
+              }}
+              className="text-xs text-white/40 hover:text-white"
+            >
+              ✕
+            </button>
           )}
         </div>
 
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={onSyncIndex}
-            className="inline-flex items-center gap-2 rounded-2xl border border-electric/30 bg-electric/12 px-4 py-3 text-sm font-semibold text-electric transition hover:bg-electric/18"
-          >
-            <Icon name="spark" className="h-4 w-4" />
-            مزامنة الفهرس
-          </button>
-          <button
-            type="button"
-            onClick={() => onOpenView("admin")}
-            className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-sm font-semibold text-white/80 transition hover:bg-white/[0.08]"
-          >
-            <Icon name="settings" className="h-4 w-4" />
-            لوحة الإدارة
-          </button>
-          <span className="rounded-full border border-white/10 bg-black/25 px-3 py-2 text-xs font-semibold text-white/55">
-            {syncStatus || "جاهز"}
-          </span>
+        {/* Live Search Dropdown */}
+        {showSearchDropdown && searchQuery.trim() && (
+          <div className="absolute right-0 top-full z-50 mt-2 max-h-96 w-full overflow-y-auto rounded-2xl border border-white/15 bg-[#0D0E18]/98 p-2 shadow-2xl backdrop-blur-2xl">
+            <div className="flex items-center justify-between border-b border-white/10 p-2 text-xs text-white/60">
+              <span>نتائج البحث الفوري ({searchResults.length})</span>
+              <button
+                type="button"
+                onClick={() => setShowSearchDropdown(false)}
+                className="hover:text-white"
+              >
+                إغلاق ✕
+              </button>
+            </div>
+            {searchResults.length > 0 ? (
+              <div className="mt-1 divide-y divide-white/5">
+                {searchResults.slice(0, 6).map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between p-2.5 transition hover:bg-white/5 rounded-xl"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onQuickPlay(item);
+                        setShowSearchDropdown(false);
+                      }}
+                      className="rounded-xl bg-gradient-to-r from-fuchsia-600 to-purple-600 px-3 py-1.5 text-xs font-bold text-white shadow-neon shrink-0"
+                    >
+                      ▶ تشغيل
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onOpenMedia(item);
+                        setShowSearchDropdown(false);
+                      }}
+                      className="text-right flex-1 mx-3 min-w-0"
+                    >
+                      <p className="truncate text-xs font-bold text-white sm:text-sm">{item.titleAr}</p>
+                      <p className="truncate text-[10px] text-white/50">{item.titleEn} · {item.year} · {item.resolution}</p>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="p-4 text-center text-xs text-white/50">
+                لا توجد نتائج تطابق "{searchQuery}"
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Brand Name Emblem in Header (for Tablet & Desktop) */}
+      <div className="flex items-center gap-3">
+        <div className="text-right">
+          <h2 className="text-base font-black text-white">مكتبتي</h2>
+          <p className="text-[10px] font-bold text-white/40">نظام إدارة الوسائط</p>
+        </div>
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-fuchsia-600 to-purple-800 text-white shadow-lg shadow-purple-900/50">
+          <svg className="h-5 w-5 stroke-current" fill="none" viewBox="0 0 24 24" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 3L2 21h20L12 3z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9l-4 7h8l-4-7z" />
+          </svg>
         </div>
       </div>
     </header>

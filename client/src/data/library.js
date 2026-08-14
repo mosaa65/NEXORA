@@ -1,43 +1,43 @@
 const categoryProfiles = {
   movies: {
     titleEn: "Movies",
-    titleAr: "أفلام",
-    count: 4820,
+    titleAr: "الأفلام",
+    count: 5430,
     accent: "linear-gradient(135deg, rgba(25,183,255,0.34), rgba(90,50,244,0.24))",
-    description: "أفلام سينمائية وعناوين جماهيرية مصفوفة لليالي المشاهدة الطويلة."
+    description: "أفلام سينمائية وعناوين عالمية مصفوفة لليالي المشاهدة الطويلة."
   },
   series: {
     titleEn: "Series",
-    titleAr: "مسلسلات",
-    count: 184,
+    titleAr: "المسلسلات",
+    count: 2650,
     accent: "linear-gradient(135deg, rgba(16,185,129,0.3), rgba(59,130,246,0.22))",
     description: "مواسم متتابعة وحلقات جاهزة لرحلات المتابعة المستمرة."
   },
   anime: {
     titleEn: "Anime",
-    titleAr: "أنمي",
-    count: 211,
+    titleAr: "الأنمي",
+    count: 8350,
     accent: "linear-gradient(135deg, rgba(236,72,153,0.28), rgba(124,58,237,0.28))",
     description: "أرشيف أنمي عربي/إنجليزي بأسماء مختلطة وبحث سريع وفوري."
   },
   kids: {
     titleEn: "Kids",
-    titleAr: "أطفال",
-    count: 72,
+    titleAr: "الأطفال",
+    count: 420,
     accent: "linear-gradient(135deg, rgba(245,158,11,0.32), rgba(239,68,68,0.18))",
     description: "منطقة عائلية هادئة وسهلة التصفح ومناسبة للصغار."
   },
   plays: {
     titleEn: "Plays",
-    titleAr: "مسرحيات",
-    count: 64,
+    titleAr: "المسرحيات",
+    count: 180,
     accent: "linear-gradient(135deg, rgba(234,179,8,0.28), rgba(168,85,247,0.22))",
     description: "عروض مسرحية وكوميدية محفوظة للعرض المحلي بدون انقطاع."
   },
   documentaries: {
     titleEn: "Documentaries",
-    titleAr: "وثائقيات",
-    count: 129,
+    titleAr: "الوثائقيات",
+    count: 310,
     accent: "linear-gradient(135deg, rgba(14,165,233,0.3), rgba(20,184,166,0.22))",
     description: "معرفة، تاريخ، علوم، وغوص عميق في محتوى طويل المدى."
   }
@@ -49,9 +49,15 @@ const categoryTitleLookup = Object.fromEntries(
 
 export const navigationItems = [
   { id: "dashboard", label: "الرئيسية", icon: "dashboard" },
-  { id: "categories", label: "التصنيفات", icon: "library" },
-  { id: "details", label: "تفاصيل العمل", icon: "play" },
-  { id: "admin", label: "الإدارة", icon: "settings" }
+  { id: "movies", label: "الأفلام", icon: "film" },
+  { id: "series", label: "المسلسلات", icon: "tv" },
+  { id: "anime", label: "الأنمي", icon: "spark" },
+  { id: "kids", label: "الأطفال", icon: "smile" },
+  { id: "plays", label: "المسرحيات", icon: "mask" },
+  { id: "documentaries", label: "الوثائقيات", icon: "book" },
+  { id: "favorites", label: "المفضلة", icon: "star" },
+  { id: "downloads", label: "التنزيلات", icon: "download" },
+  { id: "admin", label: "الإدارة والتخزين", icon: "settings" }
 ];
 
 export const serviceItems = [
@@ -92,6 +98,25 @@ export function getMediaTypeLabel(type) {
 export const mockLibrary = [
   {
     id: 1,
+    titleEn: "Tokyo Ghoul",
+    titleAr: "طوكيو غول",
+    type: "anime",
+    categorySlug: "anime",
+    year: 2014,
+    resolution: "1080p",
+    seasonLabel: "الموسم 1",
+    episodeLabel: "الحلقة 12",
+    duration: "24 دقيقة",
+    rating: 8.7,
+    fileCount: 48,
+    plot: "في طوكيو حيث تعيش غيلان بين البشر بالتخفي، تنقلب حياة الشاب (كانيكي) عندما تلتهمه إحدى الغيلان بدلاً من أن تصبح عشاءه، فيتحول إلى نصف بشري ونصف غول محاصر بين عالمين.",
+    posterPath: "/images/tokyo_ghoul_hero.png",
+    bannerPath: "/images/tokyo_ghoul_hero.png",
+    highlights: ["أنمي", "فانتازيا مظلمة", "رعب"],
+    seasons: [1, 2, 3, 4]
+  },
+  {
+    id: 2,
     titleEn: "Attack on Titan",
     titleAr: "هجوم العمالقة",
     type: "anime",
@@ -99,106 +124,170 @@ export const mockLibrary = [
     year: 2013,
     resolution: "1080p",
     seasonLabel: "الموسم 4",
-    episodeLabel: "الحلقة 5",
+    episodeLabel: "الحلقة 28",
     duration: "24 دقيقة",
-    rating: 9.1,
+    rating: 9.0,
     fileCount: 88,
-    plot: "تقف البشرية خلف أسوار هائلة بينما يتكشف سر مرعب عن العمالقة ويقلب موازين العالم.",
-    gradient:
-      "linear-gradient(135deg, rgba(11,15,33,0.98), rgba(88,28,135,0.75), rgba(25,183,255,0.55))",
-    highlights: ["أكشن", "فانتازيا مظلمة", "ترجمة عربية"],
-    seasons: [1, 2, 3, 4]
-  },
-  {
-    id: 2,
-    titleEn: "The Last of Us",
-    titleAr: "آخرنا",
-    type: "series",
-    categorySlug: "series",
-    year: 2023,
-    resolution: "4K",
-    seasonLabel: "الموسم 1",
-    episodeLabel: "الحلقة 2",
-    duration: "58 دقيقة",
-    rating: 8.7,
-    fileCount: 9,
-    plot: "يرافق ناجٍ قاسٍ فتاة صغيرة عبر عالم ينهار، وكل ميل يترك أثرًا شخصيًا جديدًا.",
-    gradient:
-      "linear-gradient(135deg, rgba(8,15,31,0.98), rgba(15,118,110,0.55), rgba(250,204,21,0.25))",
-    highlights: ["دراما", "بقاء", "HDR"],
-    seasons: [1]
+    plot: "منذ مائة عام، ظهرت العمالقة فجأة ودمرت معظم البشرية. يعيش الباقون في عالم محاط بأسوار ضخمة لحمايتهم من العمالقة... عندما يُخترق السور الأول، يبدأ إيرين غيغار رحلة الانتقام والبحث عن الحقيقة.",
+    posterPath: "/images/attack_on_titan_poster.png",
+    bannerPath: "/images/attack_on_titan_poster.png",
+    highlights: ["خيال مظلم", "دراما", "أكشن"],
+    views: "2.3M",
+    seasons: [
+      { number: 1, title: "الموسم الأول", episodeCount: 25 },
+      { number: 2, title: "الموسم الثاني", episodeCount: 12 },
+      { number: 3, title: "الموسم الثالث", episodeCount: 22 },
+      { number: 4, title: "الموسم الرابع", episodeCount: 28 },
+      { number: 5, title: "الموسم الأخير", episodeCount: 16 }
+    ]
   },
   {
     id: 3,
-    titleEn: "Dune",
-    titleAr: "كثيب",
-    type: "movie",
-    categorySlug: "movies",
-    year: 2021,
-    resolution: "4K",
-    duration: "ساعتان و35 دقيقة",
-    rating: 8.0,
-    fileCount: 1,
-    plot: "تنخرط عائلة نبيلة في سياسة كوكب صحراوي يسيطر على أثمن مورد في الكون.",
-    gradient:
-      "linear-gradient(135deg, rgba(24,24,27,0.96), rgba(146,64,14,0.66), rgba(251,191,36,0.22))",
-    highlights: ["خيال علمي", "ملحمي", "Dolby Vision"],
-    seasons: []
+    titleEn: "Demon Slayer",
+    titleAr: "ديمون سلاير",
+    type: "anime",
+    categorySlug: "anime",
+    year: 2023,
+    resolution: "1080p",
+    seasonLabel: "الموسم 3",
+    episodeLabel: "الحلقة 11",
+    duration: "24 دقيقة",
+    rating: 9.1,
+    fileCount: 55,
+    plot: "يتعهد تانجيرو كاماتو بالانتقام لعائلته وإعادة أخته نيزوكو إلى هيئتها البشرية بعد تحولها إلى شيطان، منضماً إلى فيلق قتلة الشياطين.",
+    posterPath: "/images/demon_slayer_poster.png",
+    bannerPath: "/images/demon_slayer_poster.png",
+    highlights: ["أكشن", "شياطين", "سيوف"],
+    seasons: [1, 2, 3]
   },
   {
     id: 4,
-    titleEn: "Blue Lock",
-    titleAr: "بلو لوك",
+    titleEn: "Jujutsu Kaisen",
+    titleAr: "جوجوتسو كايسن",
     type: "anime",
     categorySlug: "anime",
-    year: 2022,
+    year: 2023,
     resolution: "1080p",
-    seasonLabel: "الموسم 1",
-    episodeLabel: "الحلقة 11",
-    duration: "23 دقيقة",
-    rating: 8.3,
-    fileCount: 24,
-    plot: "يدفع مشروع رياضي قاسٍ المهاجمين إلى منافسة لا ينجو منها إلا أكثرهم أنانية.",
-    gradient:
-      "linear-gradient(135deg, rgba(8,47,73,0.95), rgba(14,165,233,0.5), rgba(37,99,235,0.24))",
-    highlights: ["رياضة", "إيقاع سريع", "مدبلج"],
-    seasons: [1]
+    seasonLabel: "الموسم 2",
+    episodeLabel: "الحلقة 23",
+    duration: "24 دقيقة",
+    rating: 9.0,
+    fileCount: 47,
+    plot: "ينتلع الفتى إيتادوري يوجي إصبع الساحر الأسطوري ريومن سوكونا، فيصبح وعاءً له وينضم لمدرسة جوجوتسو لمكافحة اللعنات.",
+    posterPath: "/images/jujutsu_kaisen_poster.png",
+    bannerPath: "/images/jujutsu_kaisen_poster.png",
+    highlights: ["لعنات", "خوارق", "معارك"],
+    seasons: [1, 2]
   },
   {
     id: 5,
-    titleEn: "Planet Earth",
-    titleAr: "كوكب الأرض",
-    type: "movie",
-    categorySlug: "documentaries",
-    year: 2006,
+    titleEn: "One Piece",
+    titleAr: "ون بيس",
+    type: "anime",
+    categorySlug: "anime",
+    year: 2023,
     resolution: "1080p",
-    duration: "1 ساعة و39 دقيقة",
-    rating: 9.4,
-    fileCount: 1,
-    plot: "تُلتقط أروع بيئات الكوكب وكائناته بعدسة سينمائية هادئة وصبورة ومبهرة.",
-    gradient:
-      "linear-gradient(135deg, rgba(4,47,46,0.96), rgba(20,184,166,0.4), rgba(59,130,246,0.18))",
-    highlights: ["طبيعة", "حائز على جوائز", "نسخة محسنة"],
-    seasons: []
+    seasonLabel: "الموسم 20",
+    episodeLabel: "الحلقة 1086",
+    duration: "24 دقيقة",
+    rating: 9.0,
+    fileCount: 1086,
+    plot: "ينطلق مونكي دي لوفي وطاقم قبعة القش في رحلة أسطورية عبر البحار للبحث عن الكنز الأعظم ون بيس وليصبح ملك القراصنة.",
+    posterPath: "/images/one_piece_poster.png",
+    bannerPath: "/images/one_piece_poster.png",
+    highlights: ["مغامرة", "قراصنة", "كوميديا"],
+    seasons: [1, 2, 3, 4, 5]
   },
   {
     id: 6,
-    titleEn: "The Bear",
-    titleAr: "ذا بير",
-    type: "series",
-    categorySlug: "series",
-    year: 2022,
+    titleEn: "One Punch Man",
+    titleAr: "ون بنش مان",
+    type: "anime",
+    categorySlug: "anime",
+    year: 2015,
     resolution: "1080p",
     seasonLabel: "الموسم 2",
-    episodeLabel: "الحلقة 4",
-    duration: "34 دقيقة",
-    rating: 8.9,
-    fileCount: 18,
-    plot: "يعود طاهٍ إلى منزله ليدير متجر الساندويتش العائلي ويكتشف أن المطبخ ساحة معركة كاملة.",
-    gradient:
-      "linear-gradient(135deg, rgba(69,10,10,0.96), rgba(220,38,38,0.56), rgba(249,115,22,0.18))",
-    highlights: ["دراما", "إيقاع عالي", "صوت متعدد"],
+    episodeLabel: "الحلقة 12",
+    duration: "24 دقيقة",
+    rating: 8.3,
+    fileCount: 24,
+    plot: "سايتاما بطل خارق يقضي على أي خصم بلكمة واحدة فقط، ويبحث عن مواجهة حقيقية تعيد له حماس القتال.",
+    posterPath: "/images/attack_on_titan_poster.png",
+    highlights: ["أبطال خارقون", "كوميديا", "قتال"],
+    seasons: [1, 2]
+  },
+  {
+    id: 7,
+    titleEn: "Naruto Shippuden",
+    titleAr: "ناروتو شيبودن",
+    type: "anime",
+    categorySlug: "anime",
+    year: 2017,
+    resolution: "1080p",
+    seasonLabel: "الموسم 21",
+    episodeLabel: "الحلقة 500",
+    duration: "24 دقيقة",
+    rating: 8.6,
+    fileCount: 500,
+    plot: "يعود ناروتو بعد سنوات التدريب يسعى لحماية قريته واستعادة صديقه ساسكي وتحقيق حلمه بلقب الهوكاجي.",
+    posterPath: "/images/naruto_poster.png",
+    bannerPath: "/images/naruto_poster.png",
+    highlights: ["نينجا", "صداقة", "معارك"],
     seasons: [1, 2, 3]
+  },
+  {
+    id: 8,
+    titleEn: "Bleach",
+    titleAr: "بليتش",
+    type: "anime",
+    categorySlug: "anime",
+    year: 2012,
+    resolution: "1080p",
+    seasonLabel: "الموسم 16",
+    episodeLabel: "الحلقة 366",
+    duration: "24 دقيقة",
+    rating: 8.5,
+    fileCount: 366,
+    plot: "يحصل إيتشيغو كوروساكي على قوى الشينيغامي لحماية البشر والأرواح من الوحوش الجائعة.",
+    posterPath: "/images/jujutsu_kaisen_poster.png",
+    highlights: ["شينيغامي", "سيوف", "أرواح"],
+    seasons: [1, 2]
+  },
+  {
+    id: 9,
+    titleEn: "Detective Conan",
+    titleAr: "المحقّق كونان",
+    type: "anime",
+    categorySlug: "anime",
+    year: 2023,
+    resolution: "1080p",
+    seasonLabel: "الموسم 31",
+    episodeLabel: "الحلقة 1100",
+    duration: "24 دقيقة",
+    rating: 8.4,
+    fileCount: 1100,
+    plot: "يتناول سينشي كودو عقاراً يقلص جسده إلى طفل فيتخذ اسم كونان إيدوجاوا ويحل أعقد القضايا أثناء تتبع العصابة السوداء.",
+    posterPath: "/images/tokyo_ghoul_hero.png",
+    highlights: ["غموض", "تحقيق", "ذكاء"],
+    seasons: [1, 2, 3]
+  },
+  {
+    id: 10,
+    titleEn: "Dragon Ball Super",
+    titleAr: "دراغون بول سوبر",
+    type: "anime",
+    categorySlug: "anime",
+    year: 2018,
+    resolution: "1080p",
+    seasonLabel: "الموسم 5",
+    episodeLabel: "الحلقة 131",
+    duration: "24 دقيقة",
+    rating: 8.4,
+    fileCount: 131,
+    plot: "يخوض غوكو ومحاربو الزد مواجهات أسطورية ضد آلهة الدمار ومحاربي الأكوان في بطولات القوة.",
+    posterPath: "/images/demon_slayer_poster.png",
+    highlights: ["تحولات", "معارك خارقة", "أكوان"],
+    seasons: [1, 2, 3, 4, 5]
   }
 ];
 
@@ -206,45 +295,43 @@ export const mockActivity = [
   {
     label: "المفهرس",
     title: "اكتملت مزامنة Meilisearch",
-    body: "تمت إضافة عنوانين جديدين من PostgreSQL وأصبحا متاحين للبحث مباشرة.",
+    body: "تمت إضافة عناوين أنمي جديدة وأصبحت متاحة للبحث الفوري.",
     tone: "emerald"
   },
   {
     label: "الماسح",
     title: "مراقبة المجلدات نشطة",
-    body: "الخادم يراقب مسارات الوسائط المحددة ويضيف الملفات الجديدة فور وصولها.",
+    body: "الخادم يراقب مسارات الوسائط المحددة ويضيف الملفات فور وصولها.",
     tone: "cyan"
-  },
-  {
-    label: "قاعدة البيانات",
-    title: "المخطط سليم",
-    body: "تم تثبيت الترحيلات، وجداول الكتالوج جاهزة للتوسع القادم.",
-    tone: "violet"
   }
 ];
 
 export const dashboardMetrics = [
-  { label: "حجم المكتبة", value: "5.4 تيرابايت", hint: "داخل الأقسام النشطة" },
-  { label: "العناصر المفهرسة", value: "5,416", hint: "أفلام، مسلسلات، أنمي" },
-  { label: "الخدمات الحية", value: "3/3", hint: "Postgres و Meili و Redis" },
-  { label: "الوافدون الجدد", value: "18 اليوم", hint: "وصلوا للتو من الماسح" }
+  { label: "إجمالي المحتوى", value: "18,430", hint: "عنوان مفهرس" },
+  { label: "إجمالي الحجم", value: "98.7 TB", hint: "سعة الأقراص" },
+  { label: "الأفلام", value: "5,430", hint: "فيلم سينمائي" },
+  { label: "المسلسلات", value: "2,650", hint: "مسلسل تلفزيوني" },
+  { label: "الأنمي", value: "8,350", hint: "أنمي عربي/إنجليزي" },
+  { label: "الحلقات", value: "112,000", hint: "حلقة محلية" }
 ];
 
 export const detailEpisodes = [
-  { number: 1, title: "الإشارة في الضجيج" },
-  { number: 2, title: "الجدران والتحذيرات" },
-  { number: 3, title: "مدينة تحت المراقبة" },
-  { number: 4, title: "وردية الليل" },
-  { number: 5, title: "الاختراق" },
-  { number: 6, title: "رماد وارتدادات" }
+  { number: 1, title: "الحلقة 01 - مكان إشارة المعركة", duration: "24:10" },
+  { number: 2, title: "الحلقة 02 - عودة إلى الشكل", duration: "24:10" },
+  { number: 3, title: "الحلقة 03 - ضوء الأمل", duration: "24:10" },
+  { number: 4, title: "الحلقة 04 - الليل يتقدم", duration: "24:10" },
+  { number: 5, title: "الحلقة 05 - رد فعل", duration: "24:10" },
+  { number: 6, title: "الحلقة 06 - العملاق والشاحن", duration: "24:10" },
+  { number: 7, title: "الحلقة 07 - ما وراء الجدار", duration: "24:10" },
+  { number: 8, title: "الحلقة 08 - القتال النهائي", duration: "24:10" }
 ];
 
 export function buildHeroCopy() {
   return {
-    eyebrow: "لوحة السينما",
-    title: "مرحبًا بك في مكتبة NEXORA العربية",
+    eyebrow: "طوكيو غول",
+    title: "طوكيو غول",
     subtitle:
-      "واجهة فخمة وسريعة للبحث في العربية والإنجليزية، ومراقبة الخادم، والتنقل بين الأقسام كأنك داخل غرفة تشغيل سينمائية."
+      "في طوكيو حيث تعيش غيلان بين البشر بالتخفي، تنقلب حياة الشاب (كانيكي) عندما تلتهمه إحدى الغيلان بدلاً من أن تصبح عشاءه، فيتحول إلى نصف بشري ونصف غول محاصر بين عالمين."
   };
 }
 

@@ -1,98 +1,75 @@
-import GlassCard from "../components/GlassCard.jsx";
 import MediaCard from "../components/MediaCard.jsx";
+import { mockLibrary } from "../data/library.js";
 
 export default function CategoryPage({
-  categories,
   selectedCategory,
-  searchResults,
-  onOpenCategory,
   onOpenMedia,
-  searchQuery
+  onQuickPlay
 }) {
-  const active = categories.find((category) => category.slug === selectedCategory) || categories[0];
+  const animeList = mockLibrary.filter((item) => item.categorySlug === "anime" || item.type === "anime");
+  const displayList = animeList.length >= 10 ? animeList : mockLibrary;
 
   return (
     <div className="space-y-6">
-      <GlassCard className="p-6">
-        <p className="text-xs font-semibold text-electric/80">عرض التصنيفات</p>
-        <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-          <div className="text-right">
-            <h1 className="text-3xl font-black text-white md:text-5xl">{active?.titleAr || "التصنيفات"}</h1>
-            <p className="mt-2 text-sm font-semibold text-white/45">{active?.titleEn || ""}</p>
-            <p className="mt-3 max-w-3xl text-base leading-8 text-white/70">
-              تصفّح الأقسام المنسّقة، ومرّر البحث الحي إلى Meilisearch، وانتقل مباشرة إلى أي عنوان تريده.
-            </p>
-          </div>
-          <div className="rounded-2xl border border-electric/20 bg-electric/12 px-4 py-3 text-sm font-semibold text-electric">
-            {searchQuery ? `جارٍ البحث عن "${searchQuery}"` : "التصفح المباشر مفعّل"}
-          </div>
+      {/* Anime Catalog Header & Filters Bar */}
+      <div className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-[#0A0914] p-4 shadow-panel sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3 text-right">
+          <h1 className="text-2xl font-black text-white sm:text-3xl">الأنمي</h1>
+          <span className="rounded-full border border-purple-500/30 bg-purple-900/30 px-3 py-1 text-xs font-bold text-fuchsia-300">
+            8,350 أنمي
+          </span>
         </div>
 
-        <div className="mt-6 flex flex-wrap gap-3">
-          {categories.map((category) => {
-            const isActive = active?.slug === category.slug;
-            return (
-              <button
-                key={category.slug}
-                type="button"
-                onClick={() => onOpenCategory(category.slug)}
-                className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
-                  isActive
-                    ? "border-electric/30 bg-electric/14 text-electric"
-                    : "border-white/10 bg-white/[0.05] text-white/70 hover:border-white/20 hover:bg-white/[0.08]"
-                }`}
-              >
-                {category.titleAr}
-              </button>
-            );
-          })}
-        </div>
-      </GlassCard>
+        {/* Filter Pill Buttons */}
+        <div className="flex flex-wrap items-center justify-end gap-2 text-xs font-bold">
+          <button
+            type="button"
+            className="rounded-xl bg-gradient-to-r from-purple-800 to-fuchsia-700 px-4 py-2 text-white shadow-md shadow-purple-900/40"
+          >
+            الكل
+          </button>
+          <button
+            type="button"
+            className="rounded-xl border border-white/10 bg-white/5 px-3.5 py-2 text-white/70 hover:bg-white/10 hover:text-white"
+          >
+            السنة ∨
+          </button>
+          <button
+            type="button"
+            className="rounded-xl border border-white/10 bg-white/5 px-3.5 py-2 text-white/70 hover:bg-white/10 hover:text-white"
+          >
+            الجودة ∨
+          </button>
+          <button
+            type="button"
+            className="rounded-xl border border-white/10 bg-white/5 px-3.5 py-2 text-white/70 hover:bg-white/10 hover:text-white"
+          >
+            ترتيب حسب ∨
+          </button>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {categories.map((category) => (
-          <GlassCard key={category.slug} className="overflow-hidden p-0">
-            <button type="button" onClick={() => onOpenCategory(category.slug)} className="block h-full w-full text-left">
-              <div className="h-2" style={{ backgroundImage: category.accent }} />
-              <div className="p-5 text-right">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-semibold text-white/35">{category.titleEn}</p>
-                    <h3 className="mt-2 text-2xl font-bold text-white">{category.titleAr}</h3>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-right">
-                    <p className="text-xl font-bold text-white">{category.count}</p>
-                    <p className="text-[11px] font-semibold text-white/35">عنوان</p>
-                  </div>
-                </div>
-                <p className="mt-4 text-sm leading-7 text-white/65">{category.description}</p>
-              </div>
+          <div className="mr-2 flex items-center rounded-xl border border-white/10 bg-black/40 p-1">
+            <button type="button" className="rounded-lg bg-white/10 px-2 py-1 text-white">
+              ⊞
             </button>
-          </GlassCard>
-        ))}
-      </section>
-
-      <GlassCard className="p-6">
-        <div className="flex items-end justify-between gap-4">
-          <div className="text-right">
-            <p className="text-xs font-semibold text-white/40">نتائج Meilisearch</p>
-            <h2 className="mt-2 text-2xl font-bold text-white">نتائج البحث الممرّرة</h2>
+            <button type="button" className="px-2 py-1 text-white/40 hover:text-white">
+              ☰
+            </button>
           </div>
-          <p className="text-sm text-white/50">{searchResults.length} عنوان</p>
         </div>
+      </div>
 
-        <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {searchResults.length > 0 ? (
-            searchResults.map((item, index) => (
-              <MediaCard key={`${item.id}-${index}`} item={item} onOpen={onOpenMedia} index={index} compact />
-            ))
-          ) : (
-            <div className="rounded-3xl border border-white/10 bg-black/20 p-6 text-right text-white/60">
-              لا توجد نتائج تطابق البحث الحالي بعد. جرّب كلمات أوسع بالعربية أو الإنجليزية.
-            </div>
-          )}
-        </div>
-      </GlassCard>
+      {/* 5-Column Grid of 10 Anime Poster Cards */}
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+        {displayList.slice(0, 10).map((item, index) => (
+          <MediaCard
+            key={item.id}
+            item={item}
+            onOpen={onOpenMedia}
+            onQuickPlay={onQuickPlay}
+            index={index}
+          />
+        ))}
+      </div>
     </div>
   );
 }

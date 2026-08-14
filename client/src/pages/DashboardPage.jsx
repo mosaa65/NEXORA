@@ -1,232 +1,159 @@
-import GlassCard from "../components/GlassCard.jsx";
+import { useRef } from "react";
 import MediaCard from "../components/MediaCard.jsx";
-import MetricCard from "../components/MetricCard.jsx";
 import Icon from "../components/Icon.jsx";
-import { buildHeroCopy, dashboardMetrics, mockActivity, serviceItems } from "../data/library.js";
+import { buildHeroCopy, dashboardMetrics, mockLibrary } from "../data/library.js";
 
 export default function DashboardPage({
-  categories,
-  featured,
+  searchQuery,
+  onSearchChange,
   searchResults,
-  health,
   onOpenMedia,
-  onOpenCategory,
-  onSyncIndex,
-  syncStatus
+  onQuickPlay,
+  onToggleSidebar
 }) {
   const hero = buildHeroCopy();
-  const online = health === null ? null : Boolean(health?.ok);
-  const healthTone =
-    online === null ? "bg-white/20" : online ? "bg-emerald-400 shadow-[0_0_20px_rgba(52,211,153,.8)]" : "bg-rose-400";
-  const healthLabel = online === null ? "جارٍ التحقق" : online ? "متصل" : "غير متصل";
-  const primaryPick = featured[0] || searchResults[0];
-  const secondaryPick = featured[1] || searchResults[1] || primaryPick;
+  const primaryPick = mockLibrary.find((item) => item.id === 1) || mockLibrary[0];
+  const mostWatched = mockLibrary;
+  const carouselRef = useRef(null);
+
+  function scrollCarousel(direction) {
+    if (carouselRef.current) {
+      const scrollAmount = direction === "left" ? -280 : 280;
+      carouselRef.current.scrollBy({ left: scrollAmount, behavior: "smooth" });
+    }
+  }
 
   return (
     <div className="space-y-6">
-      <section className="grid gap-6 xl:grid-cols-[1.25fr_0.9fr]">
-        <GlassCard className="relative overflow-hidden p-0">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(90,50,244,0.38),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(25,183,255,0.22),transparent_32%),linear-gradient(135deg,rgba(5,8,18,0.96),rgba(12,14,28,0.82))]" />
-          <div className="absolute -right-20 top-8 h-64 w-64 rounded-full bg-electric/18 blur-3xl" />
-          <div className="absolute bottom-0 left-0 h-56 w-56 rounded-full bg-royal/20 blur-3xl" />
+      {/* Hero Showcase Container with Header Integrated Overlay */}
+      <section className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0B0A16]">
+        {/* Full Image Background extending to top header */}
+        <div
+          className="absolute inset-0 bg-cover bg-right sm:bg-center opacity-85 transition-all duration-1000"
+          style={{ backgroundImage: `url('${primaryPick?.posterPath || "/images/tokyo_ghoul_hero.png"}')` }}
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0B0A16] via-[#0B0A16]/40 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-l from-[#0B0A16]/95 via-[#0B0A16]/50 to-transparent" />
 
-          <div className="relative grid gap-6 p-6 lg:grid-cols-[1.05fr_0.95fr] lg:p-8">
-            <div className="flex flex-col justify-between gap-6 text-right">
-              <div className="max-w-3xl">
-                <p className="text-xs font-semibold text-electric/90">{hero.eyebrow}</p>
-                <h1 className="mt-4 text-4xl font-black leading-tight text-white md:text-6xl">
-                  {hero.title}
-                </h1>
-                <p className="mt-5 max-w-2xl text-base leading-8 text-white/70 md:text-lg">
-                  {hero.subtitle}
-                </p>
-              </div>
-
-              <div className="flex flex-wrap justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={onSyncIndex}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-electric/25 bg-electric/12 px-4 py-3 font-semibold text-electric transition hover:bg-electric/18"
-                >
-                  <Icon name="spark" className="h-4 w-4" />
-                  مزامنة الفهرس
-                </button>
-                <span className="inline-flex items-center rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-sm font-semibold text-white/70">
-                  {syncStatus || "جاهز"}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => onOpenCategory("anime")}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 font-semibold text-white/80 transition hover:bg-white/[0.08]"
-                >
-                  <Icon name="library" className="h-4 w-4" />
-                  افتح قسم الأنمي
-                </button>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                {dashboardMetrics.map((metric) => (
-                  <MetricCard key={metric.label} {...metric} />
-                ))}
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => primaryPick && onOpenMedia(primaryPick)}
-              className="group relative min-h-[26rem] overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.04] text-left shadow-panel transition hover:-translate-y-1 hover:border-electric/30 hover:shadow-neon"
-            >
-              <div
-                className="absolute inset-0 transition duration-700 group-hover:scale-[1.03]"
-                style={{ backgroundImage: primaryPick?.gradient || "linear-gradient(135deg, rgba(90,50,244,0.7), rgba(25,183,255,0.45))" }}
+        {/* Integrated Top Bar Header (Transparent Over Hero Image, NO border, NO blur) */}
+        <div className="relative z-20 flex items-center justify-between gap-4 p-4 sm:p-6 bg-transparent border-none">
+          {/* Left: Shorter & Fully Rounded Search Bar */}
+          <div className="relative flex-1 max-w-xs sm:max-w-sm">
+            <div className="flex w-full items-center gap-2.5 rounded-full border border-white/20 bg-black/40 px-4 py-2 backdrop-blur-sm focus-within:border-fuchsia-500/60">
+              <Icon name="search" className="h-4 w-4 text-white/60 shrink-0" />
+              <input
+                value={searchQuery}
+                onChange={(event) => onSearchChange(event.target.value)}
+                placeholder="ابحث عن أنمي، فيلم، مسلسل..."
+                className="w-full bg-transparent text-xs font-bold text-white outline-none placeholder:text-white/40 text-right"
               />
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.18),transparent_30%),radial-gradient(circle_at_bottom_left,rgba(25,183,255,0.16),transparent_32%),linear-gradient(180deg,rgba(4,7,18,0.08),rgba(4,7,18,0.84))]" />
-              <div className="absolute inset-0 ring-1 ring-inset ring-white/10" />
-
-              <div className="relative flex h-full flex-col justify-between p-5">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="rounded-full border border-white/12 bg-black/28 px-3 py-2 text-[11px] font-semibold text-white/75">
-                    العمل الأبرز
-                  </div>
-                  <div className="rounded-full border border-white/12 bg-black/28 px-3 py-2 text-xs text-white/75">
-                    {primaryPick?.resolution || "4K"}
-                  </div>
-                </div>
-
-                <div className="rounded-[1.75rem] border border-white/10 bg-black/22 p-5 text-right backdrop-blur-sm">
-                  <p className="text-xs font-semibold text-white/45">{primaryPick?.titleEn || "Featured Title"}</p>
-                  <h3 className="mt-2 text-3xl font-black leading-tight text-white">{primaryPick?.titleAr || "عنوان بارز"}</h3>
-                  <p className="mt-3 line-clamp-3 text-sm leading-6 text-white/72">
-                    {primaryPick?.plot || "بطاقة سينمائية مميزة تعرض العمل الأكثر جذبًا داخل المكتبة."}
-                  </p>
-
-                  <div className="mt-4 flex flex-wrap justify-end gap-2">
-                    {(primaryPick?.highlights || ["سينمائي", "مميز", "فوري"]).slice(0, 3).map((highlight) => (
-                      <span
-                        key={highlight}
-                        className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1 text-[11px] font-semibold text-white/70"
-                      >
-                        {highlight}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-2xl border border-white/10 bg-black/28 px-4 py-3 text-right">
-                    <p className="text-xs font-semibold text-white/35">المتابعة التالية</p>
-                    <p className="mt-2 text-sm font-semibold text-white">
-                      {secondaryPick?.titleAr || "عنوان إضافي"}
-                    </p>
-                    <p className="text-xs font-semibold text-white/45">{secondaryPick?.titleEn || "Next pick"}</p>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-black/28 px-4 py-3 text-right">
-                    <p className="text-xs font-semibold text-white/35">الحالة الحية</p>
-                    <p className="mt-2 text-sm font-semibold text-white">{healthLabel}</p>
-                    <p className="text-xs text-white/45">قناة التشغيل المحلية</p>
-                  </div>
-                </div>
-              </div>
-            </button>
+            </div>
           </div>
-        </GlassCard>
 
-        <div className="space-y-6">
-          <GlassCard className="p-6">
-            <div className="flex items-center justify-between">
-              <div className="text-right">
-                <p className="text-xs font-semibold text-white/40">الأنظمة الحية</p>
-                <h2 className="mt-2 text-2xl font-bold text-white">نبض التشغيل</h2>
-              </div>
-              <div className={`h-3 w-3 rounded-full ${healthTone}`} />
+          {/* Right: Brand Emblem "مكتبتي / نظام إدارة الوسائط" (Pure Icon without BG color fill) */}
+          <div className="flex items-center gap-3">
+            <div className="text-right">
+              <h2 className="text-lg font-black text-white">مكتبتي</h2>
+              <p className="text-[10px] font-bold text-white/50">نظام إدارة الوسائط</p>
             </div>
-            <div className="mt-5 space-y-3">
-              {serviceItems.map((service) => (
-                <div key={service.label} className="flex items-center justify-between rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
-                  <div className="text-right">
-                    <p className="text-sm font-semibold text-white">{service.label}</p>
-                    <p className="text-xs text-white/45">مكوّن جاهز داخل الشبكة المحلية</p>
-                  </div>
-                  <span className={`text-sm font-semibold ${service.tone}`}>{service.value}</span>
-                </div>
-              ))}
+            {/* Pure Triangle SVG Icon with NO background fill */}
+            <div className="flex items-center justify-center text-fuchsia-400">
+              <svg className="h-7 w-7 stroke-current" fill="none" viewBox="0 0 24 24" strokeWidth="2.2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3L2 21h20L12 3z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9l-4 7h8l-4-7z" />
+              </svg>
             </div>
-          </GlassCard>
+          </div>
+        </div>
 
-          <GlassCard className="p-6">
-            <div className="flex items-center justify-between">
-              <div className="text-right">
-                <p className="text-xs font-semibold text-white/40">الأقسام</p>
-                <h2 className="mt-2 text-2xl font-bold text-white">{categories.length} قسم متاح</h2>
-              </div>
-              <Icon name="library" className="h-5 w-5 text-electric" />
+        {/* Hero Banner Content (LEFT ALIGNED for Title, Text & Buttons) */}
+        <div className="relative z-10 flex flex-col justify-end p-6 sm:p-10 lg:p-12 min-h-[22rem] sm:min-h-[26rem]">
+          <div className="max-w-xl text-left">
+            <h1 className="text-4xl font-black text-white sm:text-5xl lg:text-6xl tracking-tight leading-none">
+              طوكيو غول
+            </h1>
+            <p className="mt-2 text-base font-bold text-white/70 sm:text-lg">Tokyo Ghoul</p>
+            <p className="mt-4 max-w-lg text-xs leading-relaxed text-white/80 sm:text-sm text-left">
+              في طوكيو حيث تعيش غيلان بين البشر بالتخفي، تنقلب حياة الشاب (كانيكي) عندما تلتهمه إحدى الغيلان بدلاً من أن تصبح عشاءه، فيتحول إلى نصف بشري ونصف غول محاصر بين عالمين.
+            </p>
+
+            {/* Action Buttons (LEFT ALIGNED & NOT 50% ROUNDED, SVG Play Icon) */}
+            <div className="mt-6 flex flex-wrap items-center justify-start gap-3">
+              <button
+                type="button"
+                onClick={() => onQuickPlay(primaryPick)}
+                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-fuchsia-600 via-purple-600 to-fuchsia-700 px-6 py-2.5 text-xs font-black text-white shadow-lg shadow-purple-900/50 transition hover:scale-105 sm:text-sm"
+              >
+                <Icon name="play" className="h-4 w-4 text-white fill-current shrink-0" />
+                <span>تشغيل الآن</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onOpenMedia(primaryPick)}
+                className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-5 py-2.5 text-xs font-bold text-white backdrop-blur-md transition hover:bg-white/20 sm:text-sm"
+              >
+                المزيد من المعلومات
+              </button>
             </div>
-            <div className="mt-5 space-y-3">
-              {categories.slice(0, 4).map((category) => (
-                <button
-                  key={category.slug}
-                  type="button"
-                  onClick={() => onOpenCategory(category.slug)}
-                  className="flex w-full items-center justify-between rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-left transition hover:border-electric/20 hover:bg-white/[0.05]"
-                >
-                  <div className="text-right">
-                    <p className="font-semibold text-white">{category.titleAr}</p>
-                    <p className="text-xs text-white/45">{category.titleEn}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-bold text-white">{category.count}</p>
-                    <p className="text-[11px] font-semibold text-white/35">عنوان</p>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </GlassCard>
+          </div>
         </div>
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[1.35fr_0.95fr]">
-        <GlassCard className="p-6">
-          <div className="flex items-end justify-between gap-4">
-            <div className="text-right">
-              <p className="text-xs font-semibold text-white/40">الرف المميز</p>
-              <h2 className="mt-2 text-2xl font-bold text-white">أقوى العناوين على الخادم المحلي</h2>
-            </div>
-            <span className="rounded-full border border-electric/20 bg-electric/12 px-3 py-1 text-xs font-semibold text-electric">
-              {searchResults.length} نتيجة
-            </span>
-          </div>
-          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-2">
-            {featured.map((item, index) => (
-              <MediaCard key={item.id} item={item} onOpen={onOpenMedia} index={index} />
-            ))}
-          </div>
-        </GlassCard>
+      {/* "الأكثر مشاهدة" Carousel Section with Left & Right Scroll Buttons */}
+      <section className="space-y-3">
+        <div className="flex items-center justify-between border-b border-white/10 pb-2 text-right">
+          <h2 className="text-lg font-black text-white sm:text-xl">الأكثر مشاهدة</h2>
 
-        <GlassCard className="p-6">
-          <div className="flex items-center justify-between">
-            <div className="text-right">
-              <p className="text-xs font-semibold text-white/40">آخر التحركات</p>
-              <h2 className="mt-2 text-2xl font-bold text-white">ما يجري خلف الزجاج</h2>
+          {/* Carousel Left & Right Arrows */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => scrollCarousel("right")}
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/15 bg-white/5 text-white/80 transition hover:bg-white/15"
+              title="التالي"
+            >
+              ›
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollCarousel("left")}
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/15 bg-white/5 text-white/80 transition hover:bg-white/15"
+              title="السابق"
+            >
+              ‹
+            </button>
+          </div>
+        </div>
+
+        {/* Carousel Scroll Container (Controlled Compact Cards, Pure Images) */}
+        <div
+          ref={carouselRef}
+          className="flex items-center gap-3 overflow-x-auto pb-2 scrollbar-none scroll-smooth"
+        >
+          {mostWatched.map((item, index) => (
+            <div key={item.id} className="shrink-0">
+              <MediaCard
+                item={item}
+                onOpen={onOpenMedia}
+                index={index}
+                compact
+              />
             </div>
-            <Icon name="bell" className="h-5 w-5 text-electric" />
-          </div>
-          <div className="mt-6 space-y-4">
-            {mockActivity.map((item) => (
-              <div key={item.title} className="rounded-2xl border border-white/10 bg-black/20 p-4 text-right">
-                <div className="flex items-center justify-between">
-                  <span className={`text-xs font-semibold ${
-                    item.tone === "emerald" ? "text-emerald-300" : item.tone === "cyan" ? "text-cyan-300" : "text-violet-300"
-                  }`}>
-                    {item.label}
-                  </span>
-                  <span className="text-xs text-white/35">الآن</span>
-                </div>
-                <h3 className="mt-3 text-lg font-semibold text-white">{item.title}</h3>
-                <p className="mt-2 text-sm leading-6 text-white/65">{item.body}</p>
-              </div>
-            ))}
-          </div>
-        </GlassCard>
+          ))}
+        </div>
+      </section>
+
+      {/* Bottom Statistics Bar (Flat dark rounded panel) */}
+      <section className="rounded-2xl border border-white/10 bg-[#0A0914] p-4 text-center">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6 divide-x-0 sm:divide-x sm:divide-x-reverse sm:divide-white/10">
+          {dashboardMetrics.map((stat) => (
+            <div key={stat.label} className="p-1">
+              <p className="text-[11px] font-bold text-white/40">{stat.label}</p>
+              <p className="mt-1 text-lg font-black text-white">{stat.value}</p>
+            </div>
+          ))}
+        </div>
       </section>
     </div>
   );
