@@ -543,20 +543,24 @@ func (r *Repository) ingestScannedFile(ctx context.Context, file scanner.FileInf
 	if title == "" {
 		title = strings.TrimSuffix(filepath.Base(file.Path), filepath.Ext(file.Path))
 	}
-	titleAR := nullableTitleAR(title)
-	titleEN := title
+	titleAR := nullableTitleAR(file.Parsed.TitleAR)
+	if !titleAR.Valid {
+		titleAR = nullableTitleAR(title)
+	}
+	titleEN := file.Parsed.TitleEN
+	if titleEN == "" {
+		titleEN = title
+	}
 
 	var mediaID int64
-	if err := tx.QueryRowContext(ctx, `
-		WITH existing AS (
-			SELECT id
-			FROM media_items
-			WHERE type = $1
-			  AND LOWER(title_en) = LOWER($2)
-			  AND COALESCE(release_year, 0) = $3
-			LIMIT 1
-		),
-		inserted AS (
+	err = tx.QueryRowContext(ctx, `
+		SELECT id FROM media_items
+		WHERE type = $1 AND (LOWER(title_en) = LOWER($2) OR (title_ar IS NOT NULL AND title_ar = $3))
+		LIMIT 1;
+	`, mediaType, titleEN, titleAR).Scan(&mediaID)
+
+	if errors.Is(err, sql.ErrNoRows) {
+		err = tx.QueryRowContext(ctx, `
 			INSERT INTO media_items (
 				category_id,
 				title_ar,
@@ -565,16 +569,14 @@ func (r *Repository) ingestScannedFile(ctx context.Context, file scanner.FileInf
 				release_year,
 				status
 			)
-			SELECT $4, $5, $2, $1, NULLIF($3, 0), 'completed'
-			WHERE NOT EXISTS (SELECT 1 FROM existing)
-			RETURNING id
-		)
-		SELECT id FROM inserted
-		UNION ALL
-		SELECT id FROM existing
-		LIMIT 1;
-	`, mediaType, titleEN, file.Parsed.ReleaseYear, categoryID, titleAR).Scan(&mediaID); err != nil {
-		return fmt.Errorf("upsert media item %q: %w", title, err)
+			VALUES ($1, $2, $3, $4, NULLIF($5, 0), 'completed')
+			RETURNING id;
+		`, categoryID, titleAR, titleEN, mediaType, file.Parsed.ReleaseYear).Scan(&mediaID)
+		if err != nil {
+			return fmt.Errorf("insert media item %q: %w", title, err)
+		}
+	} else if err != nil {
+		return fmt.Errorf("find media item %q: %w", title, err)
 	}
 
 	seasonID := sql.NullInt64{}
@@ -633,18 +635,21 @@ func (r *Repository) ingestScannedFile(ctx context.Context, file scanner.FileInf
 func classifyMedia(path string, parsed scanner.ParsedName) (categorySlug string, mediaType string) {
 	lowerPath := strings.ToLower(filepath.ToSlash(path))
 	switch {
-	case strings.Contains(lowerPath, "anime") || strings.Contains(path, "أنمي"):
+	case strings.Contains(lowerPath, "anime") || strings.Contains(path, "أنمي") || strings.Contains(path, "انمي"):
 		return "anime", "anime"
-	case strings.Contains(lowerPath, "kids") || strings.Contains(path, "أطفال"):
+	case strings.Contains(lowerPath, "kids") || strings.Contains(path, "أطفال") || strings.Contains(path, "اطفال") || strings.Contains(lowerPath, "cartoon") || strings.Contains(path, "كرتون") || strings.Contains(path, "رسوم"):
 		if parsed.IsEpisode {
 			return "kids", "series"
 		}
 		return "kids", "movie"
-	case strings.Contains(lowerPath, "document") || strings.Contains(path, "وثائقي"):
+	case strings.Contains(lowerPath, "document") || strings.Contains(path, "وثائقي") || strings.Contains(path, "وثائقية") || strings.Contains(path, "وثائقيات"):
+		if parsed.IsEpisode {
+			return "documentaries", "series"
+		}
 		return "documentaries", "movie"
-	case strings.Contains(lowerPath, "play") || strings.Contains(path, "مسرح"):
+	case strings.Contains(lowerPath, "play") || strings.Contains(path, "مسرح") || strings.Contains(path, "مسرحيات") || strings.Contains(path, "مسرحية"):
 		return "plays", "movie"
-	case parsed.IsEpisode:
+	case strings.Contains(lowerPath, "series") || strings.Contains(path, "مسلسل") || strings.Contains(path, "مسلسلات") || parsed.IsEpisode:
 		return "series", "series"
 	default:
 		return "movies", "movie"

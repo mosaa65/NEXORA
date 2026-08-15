@@ -1,0 +1,177 @@
+package metadata
+
+import (
+	"strings"
+)
+
+var defaultCatalog = []Result{
+	{
+		Provider:      "local_catalog",
+		ExternalID:    "aot_01",
+		Title:         "Attack on Titan",
+		OriginalTitle: "هجوم العمالقة",
+		Overview:      "منذ مائة عام، ظهرت العمالقة فجأة ودمرت معظم البشرية. يعيش الباقون في عالم محاط بأسوار ضخمة لحمايتهم من العمالقة... عندما يُخترق السور الأول، يبدأ إيرين غيغار رحلة الانتقام والبحث عن الحقيقة.",
+		ReleaseYear:   2013,
+		Rating:        9.0,
+		PosterPath:    "/images/attack_on_titan_poster.png",
+		BannerPath:    "/images/aot_banner_detail.png",
+		Genres:        []string{"خيال مظلم", "دراما", "أكشن", "أنمي"},
+	},
+	{
+		Provider:      "local_catalog",
+		ExternalID:    "op_01",
+		Title:         "One Piece",
+		OriginalTitle: "ون بيس",
+		Overview:      "ينطلق مونكي دي لوفي مع طاقم قبعة القش في مغامرة أسطورية عبر البحار العظيمة للبحث عن الكنز الأسطوري (ون بيس) وتحقيق حلمه بأن يصبح ملك القراصنة الجديد.",
+		ReleaseYear:   1999,
+		Rating:        8.9,
+		PosterPath:    "/images/one_piece_poster.png",
+		BannerPath:    "/images/one_piece_poster.png",
+		Genres:        []string{"أنمي", "مغامرة", "كوميديا", "فانتازيا"},
+	},
+	{
+		Provider:      "local_catalog",
+		ExternalID:    "ds_01",
+		Title:         "Demon Slayer",
+		OriginalTitle: "قاتل الشياطين - Kimetsu no Yaiba",
+		Overview:      "يتعهد تانجيرو كاماتو بالانتقام لعائلته وإعادة أخته نيزوكو إلى هيئتها البشرية بعد تحولها إلى شيطان، منضماً إلى فيلق قتلة الشياطين العريق.",
+		ReleaseYear:   2019,
+		Rating:        8.7,
+		PosterPath:    "/images/demon_slayer_poster.png",
+		BannerPath:    "/images/demon_slayer_poster.png",
+		Genres:        []string{"أنمي", "أكشن", "شياطين", "سيوف"},
+	},
+	{
+		Provider:      "local_catalog",
+		ExternalID:    "dn_01",
+		Title:         "Death Note",
+		OriginalTitle: "مذكرة الموت",
+		Overview:      "يعثر الطالب العبقري لايت ياغامي على مذكرة غامضة تمنحه القدرة على قتل أي شخص يكتب اسمه فيها، فيقرر تطهير العالم من المجرمين بينما يطارده المحقق العبقري (إل).",
+		ReleaseYear:   2006,
+		Rating:        9.0,
+		PosterPath:    "/images/tokyo_ghoul_hero.png",
+		BannerPath:    "/images/tokyo_ghoul_hero.png",
+		Genres:        []string{"أنمي", "غموض", "إثارة نفسي", "جريمة"},
+	},
+	{
+		Provider:      "local_catalog",
+		ExternalID:    "naruto_01",
+		Title:         "Naruto Shippuden",
+		OriginalTitle: "ناروتو شيبودن",
+		Overview:      "يعود ناروتو أوزوماكي إلى قرية كونوها بعد سنتين ونصف من التدريب الشاق، ليخوض معارك مصيرية لإنقاذ صديقه ساسكي والتصدي لمنظمة الأكاتسكي الشريرة.",
+		ReleaseYear:   2007,
+		Rating:        8.7,
+		PosterPath:    "/images/naruto_poster.png",
+		BannerPath:    "/images/naruto_poster.png",
+		Genres:        []string{"أنمي", "نينجا", "معارك", "صداقة"},
+	},
+	{
+		Provider:      "local_catalog",
+		ExternalID:    "dbz_01",
+		Title:         "Dragon Ball Z",
+		OriginalTitle: "دراغون بول زد",
+		Overview:      "يواجه غوكو ومحاربو كوكب الأرض تهديدات كونية من مقاتلي السايان وحكام الفضاء مثل فريزا وسيل وماجين بو، في معارك ملحمية تتجاوز حدود القوة.",
+		ReleaseYear:   1989,
+		Rating:        8.8,
+		PosterPath:    "/images/demon_slayer_poster.png",
+		BannerPath:    "/images/demon_slayer_poster.png",
+		Genres:        []string{"أنمي", "أكشن", "فضاء", "معارك خارقة"},
+	},
+	{
+		Provider:      "local_catalog",
+		ExternalID:    "inc_01",
+		Title:         "Inception",
+		OriginalTitle: "بداية (إنسبشن)",
+		Overview:      "دوم كوب سارق ماهر يمتلك قدرة فريدة على الدخول إلى أحلام الآخرين وسرقة أسرارهم العميقة. يُعرض عليه فرصة أخيرة لاستعادة حياته الطبيعية عبر زرع فكرة بدلاً من سرقتها.",
+		ReleaseYear:   2010,
+		Rating:        8.8,
+		PosterPath:    "/images/tokyo_ghoul_hero.png",
+		BannerPath:    "/images/tokyo_ghoul_hero.png",
+		Genres:        []string{"خيال علمي", "إثارة", "أكشن", "غموض"},
+	},
+	{
+		Provider:      "local_catalog",
+		ExternalID:    "msg_01",
+		Title:         "The Message",
+		OriginalTitle: "الرسالة",
+		Overview:      "الفيلم التاريخي الملحمي للمخرج مصطفى العقاد الذي يروي سيرة فجر الإسلام وبداية الدعوة النبوية في مكة المكرمة وانتشارها في الجزيرة العربية.",
+		ReleaseYear:   1976,
+		Rating:        8.4,
+		PosterPath:    "/images/attack_on_titan_poster.png",
+		BannerPath:    "/images/attack_on_titan_poster.png",
+		Genres:        []string{"تاريخي", "سيرة", "دراما"},
+	},
+	{
+		Provider:      "local_catalog",
+		ExternalID:    "inter_01",
+		Title:         "Interstellar",
+		OriginalTitle: "بين النجوم (إنترستيلار)",
+		Overview:      "في مستقبل كئيب تعاني فيه الأرض من الجفاف والمجاعة، ينطلق فريق من رواد الفضاء عبر ثقب دودي تم اكتشافه حديثاً بحثاً عن كوكب جديد يصلح لحياة البشرية.",
+		ReleaseYear:   2014,
+		Rating:        8.7,
+		PosterPath:    "/images/tokyo_ghoul_hero.png",
+		BannerPath:    "/images/tokyo_ghoul_hero.png",
+		Genres:        []string{"خيال علمي", "دراما", "مغامرة"},
+	},
+	{
+		Provider:      "local_catalog",
+		ExternalID:    "bb_01",
+		Title:         "Breaking Bad",
+		OriginalTitle: "بريكينغ باد",
+		Overview:      "مدرس كيمياء في المدرسة الثانوية يُشخص بسرطان الرئة في مرحلة متقدمة، فيقرر تصنيع الميثامفيتامين مع طالب سابق لتأمين مستقبل عائلته المالي، ليتحول تدريجياً إلى زعيم إجرامي أسطوري.",
+		ReleaseYear:   2008,
+		Rating:        9.5,
+		PosterPath:    "/images/tokyo_ghoul_hero.png",
+		BannerPath:    "/images/tokyo_ghoul_hero.png",
+		Genres:        []string{"جريمة", "دراما", "إثارة"},
+	},
+	{
+		Provider:      "local_catalog",
+		ExternalID:    "got_01",
+		Title:         "Game of Thrones",
+		OriginalTitle: "صراع العروش",
+		Overview:      "تسع عائلات نبيلة تتقاتل من أجل السيطرة على أراضي ويستروس والعرش الحديدي، بينما يستيقظ عدو قديم من سباته في أقصى الشمال ليهدد البشرية جمعاء.",
+		ReleaseYear:   2011,
+		Rating:        9.2,
+		PosterPath:    "/images/aot_banner_detail.png",
+		BannerPath:    "/images/aot_banner_detail.png",
+		Genres:        []string{"فانتازيا", "دراما", "أكشن", "حروب"},
+	},
+	{
+		Provider:      "local_catalog",
+		ExternalID:    "conan_01",
+		Title:         "Detective Conan",
+		OriginalTitle: "المحقق كونان",
+		Overview:      "يتناول المتحري الشاب سينشي كودو عقاراً ساماً من المنظمة السوداء يقلص جسده إلى طفل، فيتخذ اسم كونان إيدوجاوا ويحل أصعب القضايا الجنائية.",
+		ReleaseYear:   1996,
+		Rating:        8.5,
+		PosterPath:    "/images/attack_on_titan_poster.png",
+		BannerPath:    "/images/attack_on_titan_poster.png",
+		Genres:        []string{"أنمي", "غموض", "تحقيق", "أطفال"},
+	},
+	{
+		Provider:      "local_catalog",
+		ExternalID:    "pe_01",
+		Title:         "Planet Earth II",
+		OriginalTitle: "كوكب الأرض ٢",
+		Overview:      "سلسلة وثائقية استثنائية من هيئة الإذاعة البريطانية BBC تستكشف عجائب الطبيعة والحيوانات في أكثر بيئات الأرض عزلة وإثارة بدقة 4K فائقة.",
+		ReleaseYear:   2016,
+		Rating:        9.5,
+		PosterPath:    "/images/tokyo_ghoul_hero.png",
+		BannerPath:    "/images/tokyo_ghoul_hero.png",
+		Genres:        []string{"وثائقي", "طبيعة", "استكشاف"},
+	},
+}
+
+func findInLocalCatalog(query Query) (Result, bool) {
+	normQuery := strings.ToLower(strings.TrimSpace(query.Title))
+	for _, item := range defaultCatalog {
+		titleEn := strings.ToLower(item.Title)
+		titleAr := strings.ToLower(item.OriginalTitle)
+		if strings.Contains(normQuery, titleEn) || strings.Contains(titleEn, normQuery) ||
+			strings.Contains(normQuery, titleAr) || strings.Contains(titleAr, normQuery) {
+			return item, true
+		}
+	}
+	return Result{}, false
+}

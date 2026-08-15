@@ -1,7 +1,8 @@
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import MediaCard from "../components/MediaCard.jsx";
 import Icon from "../components/Icon.jsx";
-import { buildHeroCopy, dashboardMetrics, mockLibrary } from "../data/library.js";
+import { getDashboardStats, getMediaList } from "../lib/api.js";
+import { mockLibrary } from "../data/library.js";
 
 export default function DashboardPage({
   searchQuery,
@@ -11,10 +12,54 @@ export default function DashboardPage({
   onQuickPlay,
   onToggleSidebar
 }) {
-  const hero = buildHeroCopy();
-  const primaryPick = mockLibrary.find((item) => item.id === 1) || mockLibrary[0];
-  const mostWatched = mockLibrary;
+  const [items, setItems] = useState([]);
+  const [stats, setStats] = useState(null);
   const carouselRef = useRef(null);
+
+  useEffect(() => {
+    let alive = true;
+
+    getMediaList({ limit: 30, sort: "rating" })
+      .then((data) => {
+        if (!alive) return;
+        if (data.items && data.items.length > 0) {
+          const transformed = data.items.map((item) => ({
+            id: item.id,
+            titleAr: item.title_ar || item.title_en,
+            titleEn: item.title_en,
+            type: item.type,
+            plot: item.plot_ar || item.plot_en || "عمل سينمائي مميز متاح في مكتبة NEXORA المحلية.",
+            year: item.release_year || 2023,
+            rating: item.rating || 8.5,
+            posterPath: item.poster_path,
+            bannerPath: item.banner_path,
+            categorySlug: item.category_slug,
+            fileCount: item.file_count || 1
+          }));
+          setItems(transformed);
+        } else {
+          setItems(mockLibrary);
+        }
+      })
+      .catch(() => {
+        if (alive) setItems(mockLibrary);
+      });
+
+    getDashboardStats()
+      .then((data) => {
+        if (!alive) return;
+        if (data) setStats(data);
+      })
+      .catch(() => {});
+
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const displayItems = searchResults?.length > 0 && searchQuery ? searchResults : items.length > 0 ? items : mockLibrary;
+  const primaryPick = displayItems[0] || mockLibrary[0];
+  const carouselItems = displayItems.slice(0, 15);
 
   function scrollCarousel(direction) {
     if (carouselRef.current) {
@@ -23,21 +68,30 @@ export default function DashboardPage({
     }
   }
 
+  const metrics = [
+    { label: "إجمالي الأعمال", value: stats?.total_media ? `${stats.total_media}` : `${displayItems.length}` },
+    { label: "ملفات الفيديو", value: stats?.total_files ? `${stats.total_files}` : "133" },
+    { label: "مساحة التخزين", value: stats?.total_storage_bytes ? `${(stats.total_storage_bytes / (1024 * 1024 * 1024)).toFixed(1)} GB` : "249 KB" },
+    { label: "الأقسام النشطة", value: `${stats?.categories?.length || 6}` },
+    { label: "الحلقات المفقودة", value: `${stats?.missing_episodes_count ?? 1}` },
+    { label: "الملفات المكررة", value: `${stats?.duplicates_count ?? 2}` }
+  ];
+
   return (
     <div className="space-y-6">
       {/* Hero Showcase Container with Header Integrated Overlay */}
       <section className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0B0A16]">
-        {/* Full Image Background extending to top header */}
+        {/* Full Image Background */}
         <div
           className="absolute inset-0 bg-cover bg-right sm:bg-center opacity-85 transition-all duration-1000"
-          style={{ backgroundImage: `url('${primaryPick?.posterPath || "/images/tokyo_ghoul_hero.png"}')` }}
+          style={{ backgroundImage: `url('${primaryPick?.bannerPath || primaryPick?.posterPath || "/images/tokyo_ghoul_hero.png"}')` }}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-[#0B0A16] via-[#0B0A16]/40 to-transparent" />
         <div className="absolute inset-0 bg-gradient-to-l from-[#0B0A16]/95 via-[#0B0A16]/50 to-transparent" />
 
-        {/* Integrated Top Bar Header (Transparent Over Hero Image, NO border, NO blur) */}
+        {/* Integrated Top Bar Header */}
         <div className="relative z-20 flex items-center justify-between gap-4 p-4 sm:p-6 bg-transparent border-none">
-          {/* Left: Shorter & Fully Rounded Search Bar */}
+          {/* Left: Search Bar */}
           <div className="relative flex-1 max-w-xs sm:max-w-sm">
             <div className="flex w-full items-center gap-2.5 rounded-full border border-white/20 bg-black/40 px-4 py-2 backdrop-blur-sm focus-within:border-fuchsia-500/60">
               <Icon name="search" className="h-4 w-4 text-white/60 shrink-0" />
@@ -50,13 +104,12 @@ export default function DashboardPage({
             </div>
           </div>
 
-          {/* Right: Brand Emblem "مكتبتي / نظام إدارة الوسائط" (Pure Icon without BG color fill) */}
+          {/* Right: Brand Emblem */}
           <div className="flex items-center gap-3">
             <div className="text-right">
               <h2 className="text-lg font-black text-white">مكتبتي</h2>
               <p className="text-[10px] font-bold text-white/50">نظام إدارة الوسائط</p>
             </div>
-            {/* Pure Triangle SVG Icon with NO background fill */}
             <div className="flex items-center justify-center text-fuchsia-400">
               <svg className="h-7 w-7 stroke-current" fill="none" viewBox="0 0 24 24" strokeWidth="2.2">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 3L2 21h20L12 3z" />
@@ -66,18 +119,18 @@ export default function DashboardPage({
           </div>
         </div>
 
-        {/* Hero Banner Content (LEFT ALIGNED for Title, Text & Buttons) */}
+        {/* Hero Banner Content */}
         <div className="relative z-10 flex flex-col justify-end p-6 sm:p-10 lg:p-12 min-h-[22rem] sm:min-h-[26rem]">
-          <div className="max-w-xl text-left">
+          <div className="max-w-xl text-right md:text-left">
             <h1 className="text-4xl font-black text-white sm:text-5xl lg:text-6xl tracking-tight leading-none">
-              طوكيو غول
+              {primaryPick.titleAr}
             </h1>
-            <p className="mt-2 text-base font-bold text-white/70 sm:text-lg">Tokyo Ghoul</p>
-            <p className="mt-4 max-w-lg text-xs leading-relaxed text-white/80 sm:text-sm text-left">
-              في طوكيو حيث تعيش غيلان بين البشر بالتخفي، تنقلب حياة الشاب (كانيكي) عندما تلتهمه إحدى الغيلان بدلاً من أن تصبح عشاءه، فيتحول إلى نصف بشري ونصف غول محاصر بين عالمين.
+            <p className="mt-2 text-base font-bold text-white/70 sm:text-lg">{primaryPick.titleEn}</p>
+            <p className="mt-4 max-w-lg text-xs leading-relaxed text-white/80 sm:text-sm text-right md:text-left">
+              {primaryPick.plot}
             </p>
 
-            {/* Action Buttons (LEFT ALIGNED & NOT 50% ROUNDED, SVG Play Icon) */}
+            {/* Action Buttons */}
             <div className="mt-6 flex flex-wrap items-center justify-start gap-3">
               <button
                 type="button"
@@ -100,12 +153,11 @@ export default function DashboardPage({
         </div>
       </section>
 
-      {/* "الأكثر مشاهدة" Carousel Section with Left & Right Scroll Buttons */}
+      {/* "الأكثر مشاهدة / الأحدث" Carousel Section */}
       <section className="space-y-3">
         <div className="flex items-center justify-between border-b border-white/10 pb-2 text-right">
-          <h2 className="text-lg font-black text-white sm:text-xl">الأكثر مشاهدة</h2>
+          <h2 className="text-lg font-black text-white sm:text-xl">أحدث الأعمال المفهرسة</h2>
 
-          {/* Carousel Left & Right Arrows */}
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -126,12 +178,12 @@ export default function DashboardPage({
           </div>
         </div>
 
-        {/* Carousel Scroll Container (Controlled Compact Cards, Pure Images) */}
+        {/* Carousel Scroll Container */}
         <div
           ref={carouselRef}
           className="flex items-center gap-3 overflow-x-auto pb-2 scrollbar-none scroll-smooth"
         >
-          {mostWatched.map((item, index) => (
+          {carouselItems.map((item, index) => (
             <div key={item.id} className="shrink-0">
               <MediaCard
                 item={item}
@@ -144,10 +196,10 @@ export default function DashboardPage({
         </div>
       </section>
 
-      {/* Bottom Statistics Bar (Flat dark rounded panel) */}
+      {/* Bottom Statistics Bar */}
       <section className="rounded-2xl border border-white/10 bg-[#0A0914] p-4 text-center">
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6 divide-x-0 sm:divide-x sm:divide-x-reverse sm:divide-white/10">
-          {dashboardMetrics.map((stat) => (
+          {metrics.map((stat) => (
             <div key={stat.label} className="p-1">
               <p className="text-[11px] font-bold text-white/40">{stat.label}</p>
               <p className="mt-1 text-lg font-black text-white">{stat.value}</p>

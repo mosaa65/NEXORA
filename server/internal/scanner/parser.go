@@ -11,6 +11,8 @@ import (
 type ParsedName struct {
 	Original      string `json:"original"`
 	Title         string `json:"title"`
+	TitleAR       string `json:"titleAr,omitempty"`
+	TitleEN       string `json:"titleEn,omitempty"`
 	SeasonNumber  int    `json:"seasonNumber,omitempty"`
 	EpisodeNumber int    `json:"episodeNumber,omitempty"`
 	Resolution    string `json:"resolution,omitempty"`
@@ -20,14 +22,15 @@ type ParsedName struct {
 }
 
 type episodePattern struct {
-	re           *regexp.Regexp
-	seasonGroup  int
-	episodeGroup int
+	re            *regexp.Regexp
+	seasonGroup   int
+	episodeGroup  int
 	defaultSeason int
 }
 
 var (
-	resolutionRE = regexp.MustCompile(`(?i)(?:^|\s)(4320p|2160p|1080p|720p|576p|480p|360p|8k|4k|uhd|fhd|hd)(?:\s|$)`)
+	bracketTagRE = regexp.MustCompile(`\[[^\]]*\]|\([^\)]*(?:1080p|720p|4k|bluray|hevc|x264|x265)[^\)]*\)`)
+	resolutionRE = regexp.MustCompile(`(?i)(?:^|\s)(4320p|2160p|1080p|1080i|720p|576p|480p|360p|8k|4k|uhd|fhd|hd)(?:\s|$)`)
 	yearRE       = regexp.MustCompile(`(?:^|\s)((?:19|20)\d{2})(?:\s|$)`)
 
 	episodePatterns = []episodePattern{
@@ -52,22 +55,43 @@ var (
 			episodeGroup: 2,
 		},
 		{
-			re:             regexp.MustCompile(`(?i)(?:^|\s)(?:episode|ep|e)\s*(\d{1,4})(?:\s|$)`),
-			episodeGroup:   1,
-			defaultSeason:  1,
+			re:           regexp.MustCompile(`(?:الموسم|موسم)\s*(الأول|الاول|الثاني|الثالث|الرابع|الخامس|السادس|السابع|الثامن|التاسع|العاشر)\s*(?:الحلقة|حلقة|ح)\s*(\d{1,4})(?:\s|$)`),
+			seasonGroup:  1,
+			episodeGroup: 2,
 		},
 		{
-			re:             regexp.MustCompile(`(?:^|\s)(?:الحلقة|حلقة|ح)\s*(\d{1,4})(?:\s|$)`),
-			episodeGroup:   1,
-			defaultSeason:  1,
+			re:            regexp.MustCompile(`(?i)(?:^|\s)(?:episode|ep|e)\s*(\d{1,4})(?:\s|$)`),
+			episodeGroup:  1,
+			defaultSeason: 1,
 		},
+		{
+			re:            regexp.MustCompile(`(?:^|\s)(?:الحلقة|حلقة|ح)\s*(\d{1,4})(?:\s|$)`),
+			episodeGroup:  1,
+			defaultSeason: 1,
+		},
+	}
+
+	arabicWordToNum = map[string]int{
+		"الأول": 1, "الاول": 1, "الأولى": 1, "الاولى": 1,
+		"الثاني": 2, "الثانية": 2,
+		"الثالث": 3, "الثالثة": 3,
+		"الرابع": 4, "الرابعة": 4,
+		"الخامس": 5, "الخامسة": 5,
+		"السادس": 6, "السادسة": 6,
+		"السابع": 7, "السابعة": 7,
+		"الثامن": 8, "الثامنة": 8,
+		"التاسع": 9, "التاسعة": 9,
+		"العاشر": 10, "العاشرة": 10,
 	}
 
 	noiseTokens = map[string]struct{}{
 		"aac": {}, "ac3": {}, "bdrip": {}, "bluray": {}, "brrip": {}, "cam": {},
-		"ddp": {}, "dl": {}, "dual": {}, "dvdrip": {}, "h264": {}, "h265": {},
+		"ddp": {}, "dl": {}, "dual": {}, "dvdrip": {}, "dvd": {}, "h264": {}, "h265": {},
 		"hdcam": {}, "hdtv": {}, "hevc": {}, "proper": {}, "repack": {}, "rip": {},
-		"web": {}, "webrip": {}, "x264": {}, "x265": {}, "yts": {},
+		"web": {}, "webrip": {}, "webdl": {}, "web-dl": {}, "x264": {}, "x265": {}, "yts": {},
+		"hdr": {}, "hdr10": {}, "dv": {}, "atmos": {}, "remux": {}, "dts": {}, "dts-hd": {},
+		"10bit": {}, "extended": {}, "unrated": {}, "flac": {}, "sub": {}, "dub": {},
+		"مترجم": {}, "مدبلج": {}, "كامل": {}, "نسخة": {}, "جودة": {}, "عالية": {},
 	}
 )
 
@@ -75,13 +99,20 @@ func ParseFileName(fileName string) ParsedName {
 	original := filepath.Base(fileName)
 	extension := strings.ToLower(filepath.Ext(original))
 	base := strings.TrimSuffix(original, filepath.Ext(original))
-	working := normalizeWorkingName(base)
+
+	normalizedBase := normalizeWorkingName(base)
+	resolution := canonicalResolution(normalizedBase)
+	year := extractYear(normalizedBase)
+
+	// Remove bracketed release group tags e.g. "[Sub-Group] Name [FLAC]"
+	cleanedBrackets := bracketTagRE.ReplaceAllString(base, " ")
+	working := normalizeWorkingName(cleanedBrackets)
 
 	parsed := ParsedName{
-		Original:  original,
-		Extension: extension,
-		Resolution: canonicalResolution(working),
-		ReleaseYear: extractYear(working),
+		Original:    original,
+		Extension:   extension,
+		Resolution:  resolution,
+		ReleaseYear: year,
 	}
 
 	titleCandidate := working
@@ -92,10 +123,16 @@ func ParseFileName(fileName string) ParsedName {
 		}
 
 		if pattern.seasonGroup > 0 {
-			parsed.SeasonNumber = atoiSubmatch(working, match, pattern.seasonGroup)
+			rawSeason := working[match[pattern.seasonGroup*2]:match[pattern.seasonGroup*2+1]]
+			if num, ok := arabicWordToNum[rawSeason]; ok {
+				parsed.SeasonNumber = num
+			} else {
+				parsed.SeasonNumber = atoiSubmatch(working, match, pattern.seasonGroup)
+			}
 		} else {
 			parsed.SeasonNumber = pattern.defaultSeason
 		}
+
 		parsed.EpisodeNumber = atoiSubmatch(working, match, pattern.episodeGroup)
 		parsed.IsEpisode = parsed.EpisodeNumber > 0
 		if parsed.SeasonNumber == 0 && parsed.IsEpisode {
@@ -110,6 +147,9 @@ func ParseFileName(fileName string) ParsedName {
 		parsed.Title = cleanTitle(working)
 	}
 
+	// Split dual titles (e.g. "Attack on Titan - هجوم العمالقة")
+	parsed.TitleAR, parsed.TitleEN = splitDualTitle(parsed.Title)
+
 	return parsed
 }
 
@@ -117,7 +157,7 @@ func normalizeWorkingName(input string) string {
 	input = normalizeDigits(input)
 	replaced := strings.Map(func(r rune) rune {
 		switch r {
-		case '.', '_', '-', '[', ']', '(', ')', '{', '}', '+', '|':
+		case '.', '_', '-', '[', ']', '(', ')', '{', '}', '+', '|', '–', '—':
 			return ' '
 		default:
 			if unicode.IsControl(r) {
@@ -165,6 +205,25 @@ func cleanTitle(input string) string {
 	return strings.Join(cleaned, " ")
 }
 
+func splitDualTitle(raw string) (string, string) {
+	if strings.Contains(raw, " - ") {
+		parts := strings.Split(raw, " - ")
+		if len(parts) >= 2 {
+			p1 := strings.TrimSpace(parts[0])
+			p2 := strings.TrimSpace(parts[1])
+			if containsArabic(p1) && !containsArabic(p2) {
+				return p1, p2
+			} else if !containsArabic(p1) && containsArabic(p2) {
+				return p2, p1
+			}
+		}
+	}
+	if containsArabic(raw) {
+		return raw, raw
+	}
+	return "", raw
+}
+
 func canonicalResolution(input string) string {
 	match := resolutionRE.FindStringSubmatch(input)
 	if len(match) < 2 {
@@ -172,19 +231,18 @@ func canonicalResolution(input string) string {
 	}
 	value := strings.ToLower(match[1])
 	switch value {
-	case "4k", "uhd":
+	case "4k", "uhd", "2160p":
 		return "4K"
 	case "8k", "4320p":
-		if value == "8k" {
-			return "8K"
-		}
-		return "4320p"
-	case "fhd":
+		return "8K"
+	case "fhd", "1080p", "1080i":
 		return "1080p"
-	case "hd":
+	case "hd", "720p":
 		return "720p"
-	default:
+	case "480p", "576p", "360p":
 		return value
+	default:
+		return strings.ToUpper(value)
 	}
 }
 
@@ -212,6 +270,15 @@ func atoiSubmatch(input string, match []int, group int) int {
 func containsLetter(input string) bool {
 	for _, r := range input {
 		if unicode.IsLetter(r) {
+			return true
+		}
+	}
+	return false
+}
+
+func containsArabic(input string) bool {
+	for _, r := range input {
+		if unicode.In(r, unicode.Arabic) {
 			return true
 		}
 	}

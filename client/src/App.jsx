@@ -149,13 +149,8 @@ export default function App() {
     startTransition(() => {
       if (view === "admin") {
         setAdminAnchor("admin-overview");
-      }
-      if (view === "anime") {
-        setSelectedCategory("anime");
-      } else if (view === "movies") {
-        setSelectedCategory("movies");
-      } else if (view === "series") {
-        setSelectedCategory("series");
+      } else if (["anime", "movies", "series", "kids", "documentaries", "plays"].includes(view)) {
+        setSelectedCategory(view);
       }
       setActiveView(view);
       setIsSidebarOpen(false);
@@ -167,26 +162,30 @@ export default function App() {
     navigate("details");
   }
 
-  async function quickPlayMedia(item) {
+  async function quickPlayMedia(item, episode) {
     setSelectedMedia(item);
     setIsPlaying(true);
-    setCurrentTimeSec(765);
+    setCurrentTimeSec(0);
     try {
       const payload = await getMediaFiles(item.id);
       const files = payload.files || [];
       setPlayingVideoFiles(files);
-      setPlayingVideoFile(files[0] || null);
+      if (episode && episode.id) {
+        setPlayingVideoFile(episode);
+      } else {
+        setPlayingVideoFile(files[0] || null);
+      }
       setPlayingMedia(item);
     } catch {
       setPlayingVideoFiles([]);
-      setPlayingVideoFile(null);
+      setPlayingVideoFile(episode || null);
       setPlayingMedia(item);
     }
   }
 
   function openCategory(slug) {
     setSelectedCategory(slug);
-    navigate("categories");
+    navigate(slug);
   }
 
   async function handleSyncIndex() {
@@ -263,7 +262,7 @@ export default function App() {
                   />
                 )}
 
-                {(activeView === "categories" || activeView === "anime" || activeView === "movies" || activeView === "series") && (
+                {(activeView === "categories" || ["anime", "movies", "series", "kids", "documentaries", "plays"].includes(activeView)) && (
                   <CategoryPage
                     selectedCategory={selectedCategory}
                     searchResults={searchResults}
