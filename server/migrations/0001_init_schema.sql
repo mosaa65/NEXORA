@@ -69,6 +69,7 @@ CREATE INDEX IF NOT EXISTS idx_video_files_media_item_id ON video_files(media_it
 CREATE INDEX IF NOT EXISTS idx_video_files_season_id ON video_files(season_id);
 CREATE INDEX IF NOT EXISTS idx_video_files_episode_number ON video_files(episode_number);
 
+-- Seed Essential System Categories Lookup Table
 INSERT INTO categories (name_ar, name_en, slug) VALUES
     ('أفلام', 'Movies', 'movies'),
     ('مسلسلات', 'Series', 'series'),

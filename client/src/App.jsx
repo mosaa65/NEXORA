@@ -14,13 +14,15 @@ import { getCategories, getHealth, getMediaFiles, searchLibrary, syncIndex, reso
 const fallbackCategories = categorySeed;
 
 export default function App() {
-  const [activeView, setActiveView] = useState("dashboard"); // "dashboard", "movies", "series", "anime", "details", "admin"
+  const [activeView, setActiveView] = useState("dashboard");
   const [selectedCategory, setSelectedCategory] = useState("anime");
   const [selectedMedia, setSelectedMedia] = useState(mockLibrary[0]);
   const [playingMedia, setPlayingMedia] = useState(null);
   const [playingEpisode, setPlayingEpisode] = useState(detailEpisodes[0]);
   const [playingVideoFile, setPlayingVideoFile] = useState(null);
   const [playingVideoFiles, setPlayingVideoFiles] = useState([]);
+  const [isPlaying, setIsPlaying] = useState(true);
+  const [currentTimeSec, setCurrentTimeSec] = useState(765); // 12:45
   const [searchQuery, setSearchQuery] = useState("");
   const deferredQuery = useDeferredValue(searchQuery);
   const [health, setHealth] = useState(null);
@@ -29,6 +31,17 @@ export default function App() {
   const [isSearching, setIsSearching] = useState(false);
   const [syncStatus, setSyncStatus] = useState("جاهز");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [adminAnchor, setAdminAnchor] = useState("admin-overview");
+
+  useEffect(() => {
+    let interval;
+    if (playingMedia && isPlaying && !playingVideoFile) {
+      interval = setInterval(() => {
+        setCurrentTimeSec((prev) => (prev >= 1450 ? 0 : prev + 1));
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [playingMedia, isPlaying, playingVideoFile]);
 
   useEffect(() => {
     let alive = true;
@@ -134,6 +147,9 @@ export default function App() {
 
   function navigate(view) {
     startTransition(() => {
+      if (view === "admin") {
+        setAdminAnchor("admin-overview");
+      }
       if (view === "anime") {
         setSelectedCategory("anime");
       } else if (view === "movies") {
@@ -153,6 +169,8 @@ export default function App() {
 
   async function quickPlayMedia(item) {
     setSelectedMedia(item);
+    setIsPlaying(true);
+    setCurrentTimeSec(765);
     try {
       const payload = await getMediaFiles(item.id);
       const files = payload.files || [];
@@ -182,14 +200,20 @@ export default function App() {
     window.setTimeout(() => setSyncStatus("جاهز"), 3000);
   }
 
+  function formatTime(seconds) {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  }
+
   return (
     <main className="relative min-h-screen bg-[#08070E] text-white selection:bg-fuchsia-600/40 selection:text-white font-sans">
       {/* Background Micro Glow */}
       <div className="pointer-events-none fixed inset-0 z-0 bg-[radial-gradient(circle_at_20%_0%,rgba(147,51,234,0.18),transparent_40%),radial-gradient(circle_at_80%_0%,rgba(217,70,239,0.14),transparent_35%)]" />
 
       <div className="relative z-10 mx-auto max-w-[1920px] p-3 sm:p-5 lg:p-8">
-        {/* Render TopBar only on non-dashboard views to allow full header extension in Dashboard */}
-        {activeView !== "dashboard" && (
+        {/* Render TopBar only on views that do not have their own integrated header */}
+        {activeView !== "dashboard" && activeView !== "details" && (
           <TopBar
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
@@ -208,6 +232,14 @@ export default function App() {
             onClose={() => setIsSidebarOpen(false)}
             activeView={activeView}
             onNavigate={navigate}
+            activeAdminAnchor={adminAnchor}
+            onAdminNavigate={(anchor) => {
+              setAdminAnchor(anchor);
+              startTransition(() => {
+                setActiveView("admin");
+                setIsSidebarOpen(false);
+              });
+            }}
           />
 
           {/* Active View Container */}
@@ -243,6 +275,8 @@ export default function App() {
                 {activeView === "details" && (
                   <MediaDetailsPage
                     media={currentMedia}
+                    searchQuery={searchQuery}
+                    onSearchChange={setSearchQuery}
                     onOpenCategory={openCategory}
                     onQuickPlay={quickPlayMedia}
                   />
@@ -250,7 +284,7 @@ export default function App() {
 
                 {/* Completely Isolated Admin Console View */}
                 {activeView === "admin" && (
-                  <AdminPage health={health} onSyncIndex={handleSyncIndex} />
+                  <AdminPage health={health} onSyncIndex={handleSyncIndex} activeAnchor={adminAnchor} />
                 )}
               </motion.div>
             </AnimatePresence>
@@ -278,26 +312,27 @@ export default function App() {
               </button>
 
               <div className="text-right">
-                <p className="text-xs font-bold text-fuchsia-400">
-                  {playingMedia.titleAr} - {playingMedia.seasonLabel || "الموسم الثالث"} - {playingEpisode.title || "الحلقة 01"}
+                <p className="text-xs sm:text-sm font-bold text-fuchsia-300">
+                  {playingMedia.titleAr} - {playingMedia.seasonLabel || "الموسم الثالث"} - {playingEpisode.title}
                 </p>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <div className="text-right hidden sm:block">
                   <h3 className="text-sm font-black text-white">مكتبتي</h3>
                   <p className="text-[10px] text-white/40">نظام إدارة الوسائط</p>
                 </div>
-                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-fuchsia-600 to-purple-800 text-white shadow-md">
-                  <svg className="h-4 w-4 stroke-current" fill="none" viewBox="0 0 24 24" strokeWidth="2">
+                <div className="flex h-9 w-9 items-center justify-center text-fuchsia-400">
+                  <svg className="h-6 w-6 stroke-current" fill="none" viewBox="0 0 24 24" strokeWidth="2.2">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 3L2 21h20L12 3z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9l-4 7h8l-4-7z" />
                   </svg>
                 </div>
               </div>
             </div>
 
             {/* Content Body: Player (Left) + Episodes Sidebar (Right) */}
-            <div className="grid flex-1 gap-6 overflow-hidden lg:grid-cols-[1.3fr_0.7fr]">
+            <div className="grid flex-1 gap-6 overflow-hidden lg:grid-cols-[1.35fr_0.65fr]">
               {/* Left Video Player Container */}
               <div className="relative flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-black shadow-2xl">
                 {playingVideoFile?.stream_url ? (
@@ -307,49 +342,87 @@ export default function App() {
                     poster={playingMedia.posterPath ? resolveAPIURL(playingMedia.posterPath) : undefined}
                   />
                 ) : (
-                  <div className="relative flex h-full w-full flex-col justify-between overflow-hidden bg-black/80 p-6">
-                    {/* Character Backdrop Image */}
+                  <div className="relative flex h-full w-full flex-col justify-between overflow-hidden bg-black/90 p-5">
+                    {/* Dark Character Artwork Backdrop */}
                     <div
-                      className="absolute inset-0 bg-cover bg-center opacity-60"
+                      className="absolute inset-0 bg-cover bg-center opacity-70 transition-all duration-700"
                       style={{ backgroundImage: `url('${playingMedia.posterPath || "/images/jujutsu_kaisen_poster.png"}')` }}
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-black/20" />
 
-                    {/* Centered Play Pulse Icon */}
+                    {/* Centered Interactive Play/Pause Button */}
                     <div className="relative z-10 my-auto flex flex-col items-center justify-center text-center">
                       <button
                         type="button"
-                        onClick={() => {
-                          if (playingVideoFiles[0]) setPlayingVideoFile(playingVideoFiles[0]);
-                        }}
+                        onClick={() => setIsPlaying(!isPlaying)}
                         className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-tr from-fuchsia-600 to-purple-600 text-white shadow-2xl shadow-purple-900/80 transition hover:scale-110"
                       >
-                        <span className="text-2xl font-black">▶</span>
+                        <Icon name={isPlaying ? "play" : "play"} className="h-8 w-8 text-white fill-current" />
                       </button>
-                      <p className="mt-4 text-lg font-black text-white">بث مباشر متصل بالشبكة المحلية LAN</p>
-                      <p className="mt-1 text-xs text-white/60">دقة 1080p · صوت محيطي · ترجمة احترافية</p>
+                      <p className="mt-4 text-lg font-black text-white">{playingMedia.titleAr} · {playingEpisode.title}</p>
+                      <p className="mt-1 text-xs font-bold text-white/60">بث شبكي محلي LAN · دقة 1080p · صوت محيطي</p>
                     </div>
 
-                    {/* Player Controls Bar */}
-                    <div className="relative z-10 space-y-2 rounded-2xl border border-white/10 bg-black/60 p-3 backdrop-blur-md">
-                      <div className="flex items-center justify-between text-xs font-bold text-white/70">
-                        <span>24:10</span>
-                        <span>12:45</span>
+                    {/* Bottom Custom Player Controls Bar (Matching Reference Image) */}
+                    <div className="relative z-10 space-y-2 rounded-2xl border border-white/10 bg-black/70 p-3.5 backdrop-blur-md">
+                      {/* Scrubber Line */}
+                      <div className="relative h-1.5 w-full cursor-pointer rounded-full bg-white/20">
+                        <div
+                          className="h-1.5 rounded-full bg-gradient-to-r from-purple-600 to-fuchsia-500"
+                          style={{ width: `${(currentTimeSec / 1450) * 100}%` }}
+                        />
+                        <div
+                          className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-md shadow-fuchsia-500/50"
+                          style={{ left: `${(currentTimeSec / 1450) * 100}%` }}
+                        />
                       </div>
-                      <div className="relative h-1.5 w-full rounded-full bg-white/20">
-                        <div className="h-1.5 w-1/2 rounded-full bg-gradient-to-r from-purple-600 to-fuchsia-500" />
-                        <div className="absolute top-1/2 left-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-md" />
-                      </div>
+
+                      {/* Timestamps & Control Action Buttons */}
                       <div className="flex items-center justify-between pt-1 text-xs text-white/80">
-                        <div className="flex items-center gap-3">
-                          <button type="button" className="hover:text-white">🔊</button>
-                          <button type="button" className="hover:text-white">⚙️</button>
-                          <button type="button" className="hover:text-white">⛶</button>
+                        {/* Time Indicator */}
+                        <div className="flex items-center gap-2 font-mono text-xs font-bold text-white/70">
+                          <span>{formatTime(currentTimeSec)}</span>
+                          <span>/</span>
+                          <span>24:10</span>
                         </div>
+
+                        {/* Control Buttons */}
                         <div className="flex items-center gap-4">
-                          <button type="button" className="hover:text-white">⏭</button>
-                          <button type="button" className="text-lg text-fuchsia-400">⏸</button>
-                          <button type="button" className="hover:text-white">⏮</button>
+                          <button type="button" className="hover:text-white" title="كتم الصوت">
+                            <Icon name="smile" className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCurrentTimeSec((prev) => Math.max(0, prev - 10))}
+                            className="hover:text-white"
+                            title="تراجع 10 ثوان"
+                          >
+                            ⏮
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setIsPlaying(!isPlaying)}
+                            className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-r from-fuchsia-600 to-purple-600 text-white shadow-md hover:scale-105"
+                          >
+                            {isPlaying ? "⏸" : "▶"}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setCurrentTimeSec((prev) => Math.min(1450, prev + 10))}
+                            className="hover:text-white"
+                            title="تقديم 10 ثوان"
+                          >
+                            ⏭
+                          </button>
+
+                          <button type="button" className="hover:text-white" title="الإعدادات">
+                            <Icon name="settings" className="h-4 w-4" />
+                          </button>
+                          <button type="button" className="hover:text-white" title="ملء الشاشة">
+                            ⛶
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -359,36 +432,49 @@ export default function App() {
 
               {/* Right Episode List Sidebar */}
               <div className="flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0D0E18] p-4 text-right">
+                {/* Season Header */}
                 <div className="mb-3 flex items-center justify-between border-b border-white/10 pb-3">
-                  <span className="rounded-md bg-white/10 px-2.5 py-0.5 text-xs font-bold text-white/70">
+                  <span className="rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-bold text-white/70">
                     22 حلقة
                   </span>
-                  <h4 className="text-sm font-black text-white">الموسم الثالث</h4>
+                  <div className="flex items-center gap-1.5 cursor-pointer">
+                    <span className="text-xs text-white/40">▼</span>
+                    <h4 className="text-sm font-black text-white">الموسم الثالث</h4>
+                  </div>
                 </div>
 
-                <div className="flex-1 space-y-2 overflow-y-auto pr-1">
+                {/* Episodes Scroll List */}
+                <div className="flex-1 space-y-2.5 overflow-y-auto pr-1">
                   {detailEpisodes.map((ep) => {
                     const isSelected = ep.number === playingEpisode.number;
                     return (
                       <button
                         key={ep.number}
                         type="button"
-                        onClick={() => setPlayingEpisode(ep)}
+                        onClick={() => {
+                          setPlayingEpisode(ep);
+                          setIsPlaying(true);
+                          setCurrentTimeSec(0);
+                        }}
                         className={`flex w-full items-center justify-between rounded-xl p-3 text-right transition ${
                           isSelected
-                            ? "bg-gradient-to-r from-purple-900/90 to-fuchsia-900/90 border border-fuchsia-500/50 text-white shadow-lg shadow-purple-900/30"
-                            : "border border-white/5 bg-white/[0.02] text-white/70 hover:border-white/10 hover:bg-white/5"
+                            ? "bg-gradient-to-r from-purple-900/90 via-fuchsia-900/90 to-purple-900/90 border border-fuchsia-500/50 text-white shadow-lg shadow-purple-900/40"
+                            : "border border-white/5 bg-white/[0.02] text-white/70 hover:border-white/15 hover:bg-white/5"
                         }`}
                       >
                         <span className="text-xs font-bold text-white/50">{ep.duration}</span>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-3">
                           <div className="text-right">
                             <p className="text-xs font-bold text-white">{ep.title}</p>
                             <p className="text-[10px] text-white/40">مكان إشارة المعركة</p>
                           </div>
-                          <span className={`flex h-7 w-7 items-center justify-center rounded-lg ${isSelected ? "bg-fuchsia-600 text-white" : "bg-white/10 text-white/40"}`}>
+                          <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${
+                            isSelected
+                              ? "bg-fuchsia-600 text-white shadow-md shadow-fuchsia-900/50"
+                              : "bg-white/10 text-white/40"
+                          }`}>
                             ▶
-                          </span>
+                          </div>
                         </div>
                       </button>
                     );

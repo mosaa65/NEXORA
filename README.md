@@ -512,9 +512,13 @@ NEXORA/
 | `/api/categories` | `GET` | Retrieves category counts for dashboard display. |
 | `/api/search` | `GET` | Forwards instant search queries (`?q=...`) to Meilisearch index. |
 | `/api/media/{id}/files` | `GET` | Returns list of video files associated with a media item. |
+| `/api/media/inspect` | `POST` | Uses FFprobe to extract and persist duration, resolution, codec, audio tracks, and subtitles for `{ "fileId": 42 }`. |
+| `/api/library/duplicates` | `GET` | Returns groups of files with matching verified SHA-256 checksums. |
+| `/api/library/missing-episodes` | `GET` | Reports missing episode numbers between 1 and the highest indexed episode per season. |
 | `/api/scan` | `GET` | Triggers directory file scan and returns parsed Regex metadata. |
 | `/api/ingest` | `POST` | Scans directory and persists new media records to PostgreSQL. |
 | `/api/search/sync` | `POST` | Syncs PostgreSQL media records into Meilisearch index. |
+| `/api/media/checksums` | `POST` | Calculates and stores SHA-256 checksums. Pass `{ "mediaItemId": 12 }` to limit work to one title, or `{}` for all indexed files. |
 | `/api/stream` | `GET` | Streams local video file (`?path=...`) with HTTP Range headers. |
 | `/api/stream/file/{id}` | `GET` | Streams imported video file by database ID with Range headers. |
 | `/api/migration/preview` | `POST` | Generates disk reorganization diff preview. |
@@ -552,14 +556,14 @@ erDiagram
 🇺🇸 **English**
 
 - **LAN Network Isolation:** Designed for internal lounge deployment behind firewalls; external ports are not exposed publicly.
-- **Path Traversal Protection:** File streaming endpoints validate target paths against configured `NEXORA_MEDIA_ROOTS` to prevent directory traversal attacks.
+- **Path Traversal Protection:** Streaming and migration endpoints validate source and target paths against configured `NEXORA_MEDIA_ROOTS` to prevent directory traversal attacks.
 - **Isolated Credentials:** Sensitive database and API keys are managed exclusively via `.env` environment variables.
 - **Input Sanitization:** Search and scan parameters are validated before database execution.
 
 🇸🇦 **العربية**
 
 - **عزل الشبكة المحلية:** صُمّم للنشر الداخلي خلف جدران الحماية بالاستراحات؛ ولا تُعرّض المنافذ للخارج.
-- **الحماية من مسارات الملفات الضارة:** تتحقق نقاط البث من مسارات الملفات مقابل المجلدات المسموحة `NEXORA_MEDIA_ROOTS` لتفادي هجمات القفز بين المجلدات.
+- **الحماية من مسارات الملفات الضارة:** تتحقق نقاط البث والنقل من مسارات المصدر والوجهة مقابل المجلدات المسموحة `NEXORA_MEDIA_ROOTS` لتفادي هجمات القفز بين المجلدات.
 - **عزل الاعتمادات:** تُدار الاعتمادات الحساسة عبر ملف `.env` المستثنى من المستودع.
 - **تعقيم المدخلات:** يتم التحقق من كافة معلمات الاستعلام والبحث قبل التنفيذ في قاعدة البيانات.
 

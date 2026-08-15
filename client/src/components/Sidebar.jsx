@@ -1,7 +1,15 @@
 import Icon from "./Icon.jsx";
 import { navigationItems } from "../data/library.js";
 
-export default function Sidebar({ isOpen, onClose, activeView, onNavigate }) {
+const adminItems = [
+  { id: "admin-overview", label: "نظرة عامة", icon: "dashboard" },
+  { id: "admin-indexing", label: "فهرسة المكتبة", icon: "search" },
+  { id: "admin-migration", label: "تنظيم ونقل", icon: "arrowLeft" },
+  { id: "admin-services", label: "الخدمات", icon: "settings" },
+  { id: "admin-tasks", label: "المهام والوسائط", icon: "spark" }
+];
+
+export default function Sidebar({ isOpen, onClose, activeView, onNavigate, onAdminNavigate, activeAdminAnchor }) {
   return (
     <>
       {/* Mobile Backdrop */}
@@ -48,6 +56,7 @@ export default function Sidebar({ isOpen, onClose, activeView, onNavigate }) {
             {navigationItems.map((item) => {
               const active = activeView === item.id;
               return (
+                <div key={item.id}>
                 <button
                   key={item.id}
                   type="button"
@@ -61,6 +70,22 @@ export default function Sidebar({ isOpen, onClose, activeView, onNavigate }) {
                   <Icon name={item.icon} className={`h-4 w-4 shrink-0 ${active ? "text-white" : "text-white/50"}`} />
                   <span className="flex-1 text-sm">{item.label}</span>
                 </button>
+                {item.id === "admin" && active ? (
+                  <div className="mt-2 space-y-1.5 border-t border-white/10 pt-2">
+                    {adminItems.map((adminItem) => (
+                      <button
+                        key={adminItem.id}
+                        type="button"
+                        onClick={() => onAdminNavigate?.(adminItem.id)}
+                        className={`flex w-full items-center gap-3.5 rounded-2xl px-4 py-3 text-right text-sm font-bold transition ${activeAdminAnchor === adminItem.id ? "bg-gradient-to-r from-purple-800/80 via-fuchsia-700/70 to-purple-900/80 text-white shadow-lg shadow-purple-900/30" : "text-white/65 hover:bg-white/[0.06] hover:text-white"}`}
+                      >
+                        <Icon name={adminItem.icon} className="h-4 w-4 text-fuchsia-300" />
+                        {adminItem.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                </div>
               );
             })}
           </nav>

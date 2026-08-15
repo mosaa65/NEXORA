@@ -18,8 +18,8 @@ import (
 	"nexora/server/internal/config"
 	"nexora/server/internal/db"
 	"nexora/server/internal/media"
-	"nexora/server/internal/migration"
 	"nexora/server/internal/metadata"
+	"nexora/server/internal/migration"
 	"nexora/server/internal/scanner"
 	"nexora/server/internal/search"
 )
@@ -31,6 +31,11 @@ type repository interface {
 	ListSearchDocuments(ctx context.Context, limit int) ([]search.MediaDocument, error)
 	ListVideoFiles(ctx context.Context, mediaItemID int64) ([]db.VideoFile, error)
 	GetVideoFilePath(ctx context.Context, id int64) (string, error)
+	GetVideoFileIDByPath(ctx context.Context, path string) (int64, error)
+	UpdateVideoTechnicalDetails(ctx context.Context, id int64, details media.InspectResult) error
+	ListDuplicateGroups(ctx context.Context) ([]db.DuplicateGroup, error)
+	ListMissingEpisodes(ctx context.Context) ([]db.MissingEpisode, error)
+	CalculateChecksums(ctx context.Context, mediaItemID int64) (db.ChecksumResult, error)
 }
 
 type searchClient interface {
@@ -44,6 +49,7 @@ type metadataService interface {
 
 type mediaProcessor interface {
 	Verify(ctx context.Context, path string) (media.VerifyResult, error)
+	Inspect(ctx context.Context, path string) (media.InspectResult, error)
 	GenerateThumbnail(ctx context.Context, inputPath, outputPath string, at time.Duration) (string, error)
 }
 
@@ -92,16 +98,171 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/categories", s.handleCategories)
 	s.mux.HandleFunc("GET /api/search", s.handleSearch)
 	s.mux.HandleFunc("GET /api/media/{id}/files", s.handleMediaFiles)
+	s.mux.HandleFunc("GET /api/library/duplicates", s.handleDuplicates)
+	s.mux.HandleFunc("GET /api/library/missing-episodes", s.handleMissingEpisodes)
 	s.mux.HandleFunc("GET /api/scan", s.handleScan)
 	s.mux.HandleFunc("POST /api/ingest", s.handleIngest)
+	s.mux.HandleFunc("POST /api/index", s.handleIndex)
 	s.mux.HandleFunc("POST /api/search/sync", s.handleSearchSync)
 	s.mux.HandleFunc("POST /api/metadata/lookup", s.handleMetadataLookup)
 	s.mux.HandleFunc("POST /api/media/verify", s.handleMediaVerify)
+	s.mux.HandleFunc("POST /api/media/inspect", s.handleMediaInspect)
 	s.mux.HandleFunc("POST /api/media/thumbnail", s.handleThumbnail)
+	s.mux.HandleFunc("POST /api/media/checksums", s.handleChecksums)
 	s.mux.HandleFunc("POST /api/migration/preview", s.handleMigrationPreview)
 	s.mux.HandleFunc("POST /api/migration/copy", s.handleMigrationCopy)
 	s.mux.HandleFunc("GET /api/stream", s.handleStream)
 	s.mux.HandleFunc("GET /api/stream/file/{id}", s.handleStreamByID)
+}
+
+type indexResult struct {
+	Roots         []string          `json:"roots"`
+	Scanned       int               `json:"scanned"`
+	Imported      int               `json:"imported"`
+	Inspected     int               `json:"inspected"`
+	InspectFailed int               `json:"inspectFailed"`
+	SearchSync    search.SyncResult `json:"searchSync"`
+	Warnings      []string          `json:"warnings,omitempty"`
+}
+
+// handleIndex is the unified first-pass library workflow. Metadata artwork and
+// subtitle extraction are deliberately separate jobs because they can require
+// external providers or long-running FFmpeg work.
+func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		Roots []string `json:"roots"`
+	}
+	if err := decodeJSON(r, &request); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+		return
+	}
+	if len(request.Roots) == 0 {
+		request.Roots = s.config.MediaRoots
+	}
+	if len(request.Roots) == 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "provide at least one media root"})
+		return
+	}
+	for _, root := range request.Roots {
+		if !s.mediaPathAllowed(root) {
+			writeJSON(w, http.StatusForbidden, map[string]any{"error": "media root is outside configured roots"})
+			return
+		}
+	}
+	files, err := s.scanner.Scan(r.Context(), request.Roots)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+	result := indexResult{Roots: request.Roots, Scanned: len(files), Warnings: []string{}}
+	ingested, err := s.repository.IngestScannedFiles(r.Context(), files)
+	result.Imported = ingested.Imported
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error(), "result": result})
+		return
+	}
+	for _, file := range files {
+		id, err := s.repository.GetVideoFileIDByPath(r.Context(), file.Path)
+		if err != nil {
+			result.InspectFailed++
+			result.Warnings = append(result.Warnings, "could not locate indexed file: "+file.Path)
+			continue
+		}
+		details, err := s.processor.Inspect(r.Context(), file.Path)
+		if err != nil {
+			result.InspectFailed++
+			result.Warnings = append(result.Warnings, "could not inspect: "+file.Path)
+			continue
+		}
+		if err := s.repository.UpdateVideoTechnicalDetails(r.Context(), id, details); err != nil {
+			result.InspectFailed++
+			result.Warnings = append(result.Warnings, "could not save inspection: "+file.Path)
+			continue
+		}
+		result.Inspected++
+	}
+	documents, err := s.repository.ListSearchDocuments(r.Context(), 10000)
+	if err != nil {
+		result.Warnings = append(result.Warnings, "search sync skipped: "+err.Error())
+	} else if syncResult, err := s.search.IndexDocuments(r.Context(), documents); err != nil {
+		result.Warnings = append(result.Warnings, "search sync skipped: "+err.Error())
+	} else {
+		result.SearchSync = syncResult
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) handleMediaInspect(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		FileID int64 `json:"fileId"`
+	}
+	if err := decodeJSON(r, &request); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+		return
+	}
+	if request.FileID <= 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "fileId must be a positive integer"})
+		return
+	}
+	path, err := s.repository.GetVideoFilePath(r.Context(), request.FileID)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]any{"error": err.Error()})
+		return
+	}
+	if !s.mediaPathAllowed(path) {
+		writeJSON(w, http.StatusForbidden, map[string]any{"error": "media path is outside configured roots"})
+		return
+	}
+	details, err := s.processor.Inspect(r.Context(), path)
+	if err != nil {
+		writeJSON(w, http.StatusFailedDependency, map[string]any{"error": err.Error()})
+		return
+	}
+	if err := s.repository.UpdateVideoTechnicalDetails(r.Context(), request.FileID, details); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, details)
+}
+
+func (s *Server) handleDuplicates(w http.ResponseWriter, r *http.Request) {
+	groups, err := s.repository.ListDuplicateGroups(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"count": len(groups), "groups": groups})
+}
+
+func (s *Server) handleMissingEpisodes(w http.ResponseWriter, r *http.Request) {
+	missing, err := s.repository.ListMissingEpisodes(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"count": len(missing), "episodes": missing})
+}
+
+func (s *Server) handleChecksums(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		MediaItemID int64 `json:"mediaItemId,omitempty"`
+	}
+	if r.Body != http.NoBody {
+		if err := decodeJSON(r, &request); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+			return
+		}
+	}
+	if request.MediaItemID < 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "mediaItemId must be positive"})
+		return
+	}
+	result, err := s.repository.CalculateChecksums(r.Context(), request.MediaItemID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error(), "result": result})
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -340,6 +501,10 @@ func (s *Server) handleMigrationPreview(w http.ResponseWriter, r *http.Request) 
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "root is required"})
 		return
 	}
+	if !s.mediaPathAllowed(request.Root) {
+		writeJSON(w, http.StatusForbidden, map[string]any{"error": "migration root is outside configured media roots"})
+		return
+	}
 	result, err := s.migration.Preview(r.Context(), request.Root)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
@@ -353,6 +518,16 @@ func (s *Server) handleMigrationCopy(w http.ResponseWriter, r *http.Request) {
 	if err := decodeJSON(r, &request); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
 		return
+	}
+	if !s.mediaPathAllowed(request.Target) {
+		writeJSON(w, http.StatusForbidden, map[string]any{"error": "migration target is outside configured media roots"})
+		return
+	}
+	for _, source := range request.Sources {
+		if !s.mediaPathAllowed(source) {
+			writeJSON(w, http.StatusForbidden, map[string]any{"error": "migration source is outside configured media roots"})
+			return
+		}
 	}
 	result, err := s.migration.Copy(r.Context(), request)
 	if err != nil {

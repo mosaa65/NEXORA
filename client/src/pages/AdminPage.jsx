@@ -1,12 +1,12 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import GlassCard from "../components/GlassCard.jsx";
 import Icon from "../components/Icon.jsx";
-import { copyMedia, previewMigration } from "../lib/api.js";
+import { calculateChecksums, copyMedia, getDuplicateGroups, getMissingEpisodes, indexLibrary, previewMigration } from "../lib/api.js";
 
 const GROUPS = ["all", "movies", "series", "anime"];
 const ACTIONS = ["all", "keep", "move", "rename", "duplicate"];
 
-export default function AdminPage({ health, onSyncIndex }) {
+export default function AdminPage({ health, onSyncIndex, activeAnchor }) {
   const [previewRoot, setPreviewRoot] = useState("");
   const [previewState, setPreviewState] = useState("idle");
   const [previewResult, setPreviewResult] = useState(null);
@@ -19,6 +19,15 @@ export default function AdminPage({ health, onSyncIndex }) {
   const [copySources, setCopySources] = useState("");
   const [copyState, setCopyState] = useState("idle");
   const [copyResult, setCopyResult] = useState(null);
+  const [indexState, setIndexState] = useState("idle");
+  const [indexResult, setIndexResult] = useState(null);
+  const [integrity, setIntegrity] = useState(null);
+  const view = activeAnchor || "admin-overview";
+
+  useEffect(() => {
+    const target = document.getElementById(activeAnchor);
+    target?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [activeAnchor]);
 
   const services = [
     { label: "الـ API", value: health?.ok ? "يعمل" : "متوقف", tone: health?.ok ? "text-emerald-300" : "text-rose-300" },
@@ -100,6 +109,24 @@ export default function AdminPage({ health, onSyncIndex }) {
     }
   }
 
+  async function handleIndex() {
+    if (!previewRoot.trim()) return;
+    setIndexState("loading");
+    try {
+      setIndexResult(await indexLibrary([previewRoot.trim()]));
+      setIndexState("ready");
+    } catch {
+      setIndexState("error");
+    }
+  }
+
+  async function loadIntegrity() {
+    try {
+      const [duplicates, missing] = await Promise.all([getDuplicateGroups(), getMissingEpisodes()]);
+      setIntegrity({ duplicates, missing });
+    } catch { setIntegrity({ error: "تعذر قراءة بيانات سلامة الوسائط" }); }
+  }
+
   function toggleGroup(groupKey) {
     setExpandedGroups((current) => {
       const next = new Set(current);
@@ -142,7 +169,7 @@ export default function AdminPage({ health, onSyncIndex }) {
 
   return (
     <div className="space-y-6">
-      <GlassCard className="p-6">
+      {view === "admin-overview" ? <GlassCard id="admin-overview" className="p-6 scroll-mt-5">
         <p className="text-xs font-semibold text-electric/80">لوحة الإدارة</p>
         <h1 className="mt-4 text-4xl font-black text-white md:text-5xl">غرفة العمليات</h1>
         <p className="mt-3 max-w-3xl text-base leading-8 text-white/70">
@@ -165,10 +192,20 @@ export default function AdminPage({ health, onSyncIndex }) {
             فتح مدير الأقراص
           </button>
         </div>
-      </GlassCard>
+      </GlassCard> : null}
 
-      <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-        <GlassCard className="p-6">
+      {view === "admin-indexing" ? <GlassCard id="admin-indexing" className="p-6 scroll-mt-5">
+        <p className="text-xs font-semibold text-electric/80">LIBRARY INDEXER</p>
+        <h1 className="mt-4 text-4xl font-black text-white md:text-5xl">فهرسة المكتبة</h1>
+        <p className="mt-3 max-w-3xl text-base leading-8 text-white/70">تقرأ هذه العملية ملفات الفيديو من المسار، تحفظها في قاعدة البيانات، وتستخرج خصائص الفيديو ثم تزامنها مع البحث.</p>
+        <label className="mt-7 block max-w-3xl"><span className="mb-2 block text-sm font-semibold text-white/60">المسار الجذر للمكتبة</span><input value={previewRoot} onChange={(event) => setPreviewRoot(event.target.value)} placeholder="D:\\Media" className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-4 text-left text-sm text-white outline-none placeholder:text-white/30 focus:border-electric/50" dir="ltr" /></label>
+        <button type="button" onClick={handleIndex} disabled={indexState === "loading"} className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-electric/25 bg-electric/12 px-5 py-3 text-sm font-semibold text-electric disabled:opacity-50"><Icon name="search" className="h-4 w-4" />{indexState === "loading" ? "جارٍ الفهرسة..." : "بدء الفهرسة"}</button>
+        <div className="mt-7 grid gap-3 sm:grid-cols-3"><StatCard label="ملفات مقروءة" value={indexResult?.scanned || 0} /><StatCard label="محفوظة" value={indexResult?.imported || 0} tone="text-emerald-300" /><StatCard label="محللة" value={indexResult?.inspected || 0} tone="text-cyan-300" /></div>
+        {indexState === "error" ? <p className="mt-5 text-sm text-rose-300">تعذرت الفهرسة. تأكد من تشغيل النسخة الجديدة من الخادم وأن المسار مسموح.</p> : null}
+      </GlassCard> : null}
+
+      {view === "admin-migration" ? <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+        <GlassCard id="admin-migration" className="p-6 scroll-mt-5">
           <div className="flex items-center justify-between">
             <div className="text-right">
               <p className="text-xs font-semibold text-white/40">Migration Wizard</p>
@@ -444,7 +481,10 @@ export default function AdminPage({ health, onSyncIndex }) {
             </div>
           </GlassCard>
         </div>
-      </section>
+      </section> : null}
+
+      {view === "admin-services" ? <GlassCard id="admin-services" className="p-6 scroll-mt-5"><p className="text-xs font-semibold text-electric/80">SYSTEM STATUS</p><h1 className="mt-4 text-4xl font-black text-white">الخدمات والإعدادات</h1><div className="mt-7 grid gap-4 md:grid-cols-2">{services.map((service) => <div key={service.label} className="flex items-center justify-between rounded-2xl border border-white/10 bg-black/20 px-5 py-4"><span className={`font-bold ${service.tone}`}>{service.value}</span><span className="font-bold text-white">{service.label}</span></div>)}</div></GlassCard> : null}
+      {view === "admin-tasks" ? <GlassCard id="admin-tasks" className="p-6 scroll-mt-5"><p className="text-xs font-semibold text-electric/80">MEDIA OPERATIONS</p><h1 className="mt-4 text-4xl font-black text-white">المهام والوسائط</h1><p className="mt-3 text-white/60">افحص المكتبة واعرض نتائج الملفات المكررة والحلقات الناقصة.</p><div className="mt-6 flex flex-wrap gap-3"><button type="button" onClick={loadIntegrity} className="rounded-2xl border border-electric/25 bg-electric/12 px-4 py-3 text-sm font-bold text-electric">تحديث تقرير السلامة</button><button type="button" onClick={() => calculateChecksums().then(loadIntegrity)} className="rounded-2xl border border-fuchsia-400/25 bg-fuchsia-500/12 px-4 py-3 text-sm font-bold text-fuchsia-200">حساب بصمات SHA-256</button></div>{integrity ? <div className="mt-6 grid gap-4 md:grid-cols-2"><StatCard label="مجموعات مكررة" value={integrity.duplicates?.count || 0} tone="text-amber-300" /><StatCard label="حلقات ناقصة" value={integrity.missing?.count || 0} tone="text-rose-300" /></div> : null}<div className="mt-7 grid gap-4 md:grid-cols-2">{tasks.map((task, index) => <div key={task} className="rounded-2xl border border-white/10 bg-black/20 p-5"><p className="text-xs text-white/35">مهمة {index + 1}</p><p className="mt-2 font-bold text-white">{task}</p></div>)}</div></GlassCard> : null}
     </div>
   );
 }

@@ -53,6 +53,17 @@ export async function syncIndex(limit = 1000) {
   });
 }
 
+export async function indexLibrary(roots) {
+  return requestJSON("/api/index", {
+    method: "POST",
+    body: JSON.stringify({ roots })
+  });
+}
+
+export async function getDuplicateGroups() { return requestJSON("/api/library/duplicates"); }
+export async function getMissingEpisodes() { return requestJSON("/api/library/missing-episodes"); }
+export async function calculateChecksums(mediaItemId) { return requestJSON("/api/media/checksums", { method: "POST", body: JSON.stringify(mediaItemId ? { mediaItemId } : {}) }); }
+
 export async function previewMigration(root) {
   return requestJSON("/api/migration/preview", {
     method: "POST",

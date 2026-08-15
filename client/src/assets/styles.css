@@ -136,9 +136,9 @@ select {
 }
 
 .nexora-player {
-  --plyr-color-main: #19b7ff;
+  --plyr-color-main: #c084fc;
   --plyr-video-background: #000;
-  --plyr-control-radius: 8px;
+  --plyr-control-radius: 12px;
   --plyr-font-family: "Cairo", "Space Grotesk", sans-serif;
 }
 
@@ -152,11 +152,12 @@ select {
 }
 
 .nexora-player .plyr__control--overlaid {
-  background: rgba(25, 183, 255, 0.9);
-  box-shadow: 0 0 30px rgba(25, 183, 255, 0.34);
+  background: linear-gradient(135deg, #c084fc, #9333ea);
+  box-shadow: 0 0 35px rgba(192, 132, 252, 0.5);
 }
 
 .nexora-player .plyr__controls {
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  background: linear-gradient(180deg, rgba(5, 7, 16, 0.1), rgba(5, 7, 16, 0.92));
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(180deg, rgba(5, 7, 16, 0.1), rgba(10, 9, 20, 0.95));
 }
+
