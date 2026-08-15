@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"mime"
 	"net/http"
@@ -17,6 +18,7 @@ import (
 
 	"nexora/server/internal/config"
 	"nexora/server/internal/db"
+	"nexora/server/internal/disks"
 	"nexora/server/internal/media"
 	"nexora/server/internal/metadata"
 	"nexora/server/internal/migration"
@@ -36,6 +38,12 @@ type repository interface {
 	ListDuplicateGroups(ctx context.Context) ([]db.DuplicateGroup, error)
 	ListMissingEpisodes(ctx context.Context) ([]db.MissingEpisode, error)
 	CalculateChecksums(ctx context.Context, mediaItemID int64) (db.ChecksumResult, error)
+	GetMediaItem(ctx context.Context, id int64) (*db.MediaItemDetail, error)
+	ListMediaItems(ctx context.Context, opts db.ListMediaOptions) (*db.MediaListResult, error)
+	UpdateMediaMetadata(ctx context.Context, id int64, meta metadata.Result) (*search.MediaDocument, error)
+	GetDashboardStats(ctx context.Context) (*db.DashboardStats, error)
+	ListDisks(ctx context.Context) ([]db.StorageDisk, error)
+	SaveDisks(ctx context.Context, disks []db.StorageDisk) error
 }
 
 type searchClient interface {
@@ -59,14 +67,15 @@ type migrationService interface {
 }
 
 type Server struct {
-	config     config.Config
-	repository repository
-	scanner    *scanner.Scanner
-	search     searchClient
-	metadata   metadataService
-	processor  mediaProcessor
-	migration  migrationService
-	mux        *http.ServeMux
+	config      config.Config
+	repository  repository
+	scanner     *scanner.Scanner
+	search      searchClient
+	metadata    metadataService
+	processor   mediaProcessor
+	migration   migrationService
+	diskManager *disks.Manager
+	mux         *http.ServeMux
 }
 
 func NewServer(
@@ -79,14 +88,15 @@ func NewServer(
 	migrationService migrationService,
 ) http.Handler {
 	server := &Server{
-		config:     config,
-		repository: repository,
-		scanner:    scannerService,
-		search:     searchClient,
-		metadata:   metadataService,
-		processor:  processor,
-		migration:  migrationService,
-		mux:        http.NewServeMux(),
+		config:      config,
+		repository:  repository,
+		scanner:     scannerService,
+		search:      searchClient,
+		metadata:    metadataService,
+		processor:   processor,
+		migration:   migrationService,
+		diskManager: disks.NewManager(),
+		mux:         http.NewServeMux(),
 	}
 	server.routes()
 	return server.withMiddleware(server.mux)
@@ -97,9 +107,16 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/health", s.handleHealth)
 	s.mux.HandleFunc("GET /api/categories", s.handleCategories)
 	s.mux.HandleFunc("GET /api/search", s.handleSearch)
+	s.mux.HandleFunc("GET /api/media", s.handleMediaList)
+	s.mux.HandleFunc("GET /api/media/{id}", s.handleMediaDetail)
 	s.mux.HandleFunc("GET /api/media/{id}/files", s.handleMediaFiles)
+	s.mux.HandleFunc("POST /api/media/{id}/enrich", s.handleMediaEnrich)
+	s.mux.HandleFunc("PUT /api/media/{id}/metadata", s.handleMediaMetadataUpdate)
 	s.mux.HandleFunc("GET /api/library/duplicates", s.handleDuplicates)
 	s.mux.HandleFunc("GET /api/library/missing-episodes", s.handleMissingEpisodes)
+	s.mux.HandleFunc("GET /api/dashboard/stats", s.handleDashboardStats)
+	s.mux.HandleFunc("GET /api/disks", s.handleDisksList)
+	s.mux.HandleFunc("POST /api/disks/scan", s.handleDisksScan)
 	s.mux.HandleFunc("GET /api/scan", s.handleScan)
 	s.mux.HandleFunc("POST /api/ingest", s.handleIngest)
 	s.mux.HandleFunc("POST /api/index", s.handleIndex)
@@ -113,6 +130,15 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/migration/copy", s.handleMigrationCopy)
 	s.mux.HandleFunc("GET /api/stream", s.handleStream)
 	s.mux.HandleFunc("GET /api/stream/file/{id}", s.handleStreamByID)
+	s.mux.HandleFunc("GET /api/stream/file/{id}/subtitles", s.handleFileSubtitles)
+	s.mux.HandleFunc("GET /api/stream/file/{id}/subtitles/{subId}", s.handleFileSubtitleStream)
+
+	// Static assets serving for downloaded posters/banners/thumbnails
+	if s.config.AssetImageDir != "" {
+		_ = os.MkdirAll(s.config.AssetImageDir, 0o755)
+		fileServer := http.StripPrefix("/assets/images/", http.FileServer(http.Dir(s.config.AssetImageDir)))
+		s.mux.Handle("GET /assets/images/", fileServer)
+	}
 }
 
 type indexResult struct {
@@ -622,6 +648,282 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 	}
 }
 
+func (s *Server) handleMediaList(w http.ResponseWriter, r *http.Request) {
+	limit := 24
+	if rawLimit := r.URL.Query().Get("limit"); rawLimit != "" {
+		if parsed, err := strconv.Atoi(rawLimit); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	offset := 0
+	if rawOffset := r.URL.Query().Get("offset"); rawOffset != "" {
+		if parsed, err := strconv.Atoi(rawOffset); err == nil && parsed >= 0 {
+			offset = parsed
+		}
+	}
+
+	opts := db.ListMediaOptions{
+		CategorySlug: strings.TrimSpace(r.URL.Query().Get("category")),
+		Type:         strings.TrimSpace(r.URL.Query().Get("type")),
+		Search:       strings.TrimSpace(r.URL.Query().Get("q")),
+		Sort:         strings.TrimSpace(r.URL.Query().Get("sort")),
+		Limit:        limit,
+		Offset:       offset,
+	}
+
+	result, err := s.repository.ListMediaItems(r.Context(), opts)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) handleMediaDetail(w http.ResponseWriter, r *http.Request) {
+	mediaID, ok := parsePositiveID(r.PathValue("id"))
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "media id must be a positive integer"})
+		return
+	}
+
+	item, err := s.repository.GetMediaItem(r.Context(), mediaID)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, sql.ErrNoRows) {
+			status = http.StatusNotFound
+		}
+		writeJSON(w, status, map[string]any{"error": err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, item)
+}
+
+func (s *Server) handleMediaEnrich(w http.ResponseWriter, r *http.Request) {
+	mediaID, ok := parsePositiveID(r.PathValue("id"))
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "media id must be a positive integer"})
+		return
+	}
+
+	item, err := s.repository.GetMediaItem(r.Context(), mediaID)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, sql.ErrNoRows) {
+			status = http.StatusNotFound
+		}
+		writeJSON(w, status, map[string]any{"error": err.Error()})
+		return
+	}
+
+	lookupTitle := item.TitleEN
+	if lookupTitle == "" {
+		lookupTitle = item.TitleAR
+	}
+
+	metaResult, err := s.metadata.Lookup(r.Context(), metadata.Query{
+		Title: lookupTitle,
+		Type:  item.Type,
+		Year:  item.ReleaseYear,
+	})
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]any{
+			"error":   "metadata lookup failed: " + err.Error(),
+			"title":   lookupTitle,
+			"mediaId": mediaID,
+		})
+		return
+	}
+
+	doc, err := s.repository.UpdateMediaMetadata(r.Context(), mediaID, metaResult)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+
+	if doc != nil {
+		_, _ = s.search.IndexDocuments(r.Context(), []search.MediaDocument{*doc})
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":       true,
+		"metadata": metaResult,
+		"document": doc,
+	})
+}
+
+func (s *Server) handleMediaMetadataUpdate(w http.ResponseWriter, r *http.Request) {
+	mediaID, ok := parsePositiveID(r.PathValue("id"))
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "media id must be a positive integer"})
+		return
+	}
+
+	var request struct {
+		Title       string   `json:"title"`
+		Overview    string   `json:"overview"`
+		ReleaseYear int      `json:"releaseYear"`
+		Rating      float64  `json:"rating"`
+		PosterPath  string   `json:"posterPath"`
+		BannerPath  string   `json:"bannerPath"`
+		Genres      []string `json:"genres"`
+	}
+	if err := decodeJSON(r, &request); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+		return
+	}
+
+	doc, err := s.repository.UpdateMediaMetadata(r.Context(), mediaID, metadata.Result{
+		Title:       request.Title,
+		Overview:    request.Overview,
+		ReleaseYear: request.ReleaseYear,
+		Rating:      request.Rating,
+		PosterPath:  request.PosterPath,
+		BannerPath:  request.BannerPath,
+		Genres:      request.Genres,
+	})
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+
+	if doc != nil {
+		_, _ = s.search.IndexDocuments(r.Context(), []search.MediaDocument{*doc})
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "document": doc})
+}
+
+func (s *Server) handleDashboardStats(w http.ResponseWriter, r *http.Request) {
+	stats, err := s.repository.GetDashboardStats(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, stats)
+}
+
+func (s *Server) handleDisksList(w http.ResponseWriter, r *http.Request) {
+	disks, err := s.repository.ListDisks(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+
+	// If no disks recorded yet, auto-scan
+	if len(disks) == 0 && s.diskManager != nil {
+		if scanned, scanErr := s.diskManager.ScanDisks(r.Context()); scanErr == nil && len(scanned) > 0 {
+			_ = s.repository.SaveDisks(r.Context(), scanned)
+			disks = scanned
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"count": len(disks),
+		"disks": disks,
+	})
+}
+
+func (s *Server) handleDisksScan(w http.ResponseWriter, r *http.Request) {
+	if s.diskManager == nil {
+		writeJSON(w, http.StatusNotImplemented, map[string]any{"error": "disk manager not available"})
+		return
+	}
+
+	disks, err := s.diskManager.ScanDisks(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+
+	if err := s.repository.SaveDisks(r.Context(), disks); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error(), "disks": disks})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"count": len(disks),
+		"disks": disks,
+	})
+}
+
+func (s *Server) handleFileSubtitles(w http.ResponseWriter, r *http.Request) {
+	fileID, ok := parsePositiveID(r.PathValue("id"))
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "file id must be a positive integer"})
+		return
+	}
+
+	path, err := s.repository.GetVideoFilePath(r.Context(), fileID)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]any{"error": err.Error()})
+		return
+	}
+
+	subs := media.FindExternalSubtitles(path)
+	for i := range subs {
+		subs[i].Path = fmt.Sprintf("/api/stream/file/%d/subtitles/%d", fileID, subs[i].Index)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"file_id":   fileID,
+		"count":     len(subs),
+		"subtitles": subs,
+	})
+}
+
+func (s *Server) handleFileSubtitleStream(w http.ResponseWriter, r *http.Request) {
+	fileID, ok := parsePositiveID(r.PathValue("id"))
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "file id must be a positive integer"})
+		return
+	}
+	subIndex, err := strconv.Atoi(r.PathValue("subId"))
+	if err != nil || subIndex <= 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "subId must be a positive integer"})
+		return
+	}
+
+	path, err := s.repository.GetVideoFilePath(r.Context(), fileID)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]any{"error": err.Error()})
+		return
+	}
+
+	subs := media.FindExternalSubtitles(path)
+	var targetSub *media.SubtitleInfo
+	for _, sub := range subs {
+		if sub.Index == subIndex {
+			targetSub = &sub
+			break
+		}
+	}
+	if targetSub == nil {
+		writeJSON(w, http.StatusNotFound, map[string]any{"error": "subtitle not found"})
+		return
+	}
+
+	file, err := os.Open(targetSub.Path)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+	defer file.Close()
+
+	w.Header().Set("Content-Type", "text/vtt; charset=utf-8")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	if strings.ToLower(filepath.Ext(targetSub.Path)) == ".srt" {
+		if err := media.ConvertSRTToWebVTT(file, w); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	} else {
+		_, _ = io.Copy(w, file)
+	}
+}
+
 func (s *Server) mediaPathAllowed(path string) bool {
 	if strings.TrimSpace(path) == "" {
 		return false
@@ -646,6 +948,15 @@ func (s *Server) mediaPathAllowed(path string) bool {
 			return true
 		}
 	}
+
+	// Also allow paths within project directory / working directory
+	if cwd, err := os.Getwd(); err == nil {
+		cleanCwd := strings.ToLower(filepath.Clean(cwd))
+		if absolutePath == cleanCwd || strings.HasPrefix(absolutePath, cleanCwd+string(os.PathSeparator)) {
+			return true
+		}
+	}
+
 	return false
 }
 
@@ -667,3 +978,4 @@ func parsePositiveID(raw string) (int64, bool) {
 	id, err := strconv.ParseInt(raw, 10, 64)
 	return id, err == nil && id > 0
 }
+

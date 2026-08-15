@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"unicode"
 
 	"nexora/server/internal/media"
+	"nexora/server/internal/metadata"
 	"nexora/server/internal/scanner"
 	"nexora/server/internal/search"
 )
@@ -83,6 +85,75 @@ type ChecksumResult struct {
 	Scanned int `json:"scanned"`
 	Updated int `json:"updated"`
 	Failed  int `json:"failed"`
+}
+
+type SeasonDetail struct {
+	ID           int64       `json:"id"`
+	SeasonNumber int         `json:"season_number"`
+	TitleAR      string      `json:"title_ar,omitempty"`
+	TitleEN      string      `json:"title_en,omitempty"`
+	Episodes     []VideoFile `json:"episodes"`
+}
+
+type MediaItemDetail struct {
+	ID           int64          `json:"id"`
+	CategoryID   int64          `json:"category_id"`
+	CategorySlug string         `json:"category_slug,omitempty"`
+	CategoryAR   string         `json:"category_ar,omitempty"`
+	CategoryEN   string         `json:"category_en,omitempty"`
+	TitleAR      string         `json:"title_ar,omitempty"`
+	TitleEN      string         `json:"title_en"`
+	Type         string         `json:"type"`
+	PlotAR       string         `json:"plot_ar,omitempty"`
+	PlotEN       string         `json:"plot_en,omitempty"`
+	ReleaseYear  int            `json:"release_year,omitempty"`
+	Rating       float64        `json:"rating,omitempty"`
+	PosterPath   string         `json:"poster_path,omitempty"`
+	BannerPath   string         `json:"banner_path,omitempty"`
+	Genres       []string       `json:"genres,omitempty"`
+	Status       string         `json:"status,omitempty"`
+	CreatedAt    time.Time      `json:"created_at"`
+	FileCount    int            `json:"file_count"`
+	Seasons      []SeasonDetail `json:"seasons,omitempty"`
+	Files        []VideoFile    `json:"files,omitempty"`
+}
+
+type ListMediaOptions struct {
+	CategorySlug string
+	Type         string
+	Search       string
+	Sort         string
+	Limit        int
+	Offset       int
+}
+
+type MediaListResult struct {
+	Total  int                    `json:"total"`
+	Limit  int                    `json:"limit"`
+	Offset int                    `json:"offset"`
+	Items  []search.MediaDocument `json:"items"`
+}
+
+type StorageDisk struct {
+	ID          int64      `json:"id"`
+	DiskLetter  string     `json:"disk_letter"`
+	DiskLabel   string     `json:"disk_label"`
+	TotalSpace  int64      `json:"total_space"`
+	FreeSpace   int64      `json:"free_space"`
+	UsedSpace   int64      `json:"used_space"`
+	UsedPercent float64    `json:"used_percent"`
+	IsActive    bool       `json:"is_active"`
+	LastScanned *time.Time `json:"last_scanned,omitempty"`
+}
+
+type DashboardStats struct {
+	TotalMedia           int64             `json:"total_media"`
+	TotalFiles           int64             `json:"total_files"`
+	TotalStorageBytes    int64             `json:"total_storage_bytes"`
+	MissingEpisodesCount int               `json:"missing_episodes_count"`
+	DuplicatesCount      int               `json:"duplicates_count"`
+	Categories           []CategorySummary `json:"categories"`
+	Disks                []StorageDisk     `json:"disks"`
 }
 
 func (r *Repository) Health(ctx context.Context) (Health, error) {
@@ -595,3 +666,408 @@ func containsArabic(input string) bool {
 	}
 	return false
 }
+
+func (r *Repository) GetMediaItem(ctx context.Context, id int64) (*MediaItemDetail, error) {
+	var item MediaItemDetail
+	var titleAR, plotAR, plotEN, posterPath, bannerPath, categorySlug, categoryAR, categoryEN sql.NullString
+	var releaseYear sql.NullInt64
+	var rating sql.NullFloat64
+	var genresText string
+	var categoryID sql.NullInt64
+
+	err := r.db.QueryRowContext(ctx, `
+		SELECT
+			mi.id,
+			mi.category_id,
+			mi.title_ar,
+			mi.title_en,
+			mi.type,
+			mi.plot_ar,
+			mi.plot_en,
+			mi.release_year,
+			mi.rating,
+			mi.poster_path,
+			mi.banner_path,
+			COALESCE(array_to_json(mi.genres), '[]'::json)::text AS genres,
+			mi.status,
+			mi.created_at,
+			c.slug,
+			c.name_ar,
+			c.name_en
+		FROM media_items mi
+		LEFT JOIN categories c ON c.id = mi.category_id
+		WHERE mi.id = $1
+	`, id).Scan(
+		&item.ID,
+		&categoryID,
+		&titleAR,
+		&item.TitleEN,
+		&item.Type,
+		&plotAR,
+		&plotEN,
+		&releaseYear,
+		&rating,
+		&posterPath,
+		&bannerPath,
+		&genresText,
+		&item.Status,
+		&item.CreatedAt,
+		&categorySlug,
+		&categoryAR,
+		&categoryEN,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, sql.ErrNoRows
+		}
+		return nil, fmt.Errorf("get media item %d: %w", id, err)
+	}
+
+	if categoryID.Valid {
+		item.CategoryID = categoryID.Int64
+	}
+	item.TitleAR = nullableString(titleAR)
+	item.PlotAR = nullableString(plotAR)
+	item.PlotEN = nullableString(plotEN)
+	item.PosterPath = nullableString(posterPath)
+	item.BannerPath = nullableString(bannerPath)
+	item.CategorySlug = nullableString(categorySlug)
+	item.CategoryAR = nullableString(categoryAR)
+	item.CategoryEN = nullableString(categoryEN)
+	if releaseYear.Valid {
+		item.ReleaseYear = int(releaseYear.Int64)
+	}
+	if rating.Valid {
+		item.Rating = rating.Float64
+	}
+	_ = json.Unmarshal([]byte(genresText), &item.Genres)
+
+	// Fetch seasons if any
+	seasonRows, err := r.db.QueryContext(ctx, `
+		SELECT id, season_number, COALESCE(title_ar, ''), COALESCE(title_en, '')
+		FROM seasons
+		WHERE media_item_id = $1
+		ORDER BY season_number ASC;
+	`, id)
+	if err == nil {
+		defer seasonRows.Close()
+		seasonsMap := make(map[int64]*SeasonDetail)
+		for seasonRows.Next() {
+			var s SeasonDetail
+			if err := seasonRows.Scan(&s.ID, &s.SeasonNumber, &s.TitleAR, &s.TitleEN); err == nil {
+				s.Episodes = make([]VideoFile, 0)
+				item.Seasons = append(item.Seasons, s)
+			}
+		}
+		for idx := range item.Seasons {
+			seasonsMap[item.Seasons[idx].ID] = &item.Seasons[idx]
+		}
+
+		// Fetch video files
+		files, fileErr := r.ListVideoFiles(ctx, id)
+		if fileErr == nil {
+			item.FileCount = len(files)
+			for i := range files {
+				files[i].StreamURL = fmt.Sprintf("/api/stream/file/%d", files[i].ID)
+				if files[i].SeasonID > 0 && seasonsMap[files[i].SeasonID] != nil {
+					seasonsMap[files[i].SeasonID].Episodes = append(seasonsMap[files[i].SeasonID].Episodes, files[i])
+				} else {
+					item.Files = append(item.Files, files[i])
+				}
+			}
+		}
+	}
+
+	return &item, nil
+}
+
+func (r *Repository) ListMediaItems(ctx context.Context, opts ListMediaOptions) (*MediaListResult, error) {
+	if opts.Limit <= 0 || opts.Limit > 100 {
+		opts.Limit = 24
+	}
+	if opts.Offset < 0 {
+		opts.Offset = 0
+	}
+
+	whereClauses := []string{"1=1"}
+	args := []any{}
+	argIdx := 1
+
+	if strings.TrimSpace(opts.CategorySlug) != "" {
+		whereClauses = append(whereClauses, fmt.Sprintf("c.slug = $%d", argIdx))
+		args = append(args, strings.TrimSpace(opts.CategorySlug))
+		argIdx++
+	}
+
+	if strings.TrimSpace(opts.Type) != "" {
+		whereClauses = append(whereClauses, fmt.Sprintf("mi.type = $%d", argIdx))
+		args = append(args, strings.TrimSpace(opts.Type))
+		argIdx++
+	}
+
+	if strings.TrimSpace(opts.Search) != "" {
+		searchTerm := "%" + strings.TrimSpace(opts.Search) + "%"
+		whereClauses = append(whereClauses, fmt.Sprintf("(mi.title_en ILIKE $%d OR mi.title_ar ILIKE $%d)", argIdx, argIdx))
+		args = append(args, searchTerm)
+		argIdx++
+	}
+
+	whereSQL := strings.Join(whereClauses, " AND ")
+
+	// Count total
+	countQuery := fmt.Sprintf(`
+		SELECT COUNT(DISTINCT mi.id)
+		FROM media_items mi
+		LEFT JOIN categories c ON c.id = mi.category_id
+		WHERE %s;
+	`, whereSQL)
+
+	var total int
+	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, fmt.Errorf("count media items: %w", err)
+	}
+
+	orderBy := "mi.created_at DESC, mi.id DESC"
+	switch opts.Sort {
+	case "rating":
+		orderBy = "mi.rating DESC NULLS LAST, mi.id DESC"
+	case "year":
+		orderBy = "mi.release_year DESC NULLS LAST, mi.id DESC"
+	case "title":
+		orderBy = "mi.title_en ASC"
+	}
+
+	query := fmt.Sprintf(`
+		SELECT
+			mi.id,
+			mi.title_ar,
+			mi.title_en,
+			mi.type,
+			mi.plot_ar,
+			mi.plot_en,
+			mi.release_year,
+			mi.rating,
+			mi.poster_path,
+			mi.banner_path,
+			COALESCE(array_to_json(mi.genres), '[]'::json)::text AS genres,
+			c.slug,
+			c.name_ar,
+			c.name_en,
+			COUNT(vf.id) AS file_count
+		FROM media_items mi
+		LEFT JOIN categories c ON c.id = mi.category_id
+		LEFT JOIN video_files vf ON vf.media_item_id = mi.id
+		WHERE %s
+		GROUP BY mi.id, c.id
+		ORDER BY %s
+		LIMIT $%d OFFSET $%d;
+	`, whereSQL, orderBy, argIdx, argIdx+1)
+
+	args = append(args, opts.Limit, opts.Offset)
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list media items: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]search.MediaDocument, 0)
+	for rows.Next() {
+		var doc search.MediaDocument
+		var titleAR, plotAR, plotEN, posterPath, bannerPath, categorySlug, categoryAR, categoryEN sql.NullString
+		var releaseYear sql.NullInt64
+		var rating sql.NullFloat64
+		var genresText string
+		var fileCount int64
+
+		if err := rows.Scan(
+			&doc.ID,
+			&titleAR,
+			&doc.TitleEN,
+			&doc.Type,
+			&plotAR,
+			&plotEN,
+			&releaseYear,
+			&rating,
+			&posterPath,
+			&bannerPath,
+			&genresText,
+			&categorySlug,
+			&categoryAR,
+			&categoryEN,
+			&fileCount,
+		); err != nil {
+			return nil, fmt.Errorf("scan list item: %w", err)
+		}
+
+		doc.TitleAR = nullableString(titleAR)
+		doc.PlotAR = nullableString(plotAR)
+		doc.PlotEN = nullableString(plotEN)
+		doc.PosterPath = nullableString(posterPath)
+		doc.BannerPath = nullableString(bannerPath)
+		doc.CategorySlug = nullableString(categorySlug)
+		doc.CategoryAR = nullableString(categoryAR)
+		doc.CategoryEN = nullableString(categoryEN)
+		if releaseYear.Valid {
+			doc.ReleaseYear = int(releaseYear.Int64)
+		}
+		if rating.Valid {
+			doc.Rating = rating.Float64
+		}
+		doc.FileCount = int(fileCount)
+		_ = json.Unmarshal([]byte(genresText), &doc.Genres)
+
+		items = append(items, doc)
+	}
+
+	return &MediaListResult{
+		Total:  total,
+		Limit:  opts.Limit,
+		Offset: opts.Offset,
+		Items:  items,
+	}, nil
+}
+
+func (r *Repository) UpdateMediaMetadata(ctx context.Context, id int64, meta metadata.Result) (*search.MediaDocument, error) {
+	var genresArray any
+	if len(meta.Genres) > 0 {
+		genresArray = meta.Genres
+	}
+
+	poster := meta.CachedPosterPath
+	if poster == "" {
+		poster = meta.PosterPath
+	}
+	banner := meta.CachedBannerPath
+	if banner == "" {
+		banner = meta.BannerPath
+	}
+
+	result, err := r.db.ExecContext(ctx, `
+		UPDATE media_items
+		SET
+			title_ar = COALESCE(NULLIF($1, ''), title_ar),
+			title_en = COALESCE(NULLIF($2, ''), title_en),
+			plot_en = COALESCE(NULLIF($3, ''), plot_en),
+			release_year = COALESCE(NULLIF($4, 0), release_year),
+			rating = COALESCE(NULLIF($5, 0.0), rating),
+			poster_path = COALESCE(NULLIF($6, ''), poster_path),
+			banner_path = COALESCE(NULLIF($7, ''), banner_path),
+			genres = COALESCE($8, genres)
+		WHERE id = $9;
+	`, meta.Title, meta.Title, meta.Overview, meta.ReleaseYear, meta.Rating, poster, banner, genresArray, id)
+	if err != nil {
+		return nil, fmt.Errorf("update media metadata: %w", err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil || affected == 0 {
+		return nil, sql.ErrNoRows
+	}
+
+	// Fetch single document for search reindexing
+	docs, err := r.ListSearchDocuments(ctx, 10000)
+	if err != nil {
+		return nil, err
+	}
+	for _, doc := range docs {
+		if doc.ID == id {
+			return &doc, nil
+		}
+	}
+	return nil, nil
+}
+
+func (r *Repository) GetDashboardStats(ctx context.Context) (*DashboardStats, error) {
+	var stats DashboardStats
+
+	// Total media
+	_ = r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM media_items`).Scan(&stats.TotalMedia)
+
+	// Total files and size
+	var totalFiles sql.NullInt64
+	var totalSize sql.NullInt64
+	_ = r.db.QueryRowContext(ctx, `SELECT COUNT(*), COALESCE(SUM(file_size), 0) FROM video_files`).Scan(&totalFiles, &totalSize)
+	if totalFiles.Valid {
+		stats.TotalFiles = totalFiles.Int64
+	}
+	if totalSize.Valid {
+		stats.TotalStorageBytes = totalSize.Int64
+	}
+
+	// Categories summary
+	categories, err := r.ListCategories(ctx)
+	if err == nil {
+		stats.Categories = categories
+	}
+
+	// Missing episodes count
+	missing, err := r.ListMissingEpisodes(ctx)
+	if err == nil {
+		stats.MissingEpisodesCount = len(missing)
+	}
+
+	// Duplicate groups count
+	duplicates, err := r.ListDuplicateGroups(ctx)
+	if err == nil {
+		stats.DuplicatesCount = len(duplicates)
+	}
+
+	// Disks
+	disks, err := r.ListDisks(ctx)
+	if err == nil {
+		stats.Disks = disks
+	}
+
+	return &stats, nil
+}
+
+func (r *Repository) ListDisks(ctx context.Context) ([]StorageDisk, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT id, disk_letter, COALESCE(disk_label, ''), total_space, free_space, is_active, last_scanned
+		FROM storage_disks
+		ORDER BY disk_letter ASC;
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("list disks: %w", err)
+	}
+	defer rows.Close()
+
+	disks := make([]StorageDisk, 0)
+	for rows.Next() {
+		var disk StorageDisk
+		var lastScanned sql.NullTime
+		if err := rows.Scan(&disk.ID, &disk.DiskLetter, &disk.DiskLabel, &disk.TotalSpace, &disk.FreeSpace, &disk.IsActive, &lastScanned); err != nil {
+			return nil, fmt.Errorf("scan disk: %w", err)
+		}
+		if lastScanned.Valid {
+			disk.LastScanned = &lastScanned.Time
+		}
+		disk.UsedSpace = disk.TotalSpace - disk.FreeSpace
+		if disk.TotalSpace > 0 {
+			disk.UsedPercent = float64(disk.UsedSpace) / float64(disk.TotalSpace) * 100.0
+		}
+		disks = append(disks, disk)
+	}
+	return disks, nil
+}
+
+func (r *Repository) SaveDisks(ctx context.Context, disks []StorageDisk) error {
+	for _, disk := range disks {
+		_, err := r.db.ExecContext(ctx, `
+			INSERT INTO storage_disks (disk_letter, disk_label, total_space, free_space, is_active, last_scanned)
+			VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+			ON CONFLICT (disk_letter)
+			DO UPDATE SET
+				disk_label = EXCLUDED.disk_label,
+				total_space = EXCLUDED.total_space,
+				free_space = EXCLUDED.free_space,
+				is_active = EXCLUDED.is_active,
+				last_scanned = CURRENT_TIMESTAMP;
+		`, disk.DiskLetter, disk.DiskLabel, disk.TotalSpace, disk.FreeSpace, disk.IsActive)
+		if err != nil {
+			return fmt.Errorf("save disk %s: %w", disk.DiskLetter, err)
+		}
+	}
+	return nil
+}
+

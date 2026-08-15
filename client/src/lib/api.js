@@ -85,6 +85,52 @@ export async function getMediaFiles(mediaId) {
   return requestJSON(`/api/media/${encodeURIComponent(mediaId)}/files`);
 }
 
+export async function getMediaList(options = {}) {
+  const params = new URLSearchParams();
+  if (options.category) params.set("category", options.category);
+  if (options.type) params.set("type", options.type);
+  if (options.q) params.set("q", options.q);
+  if (options.sort) params.set("sort", options.sort);
+  if (options.limit) params.set("limit", String(options.limit));
+  if (options.offset) params.set("offset", String(options.offset));
+  return requestJSON(`/api/media?${params.toString()}`);
+}
+
+export async function getMediaDetail(mediaId) {
+  return requestJSON(`/api/media/${encodeURIComponent(mediaId)}`);
+}
+
+export async function enrichMedia(mediaId) {
+  return requestJSON(`/api/media/${encodeURIComponent(mediaId)}/enrich`, {
+    method: "POST"
+  });
+}
+
+export async function updateMediaMetadata(mediaId, metadata) {
+  return requestJSON(`/api/media/${encodeURIComponent(mediaId)}/metadata`, {
+    method: "PUT",
+    body: JSON.stringify(metadata)
+  });
+}
+
+export async function getDashboardStats() {
+  return requestJSON("/api/dashboard/stats");
+}
+
+export async function getDisks() {
+  return requestJSON("/api/disks");
+}
+
+export async function scanDisks() {
+  return requestJSON("/api/disks/scan", {
+    method: "POST"
+  });
+}
+
+export async function getFileSubtitles(fileId) {
+  return requestJSON(`/api/stream/file/${encodeURIComponent(fileId)}/subtitles`);
+}
+
 export function resolveAPIURL(path) {
   if (!path) {
     return "";
@@ -94,3 +140,4 @@ export function resolveAPIURL(path) {
   }
   return `${API_BASE}${path.startsWith("/") ? path : `/${path}`}`;
 }
+
