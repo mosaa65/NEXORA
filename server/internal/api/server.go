@@ -22,6 +22,7 @@ import (
 	"nexora/server/internal/media"
 	"nexora/server/internal/metadata"
 	"nexora/server/internal/migration"
+	"nexora/server/internal/quality"
 	"nexora/server/internal/scanner"
 	"nexora/server/internal/search"
 )
@@ -30,20 +31,31 @@ type repository interface {
 	Health(ctx context.Context) (db.Health, error)
 	IngestScannedFiles(ctx context.Context, files []scanner.FileInfo) (db.IngestResult, error)
 	ListCategories(ctx context.Context) ([]db.CategorySummary, error)
+	CreateCategory(ctx context.Context, nameAR, nameEN, slug string) (*db.CategorySummary, error)
+	UpdateCategory(ctx context.Context, id int64, nameAR, nameEN, slug string) error
+	DeleteCategory(ctx context.Context, id int64) error
 	ListSearchDocuments(ctx context.Context, limit int) ([]search.MediaDocument, error)
 	ListVideoFiles(ctx context.Context, mediaItemID int64) ([]db.VideoFile, error)
 	GetVideoFilePath(ctx context.Context, id int64) (string, error)
 	GetVideoFileIDByPath(ctx context.Context, path string) (int64, error)
 	UpdateVideoTechnicalDetails(ctx context.Context, id int64, details media.InspectResult) error
+	UpdateVideoVerification(ctx context.Context, id int64, result media.VerifyResult) error
 	ListDuplicateGroups(ctx context.Context) ([]db.DuplicateGroup, error)
 	ListMissingEpisodes(ctx context.Context) ([]db.MissingEpisode, error)
+	ListCorruptedFiles(ctx context.Context) ([]db.CorruptedFile, error)
 	CalculateChecksums(ctx context.Context, mediaItemID int64) (db.ChecksumResult, error)
 	GetMediaItem(ctx context.Context, id int64) (*db.MediaItemDetail, error)
 	ListMediaItems(ctx context.Context, opts db.ListMediaOptions) (*db.MediaListResult, error)
 	UpdateMediaMetadata(ctx context.Context, id int64, meta metadata.Result) (*search.MediaDocument, error)
+	GetMetadataSnapshot(ctx context.Context, mediaItemID int64, locale string) (*db.MetadataSnapshot, error)
+	SaveSeasonMetadataSnapshots(ctx context.Context, mediaItemID int64, snapshots []metadata.SeasonResult) error
+	GetSeasonMetadataSnapshots(ctx context.Context, mediaItemID int64, locale string) ([]db.SeasonMetadataSnapshot, error)
 	GetDashboardStats(ctx context.Context) (*db.DashboardStats, error)
 	ListDisks(ctx context.Context) ([]db.StorageDisk, error)
 	SaveDisks(ctx context.Context, disks []db.StorageDisk) error
+	CreateMediaItem(ctx context.Context, req db.CreateMediaRequest) (*search.MediaDocument, error)
+	UpdateMediaFull(ctx context.Context, id int64, req db.UpdateMediaRequest) (*search.MediaDocument, error)
+	DeleteMediaItem(ctx context.Context, id int64) error
 }
 
 type searchClient interface {
@@ -53,6 +65,8 @@ type searchClient interface {
 
 type metadataService interface {
 	Lookup(ctx context.Context, query metadata.Query) (metadata.Result, error)
+	LookupByExternalID(ctx context.Context, query metadata.Query, externalID string) (metadata.Result, error)
+	LookupSeasonByExternalID(ctx context.Context, externalID string, seasonNumber int, language string) (metadata.SeasonResult, error)
 }
 
 type mediaProcessor interface {
@@ -66,6 +80,14 @@ type migrationService interface {
 	Copy(ctx context.Context, request migration.CopyRequest) (migration.CopyResult, error)
 }
 
+type qualityService interface {
+	GenerateReport(ctx context.Context) (*quality.QualityReport, error)
+	FindDuplicates(ctx context.Context) ([]db.DuplicateGroup, int64, error)
+	FindMissingEpisodes(ctx context.Context) ([]quality.MissingEpisodeDetail, error)
+	VerifyFile(ctx context.Context, filePath string) (bool, string, error)
+	ListCorruptedFiles(ctx context.Context) ([]quality.CorruptedFileDetail, error)
+}
+
 type Server struct {
 	config      config.Config
 	repository  repository
@@ -74,6 +96,7 @@ type Server struct {
 	metadata    metadataService
 	processor   mediaProcessor
 	migration   migrationService
+	quality     qualityService
 	diskManager *disks.Manager
 	mux         *http.ServeMux
 }
@@ -86,6 +109,7 @@ func NewServer(
 	metadataService metadataService,
 	processor mediaProcessor,
 	migrationService migrationService,
+	qualityService qualityService,
 ) http.Handler {
 	server := &Server{
 		config:      config,
@@ -95,6 +119,7 @@ func NewServer(
 		metadata:    metadataService,
 		processor:   processor,
 		migration:   migrationService,
+		quality:     qualityService,
 		diskManager: disks.NewManager(),
 		mux:         http.NewServeMux(),
 	}
@@ -106,14 +131,24 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /health", s.handleHealth)
 	s.mux.HandleFunc("GET /api/health", s.handleHealth)
 	s.mux.HandleFunc("GET /api/categories", s.handleCategories)
+	s.mux.HandleFunc("POST /api/categories", s.handleCategoryCreate)
+	s.mux.HandleFunc("PUT /api/categories/{id}", s.handleCategoryUpdate)
+	s.mux.HandleFunc("DELETE /api/categories/{id}", s.handleCategoryDelete)
 	s.mux.HandleFunc("GET /api/search", s.handleSearch)
 	s.mux.HandleFunc("GET /api/media", s.handleMediaList)
+	s.mux.HandleFunc("POST /api/media", s.handleMediaCreate)
 	s.mux.HandleFunc("GET /api/media/{id}", s.handleMediaDetail)
+	s.mux.HandleFunc("PUT /api/media/{id}", s.handleMediaUpdateFull)
+	s.mux.HandleFunc("DELETE /api/media/{id}", s.handleMediaDelete)
 	s.mux.HandleFunc("GET /api/media/{id}/files", s.handleMediaFiles)
+	s.mux.HandleFunc("GET /api/media/{id}/metadata/raw", s.handleMediaMetadataSnapshot)
+	s.mux.HandleFunc("GET /api/media/{id}/metadata/seasons", s.handleMediaSeasonMetadataSnapshots)
 	s.mux.HandleFunc("POST /api/media/{id}/enrich", s.handleMediaEnrich)
 	s.mux.HandleFunc("PUT /api/media/{id}/metadata", s.handleMediaMetadataUpdate)
 	s.mux.HandleFunc("GET /api/library/duplicates", s.handleDuplicates)
 	s.mux.HandleFunc("GET /api/library/missing-episodes", s.handleMissingEpisodes)
+	s.mux.HandleFunc("GET /api/library/corrupted", s.handleCorruptedFiles)
+	s.mux.HandleFunc("GET /api/quality/report", s.handleQualityReport)
 	s.mux.HandleFunc("GET /api/dashboard/stats", s.handleDashboardStats)
 	s.mux.HandleFunc("GET /api/disks", s.handleDisksList)
 	s.mux.HandleFunc("POST /api/disks/scan", s.handleDisksScan)
@@ -151,6 +186,21 @@ type indexResult struct {
 	Warnings      []string          `json:"warnings,omitempty"`
 }
 
+const (
+	ingestBatchSize  = 128
+	maxIndexWarnings = 100
+)
+
+func (r *indexResult) addWarning(message string) {
+	if len(r.Warnings) < maxIndexWarnings {
+		r.Warnings = append(r.Warnings, message)
+		return
+	}
+	if len(r.Warnings) == maxIndexWarnings {
+		r.Warnings = append(r.Warnings, "additional indexing warnings were omitted")
+	}
+}
+
 // handleIndex is the unified first-pass library workflow. Metadata artwork and
 // subtitle extraction are deliberately separate jobs because they can require
 // external providers or long-running FFmpeg work.
@@ -175,43 +225,60 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	files, err := s.scanner.Scan(r.Context(), request.Roots)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
-		return
+	result := indexResult{Roots: request.Roots, Warnings: []string{}}
+	batch := make([]scanner.FileInfo, 0, ingestBatchSize)
+	flush := func() error {
+		if len(batch) == 0 {
+			return nil
+		}
+		ingested, err := s.repository.IngestScannedFiles(r.Context(), batch)
+		result.Imported += ingested.Imported
+		if err != nil {
+			return err
+		}
+		for _, file := range batch {
+			id, err := s.repository.GetVideoFileIDByPath(r.Context(), file.Path)
+			if err != nil {
+				result.InspectFailed++
+				result.addWarning("could not locate indexed file: " + file.Path)
+				continue
+			}
+			details, err := s.processor.Inspect(r.Context(), file.Path)
+			if err != nil {
+				result.InspectFailed++
+				result.addWarning("could not inspect: " + file.Path)
+				continue
+			}
+			if err := s.repository.UpdateVideoTechnicalDetails(r.Context(), id, details); err != nil {
+				result.InspectFailed++
+				result.addWarning("could not save inspection: " + file.Path)
+				continue
+			}
+			result.Inspected++
+		}
+		batch = batch[:0]
+		return nil
 	}
-	result := indexResult{Roots: request.Roots, Scanned: len(files), Warnings: []string{}}
-	ingested, err := s.repository.IngestScannedFiles(r.Context(), files)
-	result.Imported = ingested.Imported
+	err := s.scanner.Walk(r.Context(), request.Roots, func(file scanner.FileInfo) error {
+		result.Scanned++
+		batch = append(batch, file)
+		if len(batch) == cap(batch) {
+			return flush()
+		}
+		return nil
+	})
+	if err == nil {
+		err = flush()
+	}
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error(), "result": result})
 		return
 	}
-	for _, file := range files {
-		id, err := s.repository.GetVideoFileIDByPath(r.Context(), file.Path)
-		if err != nil {
-			result.InspectFailed++
-			result.Warnings = append(result.Warnings, "could not locate indexed file: "+file.Path)
-			continue
-		}
-		details, err := s.processor.Inspect(r.Context(), file.Path)
-		if err != nil {
-			result.InspectFailed++
-			result.Warnings = append(result.Warnings, "could not inspect: "+file.Path)
-			continue
-		}
-		if err := s.repository.UpdateVideoTechnicalDetails(r.Context(), id, details); err != nil {
-			result.InspectFailed++
-			result.Warnings = append(result.Warnings, "could not save inspection: "+file.Path)
-			continue
-		}
-		result.Inspected++
-	}
 	documents, err := s.repository.ListSearchDocuments(r.Context(), 10000)
 	if err != nil {
-		result.Warnings = append(result.Warnings, "search sync skipped: "+err.Error())
+		result.addWarning("search sync skipped: " + err.Error())
 	} else if syncResult, err := s.search.IndexDocuments(r.Context(), documents); err != nil {
-		result.Warnings = append(result.Warnings, "search sync skipped: "+err.Error())
+		result.addWarning("search sync skipped: " + err.Error())
 	} else {
 		result.SearchSync = syncResult
 	}
@@ -267,6 +334,15 @@ func (s *Server) handleMissingEpisodes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"count": len(missing), "episodes": missing})
+}
+
+func (s *Server) handleCorruptedFiles(w http.ResponseWriter, r *http.Request) {
+	files, err := s.repository.ListCorruptedFiles(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"count": len(files), "files": files})
 }
 
 func (s *Server) handleChecksums(w http.ResponseWriter, r *http.Request) {
@@ -341,6 +417,66 @@ func (s *Server) handleCategories(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) handleCategoryCreate(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		NameAR string `json:"name_ar"`
+		NameEN string `json:"name_en"`
+		Slug   string `json:"slug"`
+	}
+	if err := decodeJSON(r, &request); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+		return
+	}
+
+	cat, err := s.repository.CreateCategory(r.Context(), request.NameAR, request.NameEN, request.Slug)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, cat)
+}
+
+func (s *Server) handleCategoryUpdate(w http.ResponseWriter, r *http.Request) {
+	id, ok := parsePositiveID(r.PathValue("id"))
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "category id must be a positive integer"})
+		return
+	}
+
+	var request struct {
+		NameAR string `json:"name_ar"`
+		NameEN string `json:"name_en"`
+		Slug   string `json:"slug"`
+	}
+	if err := decodeJSON(r, &request); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+		return
+	}
+
+	if err := s.repository.UpdateCategory(r.Context(), id, request.NameAR, request.NameEN, request.Slug); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "id": id})
+}
+
+func (s *Server) handleCategoryDelete(w http.ResponseWriter, r *http.Request) {
+	id, ok := parsePositiveID(r.PathValue("id"))
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "category id must be a positive integer"})
+		return
+	}
+
+	if err := s.repository.DeleteCategory(r.Context(), id); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "deleted_id": id})
+}
+
 func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
 	limit := 24
@@ -393,6 +529,46 @@ func (s *Server) handleMediaFiles(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) handleMediaMetadataSnapshot(w http.ResponseWriter, r *http.Request) {
+	mediaID, ok := parsePositiveID(r.PathValue("id"))
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "media id must be a positive integer"})
+		return
+	}
+	locale := strings.TrimSpace(r.URL.Query().Get("locale"))
+	if locale == "" {
+		locale = "en-US"
+	}
+	snapshot, err := s.repository.GetMetadataSnapshot(r.Context(), mediaID, locale)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, sql.ErrNoRows) {
+			status = http.StatusNotFound
+		}
+		writeJSON(w, status, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, snapshot)
+}
+
+func (s *Server) handleMediaSeasonMetadataSnapshots(w http.ResponseWriter, r *http.Request) {
+	mediaID, ok := parsePositiveID(r.PathValue("id"))
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "media id must be a positive integer"})
+		return
+	}
+	locale := strings.TrimSpace(r.URL.Query().Get("locale"))
+	if locale == "" {
+		locale = "en-US"
+	}
+	snapshots, err := s.repository.GetSeasonMetadataSnapshots(r.Context(), mediaID, locale)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"mediaId": mediaID, "locale": locale, "items": snapshots})
+}
+
 func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 	roots := r.URL.Query()["root"]
 	if len(roots) == 0 {
@@ -405,13 +581,31 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	files, err := s.scanner.Scan(r.Context(), roots)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
-		return
+	result := db.IngestResult{}
+	batch := make([]scanner.FileInfo, 0, ingestBatchSize)
+	flush := func() error {
+		if len(batch) == 0 {
+			return nil
+		}
+		ingested, err := s.repository.IngestScannedFiles(r.Context(), batch)
+		result.Imported += ingested.Imported
+		if err != nil {
+			return err
+		}
+		batch = batch[:0]
+		return nil
 	}
-
-	result, err := s.repository.IngestScannedFiles(r.Context(), files)
+	err := s.scanner.Walk(r.Context(), roots, func(file scanner.FileInfo) error {
+		result.Scanned++
+		batch = append(batch, file)
+		if len(batch) == cap(batch) {
+			return flush()
+		}
+		return nil
+	})
+	if err == nil {
+		err = flush()
+	}
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error(), "partial": result})
 		return
@@ -471,10 +665,27 @@ func (s *Server) handleMetadataLookup(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleMediaVerify(w http.ResponseWriter, r *http.Request) {
 	var request struct {
-		Path string `json:"path"`
+		FileID int64  `json:"fileId,omitempty"`
+		Path   string `json:"path,omitempty"`
 	}
 	if err := decodeJSON(r, &request); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+		return
+	}
+	if request.FileID < 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "fileId must be a positive integer"})
+		return
+	}
+	if request.FileID > 0 {
+		path, err := s.repository.GetVideoFilePath(r.Context(), request.FileID)
+		if err != nil {
+			writeJSON(w, http.StatusNotFound, map[string]any{"error": err.Error()})
+			return
+		}
+		request.Path = path
+	}
+	if strings.TrimSpace(request.Path) == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "fileId or path is required"})
 		return
 	}
 	if !s.mediaPathAllowed(request.Path) {
@@ -486,6 +697,17 @@ func (s *Server) handleMediaVerify(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeJSON(w, http.StatusFailedDependency, map[string]any{"error": err.Error(), "result": result})
 		return
+	}
+	if request.FileID == 0 {
+		if id, lookupErr := s.repository.GetVideoFileIDByPath(r.Context(), request.Path); lookupErr == nil {
+			request.FileID = id
+		}
+	}
+	if request.FileID > 0 {
+		if err := s.repository.UpdateVideoVerification(r.Context(), request.FileID, result); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error(), "result": result})
+			return
+		}
 	}
 	writeJSON(w, http.StatusOK, result)
 }
@@ -700,6 +922,75 @@ func (s *Server) handleMediaDetail(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, item)
 }
 
+func (s *Server) handleMediaCreate(w http.ResponseWriter, r *http.Request) {
+	var request db.CreateMediaRequest
+	if err := decodeJSON(r, &request); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+		return
+	}
+
+	doc, err := s.repository.CreateMediaItem(r.Context(), request)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+
+	if s.search != nil && doc != nil {
+		_, _ = s.search.IndexDocuments(r.Context(), []search.MediaDocument{*doc})
+	}
+
+	writeJSON(w, http.StatusCreated, doc)
+}
+
+func (s *Server) handleMediaUpdateFull(w http.ResponseWriter, r *http.Request) {
+	mediaID, ok := parsePositiveID(r.PathValue("id"))
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "media id must be a positive integer"})
+		return
+	}
+
+	var request db.UpdateMediaRequest
+	if err := decodeJSON(r, &request); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+		return
+	}
+
+	doc, err := s.repository.UpdateMediaFull(r.Context(), mediaID, request)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, sql.ErrNoRows) {
+			status = http.StatusNotFound
+		}
+		writeJSON(w, status, map[string]any{"error": err.Error()})
+		return
+	}
+
+	if s.search != nil && doc != nil {
+		_, _ = s.search.IndexDocuments(r.Context(), []search.MediaDocument{*doc})
+	}
+
+	writeJSON(w, http.StatusOK, doc)
+}
+
+func (s *Server) handleMediaDelete(w http.ResponseWriter, r *http.Request) {
+	mediaID, ok := parsePositiveID(r.PathValue("id"))
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "media id must be a positive integer"})
+		return
+	}
+
+	if err := s.repository.DeleteMediaItem(r.Context(), mediaID); err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, sql.ErrNoRows) {
+			status = http.StatusNotFound
+		}
+		writeJSON(w, status, map[string]any{"error": err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "deleted_id": mediaID})
+}
+
 func (s *Server) handleMediaEnrich(w http.ResponseWriter, r *http.Request) {
 	mediaID, ok := parsePositiveID(r.PathValue("id"))
 	if !ok {
@@ -722,35 +1013,93 @@ func (s *Server) handleMediaEnrich(w http.ResponseWriter, r *http.Request) {
 		lookupTitle = item.TitleAR
 	}
 
-	metaResult, err := s.metadata.Lookup(r.Context(), metadata.Query{
-		Title: lookupTitle,
-		Type:  item.Type,
-		Year:  item.ReleaseYear,
+	canonical, lookupErr := s.metadata.Lookup(r.Context(), metadata.Query{
+		Title: lookupTitle, Type: item.Type, Year: item.ReleaseYear, Language: "en-US",
 	})
-	if err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]any{
-			"error":   "metadata lookup failed: " + err.Error(),
-			"title":   lookupTitle,
-			"mediaId": mediaID,
-		})
+	if lookupErr != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]any{"error": "metadata lookup failed: " + lookupErr.Error(), "title": lookupTitle, "mediaId": mediaID})
 		return
 	}
-
-	doc, err := s.repository.UpdateMediaMetadata(r.Context(), mediaID, metaResult)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
-		return
+	// The confirmed English search result defines the TMDB ID. Arabic is then
+	// fetched by that same ID, never via a second ambiguous title search.
+	results := []metadata.Result{canonical}
+	var lookupWarnings []string
+	if canonical.Provider == "tmdb" {
+		arabic, arabicErr := s.metadata.LookupByExternalID(r.Context(), metadata.Query{Type: item.Type, Language: "ar-SA"}, canonical.ExternalID)
+		if arabicErr != nil {
+			lookupWarnings = append(lookupWarnings, "ar-SA: "+arabicErr.Error())
+		} else {
+			results = []metadata.Result{arabic, canonical}
+		}
+	}
+	var doc *search.MediaDocument
+	for _, metaResult := range results {
+		updated, updateErr := s.repository.UpdateMediaMetadata(r.Context(), mediaID, metaResult)
+		if updateErr != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]any{"error": updateErr.Error()})
+			return
+		}
+		if updated != nil {
+			doc = updated
+		}
 	}
 
 	if doc != nil {
 		_, _ = s.search.IndexDocuments(r.Context(), []search.MediaDocument{*doc})
 	}
 
+	seasonCount := 0
+	if canonical.Provider == "tmdb" && isSeriesType(item.Type) {
+		for _, seasonNumber := range tmdbSeasonNumbers(canonical.RawPayload) {
+			englishSeason, seasonErr := s.metadata.LookupSeasonByExternalID(r.Context(), canonical.ExternalID, seasonNumber, "en-US")
+			if seasonErr != nil {
+				lookupWarnings = append(lookupWarnings, fmt.Sprintf("season %d en-US: %v", seasonNumber, seasonErr))
+				continue
+			}
+			seasonSnapshots := []metadata.SeasonResult{englishSeason}
+			arabicSeason, arabicSeasonErr := s.metadata.LookupSeasonByExternalID(r.Context(), canonical.ExternalID, seasonNumber, "ar-SA")
+			if arabicSeasonErr != nil {
+				lookupWarnings = append(lookupWarnings, fmt.Sprintf("season %d ar-SA: %v", seasonNumber, arabicSeasonErr))
+			} else {
+				seasonSnapshots = append(seasonSnapshots, arabicSeason)
+			}
+			if err := s.repository.SaveSeasonMetadataSnapshots(r.Context(), mediaID, seasonSnapshots); err != nil {
+				lookupWarnings = append(lookupWarnings, fmt.Sprintf("season %d cache: %v", seasonNumber, err))
+				continue
+			}
+			seasonCount++
+		}
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
-		"ok":       true,
-		"metadata": metaResult,
-		"document": doc,
+		"ok":            true,
+		"metadata":      results,
+		"document":      doc,
+		"warnings":      lookupWarnings,
+		"seasonsCached": seasonCount,
 	})
+}
+
+func isSeriesType(mediaType string) bool {
+	return mediaType == "series" || mediaType == "anime" || mediaType == "tv"
+}
+
+func tmdbSeasonNumbers(raw json.RawMessage) []int {
+	var payload struct {
+		Seasons []struct {
+			SeasonNumber int `json:"season_number"`
+		} `json:"seasons"`
+	}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return nil
+	}
+	numbers := make([]int, 0, len(payload.Seasons))
+	for _, season := range payload.Seasons {
+		if season.SeasonNumber >= 0 {
+			numbers = append(numbers, season.SeasonNumber)
+		}
+	}
+	return numbers
 }
 
 func (s *Server) handleMediaMetadataUpdate(w http.ResponseWriter, r *http.Request) {
@@ -802,6 +1151,21 @@ func (s *Server) handleDashboardStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, stats)
+}
+
+func (s *Server) handleQualityReport(w http.ResponseWriter, r *http.Request) {
+	if s.quality == nil {
+		writeJSON(w, http.StatusNotImplemented, map[string]any{"error": "quality service not available"})
+		return
+	}
+
+	report, err := s.quality.GenerateReport(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, report)
 }
 
 func (s *Server) handleDisksList(w http.ResponseWriter, r *http.Request) {
@@ -978,4 +1342,3 @@ func parsePositiveID(raw string) (int64, bool) {
 	id, err := strconv.ParseInt(raw, 10, 64)
 	return id, err == nil && id > 0
 }
-

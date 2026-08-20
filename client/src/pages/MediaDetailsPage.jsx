@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import Icon from "../components/Icon.jsx";
-import { getMediaDetail, enrichMedia } from "../lib/api.js";
+import { getMediaDetail, enrichMedia, getMediaMetadataSnapshot, getMediaSeasonMetadata, resolveAPIURL } from "../lib/api.js";
+import { horizontalWheel } from "../lib/horizontalScroll.js";
+
+const hasArabicText = (value) => /[\u0600-\u06FF]/.test(value || "");
 
 export default function MediaDetailsPage({
   media,
@@ -13,6 +16,11 @@ export default function MediaDetailsPage({
   const [selectedSeasonIdx, setSelectedSeasonIdx] = useState(0);
   const [isEnriching, setIsEnriching] = useState(false);
   const [enrichMsg, setEnrichMsg] = useState("");
+  const [tmdb, setTmdb] = useState(null);
+  const [tmdbEnglish, setTmdbEnglish] = useState(null);
+  const [seasonSnapshots, setSeasonSnapshots] = useState([]);
+  const [englishSeasonSnapshots, setEnglishSeasonSnapshots] = useState([]);
+  const [selectedMetadataSeason, setSelectedMetadataSeason] = useState(0);
 
   const current = detail || media || {
     id: 1,
@@ -39,12 +47,12 @@ export default function MediaDetailsPage({
           if (data && data.id) {
             setDetail({
               id: data.id,
-              titleAr: data.title_ar || data.title_en || media.titleAr,
+              titleAr: hasArabicText(data.title_ar) ? data.title_ar : (hasArabicText(media.titleAr) ? media.titleAr : ""),
               titleEn: data.title_en || media.titleEn,
               type: data.type || media.type,
               year: data.release_year || media.year || 2023,
               rating: data.rating || media.rating || 8.5,
-              plot: data.plot_ar || data.plot_en || media.plot || "عمل سينمائي مميز متاح في مكتبة NEXORA المحلية.",
+              plot: hasArabicText(data.plot_ar) ? data.plot_ar : (data.plot_en || media.plot || "عمل سينمائي مميز متاح في مكتبة NEXORA المحلية."),
               posterPath: data.poster_path || media.posterPath,
               bannerPath: data.banner_path || media.bannerPath,
               categorySlug: data.category_slug || media.categorySlug,
@@ -55,6 +63,24 @@ export default function MediaDetailsPage({
           }
         })
         .catch(() => {});
+      Promise.allSettled([
+        getMediaMetadataSnapshot(media.id, "ar-SA"),
+        getMediaMetadataSnapshot(media.id, "en-US")
+      ]).then(([arabicSnapshot, englishSnapshot]) => {
+        if (!alive) return;
+        const arabicPayload = arabicSnapshot.status === "fulfilled" ? arabicSnapshot.value?.payload : null;
+        const englishPayload = englishSnapshot.status === "fulfilled" ? englishSnapshot.value?.payload : null;
+        setTmdb(arabicPayload || englishPayload || null);
+        setTmdbEnglish(englishPayload || null);
+      });
+      Promise.allSettled([
+        getMediaSeasonMetadata(media.id, "ar-SA"),
+        getMediaSeasonMetadata(media.id, "en-US")
+      ]).then(([arabicSeasons, englishSeasons]) => {
+        if (!alive) return;
+        setSeasonSnapshots(arabicSeasons.status === "fulfilled" ? arabicSeasons.value?.items || [] : []);
+        setEnglishSeasonSnapshots(englishSeasons.status === "fulfilled" ? englishSeasons.value?.items || [] : []);
+      });
     }
 
     return () => {
@@ -68,23 +94,48 @@ export default function MediaDetailsPage({
     setEnrichMsg("جارٍ جلب البيانات والبوستر...");
     try {
       const res = await enrichMedia(current.id);
-      if (res.ok && res.metadata) {
+      const allMetadata = Array.isArray(res.metadata) ? res.metadata : [res.metadata].filter(Boolean);
+      const arabic = allMetadata.find((item) => item.locale === "ar-SA");
+      const english = allMetadata.find((item) => item.locale === "en-US") || allMetadata[0];
+      if (res.ok && english) {
         setEnrichMsg("✅ تم تحديث البيانات والبوستر بنجاح!");
         setDetail((prev) => ({
           ...prev,
-          titleAr: res.metadata.title || prev.titleAr,
-          plot: res.metadata.overview || prev.plot,
-          rating: res.metadata.rating || prev.rating,
-          year: res.metadata.releaseYear || prev.year,
-          posterPath: res.metadata.cachedPosterPath || res.metadata.posterPath || prev.posterPath,
-          bannerPath: res.metadata.cachedBannerPath || res.metadata.bannerPath || prev.bannerPath,
-          highlights: res.metadata.genres?.length > 0 ? res.metadata.genres : prev.highlights
+          titleEn: english.title || prev.titleEn,
+          titleAr: hasArabicText(arabic?.title) ? arabic.title : prev.titleAr,
+          plot: hasArabicText(arabic?.overview) ? arabic.overview : (english.overview || prev.plot),
+          rating: english.rating || prev.rating,
+          year: english.releaseYear || prev.year,
+          posterPath: english.cachedPosterPath || english.posterPath || prev.posterPath,
+          bannerPath: english.cachedBannerPath || english.bannerPath || prev.bannerPath,
+          highlights: arabic?.genres?.length > 0 ? arabic.genres : (english.genres?.length > 0 ? english.genres : prev.highlights)
         }));
+        Promise.allSettled([
+          getMediaMetadataSnapshot(current.id, "ar-SA"),
+          getMediaMetadataSnapshot(current.id, "en-US")
+        ]).then(([arabicSnapshot, englishSnapshot]) => {
+          const arabicPayload = arabicSnapshot.status === "fulfilled" ? arabicSnapshot.value?.payload : null;
+          const englishPayload = englishSnapshot.status === "fulfilled" ? englishSnapshot.value?.payload : null;
+          setTmdb(arabicPayload || englishPayload || null);
+          setTmdbEnglish(englishPayload || null);
+        });
+        Promise.allSettled([
+          getMediaSeasonMetadata(current.id, "ar-SA"),
+          getMediaSeasonMetadata(current.id, "en-US")
+        ]).then(([arabicSeasons, englishSeasons]) => {
+          setSeasonSnapshots(arabicSeasons.status === "fulfilled" ? arabicSeasons.value?.items || [] : []);
+          setEnglishSeasonSnapshots(englishSeasons.status === "fulfilled" ? englishSeasons.value?.items || [] : []);
+        });
       } else {
         setEnrichMsg("لم يتم العثور على تطابق.");
       }
     } catch (err) {
-      setEnrichMsg("تعذر الاتصال بمزود البيانات.");
+      const providerError = String(err?.payload?.error || err?.message || "");
+      if (providerError.includes("api.themoviedb.org") || providerError.includes("dial tcp") || providerError.includes("socket")) {
+        setEnrichMsg("تعذر وصول خادم NEXORA إلى TMDB — تحقق من الإنترنت أو جدار الحماية.");
+      } else {
+        setEnrichMsg("تعذر تحديث بيانات TMDB: " + (providerError || "خطأ غير معروف"));
+      }
     } finally {
       setIsEnriching(false);
       setTimeout(() => setEnrichMsg(""), 4000);
@@ -94,6 +145,48 @@ export default function MediaDetailsPage({
   const seasonsList = current.seasons && current.seasons.length > 0 ? current.seasons : [];
   const currentSeason = seasonsList[selectedSeasonIdx] || seasonsList[0];
   const activeEpisodes = currentSeason?.episodes || current.files || [];
+  const cast = tmdb?.aggregate_credits?.cast || tmdb?.credits?.cast || [];
+  const englishCastByID = new Map((tmdbEnglish?.aggregate_credits?.cast || tmdbEnglish?.credits?.cast || []).map((person) => [person.id, person]));
+  const trailers = [...(tmdb?.videos?.results || []), ...(tmdbEnglish?.videos?.results || [])]
+    .filter((video, index, videos) => String(video.site || "").toLowerCase() === "youtube" && video.key && videos.findIndex((item) => item.key === video.key) === index);
+  const keywords = tmdb?.keywords?.keywords || tmdb?.keywords?.results || [];
+  const related = tmdb?.recommendations?.results || tmdb?.similar?.results || [];
+  const englishRelatedByID = new Map([...(tmdbEnglish?.recommendations?.results || []), ...(tmdbEnglish?.similar?.results || [])].map((item) => [item.id, item]));
+  const alternativeTitles = tmdb?.alternative_titles?.titles || [];
+  const reviews = tmdb?.reviews?.results || [];
+  const translations = tmdb?.translations?.translations || [];
+  const releaseCountry = (tmdb?.release_dates?.results || []).find((entry) => entry.iso_3166_1 === "SA") || (tmdb?.release_dates?.results || [])[0];
+  const providerResults = tmdb?.watch_providers?.results || {};
+  const providerRegion = providerResults.SA || providerResults.US || Object.values(providerResults)[0];
+  const providers = [
+    ...(providerRegion?.flatrate || []), ...(providerRegion?.free || []), ...(providerRegion?.ads || []), ...(providerRegion?.rent || []), ...(providerRegion?.buy || [])
+  ].filter((provider, index, list) => list.findIndex((item) => item.provider_id === provider.provider_id) === index);
+  const crew = tmdb?.credits?.crew || tmdb?.aggregate_credits?.crew || [];
+  const imageGallery = [
+    ...(tmdbEnglish?.images?.backdrops || tmdb?.images?.backdrops || []).map((image) => ({ ...image, kind: "backdrop", localPath: image.local_backdrop_path })),
+    ...(tmdbEnglish?.images?.posters || tmdb?.images?.posters || []).map((image) => ({ ...image, kind: "poster", localPath: image.local_poster_path })),
+    ...(tmdbEnglish?.images?.logos || tmdb?.images?.logos || []).map((image) => ({ ...image, kind: "logo", localPath: image.local_logo_path }))
+  ];
+  const productionCompanies = tmdb?.production_companies || tmdbEnglish?.production_companies || [];
+  const productionCountries = tmdb?.production_countries || tmdbEnglish?.production_countries || [];
+  const spokenLanguages = tmdb?.spoken_languages || tmdbEnglish?.spoken_languages || [];
+  const collection = tmdb?.belongs_to_collection || tmdbEnglish?.belongs_to_collection;
+  const publicLists = tmdb?.lists?.results || tmdbEnglish?.lists?.results || [];
+  const localizedSeasons = seasonSnapshots.map((snapshot) => snapshot.payload || {}).filter((season) => season.season_number !== undefined);
+  const englishSeasonsByNumber = new Map(englishSeasonSnapshots.map((snapshot) => [snapshot.seasonNumber, snapshot.payload || {}]));
+  const selectedRemoteSeason = localizedSeasons[selectedMetadataSeason] || localizedSeasons[0];
+  const englishSelectedRemoteSeason = selectedRemoteSeason ? englishSeasonsByNumber.get(selectedRemoteSeason.season_number) : null;
+  const remoteEpisodes = selectedRemoteSeason?.episodes || [];
+  const englishEpisodesByNumber = new Map((englishSelectedRemoteSeason?.episodes || []).map((episode) => [episode.episode_number, episode]));
+  const infoFields = [
+    ["العنوان الأصلي", tmdb?.original_title || tmdb?.original_name || tmdbEnglish?.original_title || tmdbEnglish?.original_name], ["الشعار", tmdb?.tagline || tmdbEnglish?.tagline], ["الحالة", tmdb?.status || tmdbEnglish?.status], ["اللغة الأصلية", tmdb?.original_language || tmdbEnglish?.original_language],
+    ["تاريخ الإصدار", tmdb?.release_date || tmdbEnglish?.release_date || tmdb?.first_air_date || tmdbEnglish?.first_air_date], ["مدة الفيلم", (tmdb?.runtime || tmdbEnglish?.runtime) ? `${tmdb?.runtime || tmdbEnglish?.runtime} دقيقة` : null], ["الميزانية", (tmdb?.budget || tmdbEnglish?.budget) ? `$${Number(tmdb?.budget || tmdbEnglish?.budget).toLocaleString("en-US")}` : null], ["الإيرادات", (tmdb?.revenue || tmdbEnglish?.revenue) ? `$${Number(tmdb?.revenue || tmdbEnglish?.revenue).toLocaleString("en-US")}` : null], ["الشعبية", tmdb?.popularity || tmdbEnglish?.popularity], ["عدد الأصوات", tmdb?.vote_count || tmdbEnglish?.vote_count], ["الموقع الرسمي", tmdb?.homepage || tmdbEnglish?.homepage]
+  ].filter(([, value]) => value);
+  const posterURL = resolveAPIURL(current.posterPath) || "/images/attack_on_titan_poster.png";
+  const bannerURL = resolveAPIURL(current.bannerPath) || posterURL || "/images/aot_banner_detail.png";
+  const englishTitle = current.titleEn || current.titleAr || "Untitled";
+  const arabicTitle = hasArabicText(current.titleAr) ? current.titleAr : "لا تتوفر ترجمة عربية لهذا العنوان";
+  const tmdbImageURL = (path, size = "w342") => path ? `https://image.tmdb.org/t/p/${size}${path}` : "";
 
   return (
     <div className="relative space-y-6 text-right">
@@ -138,82 +231,65 @@ export default function MediaDetailsPage({
 
       {/* Main Details Showcase Banner */}
       <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0B0A16] p-6 sm:p-8 lg:p-10 shadow-panel">
-        {/* Background Artwork */}
-        <div
-          className="absolute inset-0 bg-cover bg-center opacity-40 transition-all duration-1000"
-          style={{ backgroundImage: `url('${current.bannerPath || current.posterPath || "/images/aot_banner_detail.png"}')` }}
-        />
+        <div className="absolute inset-0 bg-cover bg-center opacity-40 transition-all duration-1000" style={{ backgroundImage: `url('${bannerURL}')` }} />
         <div className="absolute inset-0 bg-gradient-to-t from-[#0B0A16] via-[#0B0A16]/80 to-transparent" />
         <div className="absolute inset-0 bg-gradient-to-r from-[#0B0A16]/95 via-[#0B0A16]/60 to-transparent" />
-
         <div className="relative z-10 grid gap-8 md:grid-cols-[auto_1fr] items-start">
-          {/* Fixed Poster Card */}
-          <div className="w-48 sm:w-56 shrink-0 overflow-hidden rounded-2xl border-2 border-white/20 shadow-2xl shadow-purple-950/60 mx-auto md:mx-0">
-            <img
-              src={current.posterPath || "/images/attack_on_titan_poster.png"}
-              alt={current.titleAr}
-              className="h-full w-full object-cover aspect-[2/3]"
-              onError={(e) => {
-                e.target.src = "/images/attack_on_titan_poster.png";
-              }}
-            />
-          </div>
-
-          {/* Media Info & Metadata Text */}
-          <div className="flex flex-col gap-4 text-right">
-            <div>
-              <h1 className="text-3xl font-black text-white sm:text-4xl lg:text-5xl tracking-tight">
-                {current.titleAr}
-              </h1>
-              <p className="mt-1 text-sm font-bold text-white/60 sm:text-base">{current.titleEn}</p>
-            </div>
-
-            {/* Metadata Badges Row */}
-            <div className="flex flex-wrap items-center justify-end gap-2 text-xs font-bold text-white/80">
-              <span className="rounded-md bg-white/10 px-2.5 py-1">{current.year || 2023}</span>
-              <span className="rounded-md bg-white/10 px-2.5 py-1">HD</span>
-              {(current.highlights || ["دراما", "أكشن"]).map((h) => (
-                <span key={h} className="rounded-md border border-purple-500/30 bg-purple-950/40 px-2.5 py-1 text-fuchsia-300">
-                  {h}
-                </span>
-              ))}
-              <span className="flex items-center gap-1 text-yellow-400 font-extrabold mr-2">
-                ★ {Number(current.rating || 8.5).toFixed(1)}
-              </span>
-            </div>
-
-            {/* Plot Synopsis Paragraph */}
-            <p className="text-xs leading-relaxed text-white/75 sm:text-sm max-w-2xl">
-              {current.plot}
-            </p>
-
-            {/* Action Buttons */}
-            <div className="mt-2 flex flex-wrap items-center justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => onQuickPlay(current)}
-                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-fuchsia-600 via-purple-600 to-fuchsia-700 px-7 py-3 text-xs font-black text-white shadow-lg shadow-purple-900/60 transition hover:scale-105 sm:text-sm"
-              >
-                <Icon name="play" className="h-4 w-4 text-white fill-current shrink-0" />
-                <span>تشغيل الآن</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleEnrichMetadata}
-                disabled={isEnriching}
-                className="inline-flex items-center gap-2 rounded-xl border border-fuchsia-500/40 bg-fuchsia-950/40 px-5 py-3 text-xs font-bold text-fuchsia-300 backdrop-blur-md transition hover:bg-fuchsia-900/50 sm:text-sm disabled:opacity-50"
-              >
-                <span>✨ جلب الغلاف والقصة (TMDB/MAL)</span>
-              </button>
-            </div>
-
-            {enrichMsg && (
-              <p className="text-xs font-bold text-fuchsia-300 animate-pulse">{enrichMsg}</p>
-            )}
-          </div>
+          <div className="w-48 sm:w-56 shrink-0 overflow-hidden rounded-2xl border-2 border-white/20 shadow-2xl shadow-purple-950/60 mx-auto md:mx-0"><img src={posterURL} alt={englishTitle} className="h-full w-full object-cover aspect-[2/3]" onError={(e) => { e.target.src = "/images/attack_on_titan_poster.png"; }} /></div>
+          <div className="flex flex-col gap-4 text-right"><div><h1 dir="ltr" className="text-left text-3xl font-black text-white sm:text-4xl lg:text-5xl tracking-tight">{englishTitle}</h1><p className="mt-1 text-sm font-bold text-white/70 sm:text-base">{arabicTitle}</p></div><div className="flex flex-wrap items-center justify-end gap-2 text-xs font-bold text-white/80"><span className="rounded-md bg-white/10 px-2.5 py-1">{current.year || 2023}</span><span className="rounded-md bg-white/10 px-2.5 py-1">HD</span>{(current.highlights || []).map((h) => <span key={h} className="rounded-md border border-purple-500/30 bg-purple-950/40 px-2.5 py-1 text-fuchsia-300">{h}</span>)}<span className="text-yellow-400 font-extrabold">★ {Number(current.rating || 8.5).toFixed(1)}</span></div><p className="text-xs leading-relaxed text-white/75 sm:text-sm max-w-2xl">{current.plot}</p><div className="mt-2 flex flex-wrap items-center justify-end gap-3"><button type="button" onClick={() => onQuickPlay(current)} className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-fuchsia-600 via-purple-600 to-fuchsia-700 px-7 py-3 text-xs font-black text-white"><Icon name="play" className="h-4 w-4 text-white fill-current shrink-0" /><span>تشغيل الآن</span></button><button type="button" onClick={handleEnrichMetadata} disabled={isEnriching} className="inline-flex items-center gap-2 rounded-xl border border-fuchsia-500/40 bg-fuchsia-950/40 px-5 py-3 text-xs font-bold text-fuchsia-300 disabled:opacity-50"><span>✨ تحديث معلومات TMDB</span></button></div>{enrichMsg && <p className="text-xs font-bold text-fuchsia-300 animate-pulse">{enrichMsg}</p>}</div>
         </div>
       </div>
+
+      {tmdb && (
+        <section className="grid gap-4 lg:grid-cols-2" aria-label="تفاصيل TMDB المحلية">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+            <h2 className="text-lg font-black text-white">تفاصيل العمل</h2>
+            <dl className="mt-4 grid grid-cols-2 gap-x-5 gap-y-3 text-xs">
+              {[["الحالة", tmdb.status], ["اللغة الأصلية", tmdb.original_language], ["المدة", tmdb.runtime ? `${tmdb.runtime} دقيقة` : null], ["عدد الحلقات", tmdb.number_of_episodes], ["عدد المواسم", tmdb.number_of_seasons], ["التقييمات", tmdb.vote_count]].filter(([, value]) => value).map(([label, value]) => (
+                <div key={label} className="border-b border-white/5 pb-2"><dt className="text-white/45">{label}</dt><dd className="mt-1 font-bold text-white">{value}</dd></div>
+              ))}
+            </dl>
+            {keywords.length > 0 && <div className="mt-5 flex flex-wrap gap-2">{keywords.slice(0, 12).map((keyword) => <span key={keyword.id || keyword.name} className="rounded-full bg-cyan-400/10 px-3 py-1 text-[11px] font-bold text-cyan-200">#{keyword.name}</span>)}</div>}
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+            <h2 className="text-lg font-black text-white">المقاطع الدعائية</h2>
+            <p className="mt-1 text-xs leading-6 text-white/45">تشغّل داخل NEXORA من YouTube، وليست ملفات الفيديو المحلية في المكتبة.</p>
+            <div onWheel={horizontalWheel} className="mt-4 flex gap-3 overflow-x-auto pb-2">{trailers.slice(0, 8).map((video) => <article key={video.id || video.key} className="w-72 shrink-0 overflow-hidden rounded-xl border border-fuchsia-400/20 bg-black"><div className="aspect-video"><iframe className="h-full w-full" src={`https://www.youtube-nocookie.com/embed/${encodeURIComponent(video.key)}?rel=0`} title={video.name || "YouTube trailer"} loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen /></div><p className="truncate px-3 py-2 text-xs font-bold text-white">{video.name || "المقطع الدعائي"} <span className="text-white/45">({video.type})</span></p></article>)}{trailers.length === 0 && <p className="mt-4 text-sm text-white/45">لا توجد مقاطع YouTube متاحة لهذا العمل في TMDB.</p>}</div>
+          </div>
+        </section>
+      )}
+
+      {cast.length > 0 && <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5"><h2 className="text-lg font-black text-white">طاقم العمل</h2><div onWheel={horizontalWheel} className="mt-4 flex gap-3 overflow-x-auto pb-2">{cast.slice(0, 20).map((person) => { const englishPerson = englishCastByID.get(person.id); const profileURL = resolveAPIURL(englishPerson?.local_profile_path || person.local_profile_path) || tmdbImageURL(person.profile_path || englishPerson?.profile_path, "w185"); return <article key={person.id} className="w-28 shrink-0 overflow-hidden rounded-xl border border-white/5 bg-black/20"><div className="aspect-[4/5] bg-white/5">{profileURL ? <img src={profileURL} alt={person.name} className="h-full w-full object-cover" loading="lazy" /> : <div className="flex h-full items-center justify-center text-3xl text-white/25">♙</div>}</div><div className="p-2"><p className="truncate text-xs font-bold text-white">{person.name}</p><p className="mt-1 truncate text-[10px] text-white/45">{person.character || person.roles?.[0]?.character || "طاقم العمل"}</p></div></article>; })}</div></section>}
+
+      {related.length > 0 && <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5"><h2 className="text-lg font-black text-white">قد يعجبك أيضاً</h2><div onWheel={horizontalWheel} className="mt-4 flex gap-3 overflow-x-auto pb-2">{related.slice(0, 12).map((item) => { const englishItem = englishRelatedByID.get(item.id); const titleEN = englishItem?.title || englishItem?.name || item.original_title || item.original_name || item.title || item.name; const titleAR = hasArabicText(item.title || item.name) ? (item.title || item.name) : "لا تتوفر ترجمة عربية"; const relatedPoster = resolveAPIURL(englishItem?.local_poster_path || item.local_poster_path) || tmdbImageURL(item.poster_path || englishItem?.poster_path); return <article key={item.id} className="w-40 shrink-0 overflow-hidden rounded-xl border border-white/5 bg-black/20"><div className="aspect-[2/3] bg-white/5">{relatedPoster ? <img src={relatedPoster} alt={titleEN} className="h-full w-full object-cover" loading="lazy" /> : <div className="flex h-full items-center justify-center text-xs text-white/35">لا توجد صورة</div>}</div><div className="p-3"><p dir="ltr" className="line-clamp-2 text-left text-xs font-bold text-white">{titleEN}</p><p className="mt-1 line-clamp-2 text-xs text-white/55">{titleAR}</p><p className="mt-2 text-xs text-yellow-300">★ {Number(item.vote_average || englishItem?.vote_average || 0).toFixed(1)}</p></div></article>; })}</div></section>}
+
+      {imageGallery.length > 0 && <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5"><h2 className="text-lg font-black text-white">معرض الصور</h2><p className="mt-1 text-xs text-white/45">بوسترات وخلفيات وشعارات العمل المحفوظة محلياً عند توفرها.</p><div onWheel={horizontalWheel} className="mt-4 flex gap-3 overflow-x-auto pb-2">{imageGallery.map((image, index) => { const imageURL = resolveAPIURL(image.localPath) || tmdbImageURL(image.file_path, image.kind === "poster" ? "w342" : "w780"); return <figure key={`${image.file_path}-${index}`} className={`shrink-0 overflow-hidden rounded-xl border border-white/10 bg-black/30 ${image.kind === "poster" ? "w-28" : image.kind === "logo" ? "w-48" : "w-64"}`}><div className={image.kind === "poster" ? "aspect-[2/3]" : "aspect-video"}>{imageURL ? <img src={imageURL} alt={`${image.kind} ${index + 1}`} className="h-full w-full object-cover" loading="lazy" /> : null}</div><figcaption className="px-2 py-1.5 text-[10px] text-white/45">{image.kind === "poster" ? "بوستر" : image.kind === "logo" ? "شعار" : "خلفية"}</figcaption></figure>; })}</div></section>}
+
+      {crew.length > 0 && <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5"><h2 className="text-lg font-black text-white">فريق الإنتاج</h2><div onWheel={horizontalWheel} className="mt-4 flex gap-3 overflow-x-auto pb-2">{crew.slice(0, 30).map((person, index) => <article key={`${person.credit_id || person.id}-${index}`} className="w-36 shrink-0 rounded-xl border border-white/5 bg-black/20 p-3"><p className="truncate text-xs font-bold text-white">{person.name}</p><p className="mt-1 line-clamp-2 text-[11px] text-fuchsia-200">{person.job || person.jobs?.[0]?.job || person.department || "فريق الإنتاج"}</p></article>)}</div></section>}
+
+      {(collection || publicLists.length > 0) && <section className="grid gap-4 lg:grid-cols-2"><div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5"><h2 className="text-lg font-black text-white">السلسلة</h2>{collection ? <div className="mt-4 flex items-center gap-3"><div className="h-16 w-12 shrink-0 overflow-hidden rounded-lg bg-white/5">{collection.poster_path && <img src={tmdbImageURL(collection.poster_path)} alt={collection.name} className="h-full w-full object-cover" loading="lazy" />}</div><p className="text-sm font-bold text-white">{collection.name}</p></div> : <p className="mt-4 text-sm text-white/45">ليس ضمن سلسلة مسجلة في TMDB.</p>}</div><div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5"><h2 className="text-lg font-black text-white">القوائم العامة</h2>{publicLists.length > 0 ? <div className="mt-4 flex flex-wrap gap-2">{publicLists.map((list) => <span key={list.id} className="rounded-lg bg-white/5 px-3 py-1.5 text-xs text-white/75">{list.name}</span>)}</div> : <p className="mt-4 text-sm text-white/45">لا توجد قوائم عامة مرتبطة بهذا العمل.</p>}</div></section>}
+
+      {tmdb && <section className="grid gap-4 xl:grid-cols-3">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 xl:col-span-2">
+          <h2 className="text-lg font-black text-white">بيانات الفيلم الموسّعة</h2>
+          <dl className="mt-4 grid gap-x-6 gap-y-3 text-xs sm:grid-cols-2">{infoFields.map(([label, value]) => <div key={label} className="border-b border-white/5 pb-2"><dt className="text-white/45">{label}</dt><dd className="mt-1 break-words font-bold text-white">{value}</dd></div>)}</dl>
+          {productionCompanies.length > 0 && <p className="mt-5 text-xs text-white/65"><span className="text-white/45">شركات الإنتاج: </span>{productionCompanies.map((company) => company.name).join("، ")}</p>}
+          {productionCountries.length > 0 && <p className="mt-2 text-xs text-white/65"><span className="text-white/45">بلد الإنتاج: </span>{productionCountries.map((country) => country.name).join("، ")}</p>}
+          {spokenLanguages.length > 0 && <p className="mt-2 text-xs text-white/65"><span className="text-white/45">لغات الحوار: </span>{spokenLanguages.map((language) => language.name || language.english_name || language.iso_639_1).join("، ")}</p>}
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5"><h2 className="text-lg font-black text-white">الإصدارات والتصنيف</h2>{releaseCountry ? <div className="mt-4 space-y-2 text-xs text-white/70"><p>المنطقة: <span className="font-bold text-white">{releaseCountry.iso_3166_1}</span></p>{releaseCountry.release_dates?.slice(0, 3).map((release, index) => <p key={`${release.release_date}-${index}`}>{release.release_date?.slice(0, 10)} {release.certification && <span className="mr-2 rounded bg-white/10 px-1.5 py-0.5">{release.certification}</span>}</p>)}</div> : <p className="mt-4 text-sm text-white/45">لا توجد بيانات إصدار محلية لهذا العمل.</p>}</div>
+      </section>}
+
+      {tmdb && <section className="grid gap-4 lg:grid-cols-2">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5"><h2 className="text-lg font-black text-white">العناوين والترجمات</h2>{alternativeTitles.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{alternativeTitles.slice(0, 16).map((title, index) => <span key={`${title.title}-${index}`} className="rounded-lg bg-white/5 px-3 py-1.5 text-xs text-white/80">{title.title} <span className="text-white/40">{title.iso_3166_1}</span></span>)}</div>}<p className="mt-4 text-xs text-white/50">الترجمات المتاحة في TMDB: {translations.length || 0}</p>{translations.length > 0 && <p className="mt-2 line-clamp-2 text-xs text-white/70">{translations.slice(0, 14).map((translation) => translation.name || translation.english_name || translation.iso_639_1).join("، ")}</p>}</div>
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5"><h2 className="text-lg font-black text-white">المعرّفات الخارجية</h2><div className="mt-4 space-y-2 text-xs">{tmdb?.external_ids?.imdb_id && <a className="block text-cyan-300 hover:text-cyan-100" target="_blank" rel="noreferrer" href={`https://www.imdb.com/title/${tmdb.external_ids.imdb_id}/`}>IMDB: {tmdb.external_ids.imdb_id} ↗</a>}{Object.entries(tmdb?.external_ids || {}).filter(([key, value]) => value && key !== "imdb_id" && key !== "id").slice(0, 8).map(([key, value]) => <p key={key} className="break-all text-white/70">{key}: {String(value)}</p>)}</div></div>
+      </section>}
+
+      {providers.length > 0 && <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5"><h2 className="text-lg font-black text-white">أماكن المشاهدة المتاحة</h2><p className="mt-1 text-xs text-white/45">بيانات مزود المشاهدة مقدمة من JustWatch.</p><div className="mt-4 flex flex-wrap gap-2">{providers.map((provider) => <span key={provider.provider_id} className="rounded-lg bg-white/5 px-3 py-1.5 text-xs font-bold text-white/80">{provider.provider_name}</span>)}</div>{providerRegion?.link && <a href={providerRegion.link} target="_blank" rel="noreferrer" className="mt-4 inline-block text-xs font-bold text-cyan-300 hover:text-cyan-100">عرض عبر JustWatch ↗</a>}</section>}
+
+      {reviews.length > 0 && <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5"><h2 className="text-lg font-black text-white">مراجعات الجمهور</h2><div className="mt-4 grid gap-3 lg:grid-cols-2">{reviews.slice(0, 4).map((review) => <article key={review.id} className="rounded-xl border border-white/5 bg-black/20 p-4"><p className="text-xs font-bold text-fuchsia-200">{review.author_details?.name || review.author || "مستخدم TMDB"}</p><p className="mt-2 line-clamp-4 text-xs leading-6 text-white/70">{review.content}</p>{review.url && <a href={review.url} target="_blank" rel="noreferrer" className="mt-3 inline-block text-[11px] text-cyan-300">المراجعة الكاملة ↗</a>}</article>)}</div></section>}
+
+      {localizedSeasons.length > 0 && <section className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.03] p-5"><div><h2 className="text-lg font-black text-white">مواسم وحلقات TMDB</h2><p className="mt-1 text-xs text-white/45">تفاصيل المواسم والحلقات الوصفية محفوظة محلياً؛ التشغيل يظل من ملفات مكتبتك فقط.</p></div><div onWheel={horizontalWheel} className="flex gap-3 overflow-x-auto pb-2">{localizedSeasons.map((season, index) => { const englishSeason = englishSeasonsByNumber.get(season.season_number); const seasonPoster = tmdbImageURL(season.poster_path || englishSeason?.poster_path); return <button type="button" key={season.season_number} onClick={() => setSelectedMetadataSeason(index)} className={`w-40 shrink-0 overflow-hidden rounded-xl border text-right transition ${selectedRemoteSeason?.season_number === season.season_number ? "border-fuchsia-400 bg-fuchsia-500/10" : "border-white/10 bg-black/20 hover:border-white/30"}`}><div className="aspect-[2/3] bg-white/5">{seasonPoster && <img src={seasonPoster} alt={englishSeason?.name || season.name} className="h-full w-full object-cover" loading="lazy" />}</div><div className="p-3"><p dir="ltr" className="truncate text-left text-xs font-bold text-white">{englishSeason?.name || season.name || `Season ${season.season_number}`}</p><p className="mt-1 truncate text-xs text-white/55">{hasArabicText(season.name) ? season.name : "لا تتوفر ترجمة عربية"}</p><p className="mt-2 text-[11px] text-fuchsia-200">{season.episode_count || season.episodes?.length || 0} حلقة</p></div></button>; })}</div>{selectedRemoteSeason && <div><h3 className="text-sm font-black text-white">حلقات: {hasArabicText(selectedRemoteSeason.name) ? selectedRemoteSeason.name : englishSelectedRemoteSeason?.name || selectedRemoteSeason.name}</h3><div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{remoteEpisodes.map((episode) => { const englishEpisode = englishEpisodesByNumber.get(episode.episode_number); const titleEN = englishEpisode?.name || episode.name || `Episode ${episode.episode_number}`; const titleAR = hasArabicText(episode.name) ? episode.name : "لا تتوفر ترجمة عربية"; const still = tmdbImageURL(episode.still_path || englishEpisode?.still_path, "w342"); return <article key={episode.id || episode.episode_number} className="overflow-hidden rounded-xl border border-white/10 bg-black/20"><div className="aspect-video bg-white/5">{still && <img src={still} alt={titleEN} className="h-full w-full object-cover" loading="lazy" />}</div><div className="p-3"><p dir="ltr" className="truncate text-left text-xs font-bold text-white">{episode.episode_number}. {titleEN}</p><p className="mt-1 truncate text-xs text-white/55">{titleAR}</p><p className="mt-2 text-[11px] text-white/40">{episode.air_date || ""} {episode.runtime ? `· ${episode.runtime} دقيقة` : ""}</p><p className="mt-2 line-clamp-2 text-[11px] leading-5 text-white/65">{hasArabicText(episode.overview) ? episode.overview : (englishEpisode?.overview || episode.overview || "")}</p></div></article>; })}</div></div>}</section>}
 
       {/* Seasons Tab & Episode List */}
       {seasonsList.length > 0 && (

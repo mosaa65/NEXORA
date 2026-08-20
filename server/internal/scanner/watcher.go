@@ -5,6 +5,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/fsnotify/fsnotify"
 )
@@ -24,12 +26,13 @@ type Event struct {
 }
 
 type EventWatcher struct {
-	scanner   *Scanner
-	recursive bool
+	scanner       *Scanner
+	recursive     bool
+	retryInterval time.Duration
 }
 
 func NewEventWatcher(scanner *Scanner, recursive bool) *EventWatcher {
-	return &EventWatcher{scanner: scanner, recursive: recursive}
+	return &EventWatcher{scanner: scanner, recursive: recursive, retryInterval: 5 * time.Second}
 }
 
 func (w *EventWatcher) Watch(ctx context.Context, roots []string, handle func(Event) error) error {
@@ -39,16 +42,59 @@ func (w *EventWatcher) Watch(ctx context.Context, roots []string, handle func(Ev
 	}
 	defer watcher.Close()
 
+	pendingRoots := make(map[string]struct{}, len(roots))
 	for _, root := range roots {
-		if err := w.addRoot(watcher, root); err != nil {
-			return err
+		if root = strings.TrimSpace(root); root != "" {
+			pendingRoots[root] = struct{}{}
 		}
 	}
+	if len(pendingRoots) == 0 {
+		return fs.ErrNotExist
+	}
+
+	// A removable disk can be absent when the server starts. Keep it pending
+	// instead of terminating monitoring for every other available disk.
+	addAvailableRoots := func() error {
+		for root := range pendingRoots {
+			info, err := os.Stat(root)
+			if err != nil {
+				if os.IsNotExist(err) {
+					continue
+				}
+				return err
+			}
+			if !info.IsDir() {
+				continue
+			}
+			if err := w.addRoot(watcher, root); err != nil {
+				if os.IsNotExist(err) {
+					continue
+				}
+				return err
+			}
+			delete(pendingRoots, root)
+		}
+		return nil
+	}
+	if err := addAvailableRoots(); err != nil {
+		return err
+	}
+
+	retryInterval := w.retryInterval
+	if retryInterval <= 0 {
+		retryInterval = 5 * time.Second
+	}
+	retryTicker := time.NewTicker(retryInterval)
+	defer retryTicker.Stop()
 
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
+		case <-retryTicker.C:
+			if err := addAvailableRoots(); err != nil {
+				return err
+			}
 		case err := <-watcher.Errors:
 			if err != nil {
 				return err

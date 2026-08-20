@@ -15,8 +15,9 @@ import (
 	"nexora/server/internal/config"
 	"nexora/server/internal/db"
 	"nexora/server/internal/media"
-	"nexora/server/internal/migration"
 	"nexora/server/internal/metadata"
+	"nexora/server/internal/migration"
+	"nexora/server/internal/quality"
 	"nexora/server/internal/scanner"
 	"nexora/server/internal/search"
 )
@@ -62,6 +63,7 @@ func Run() {
 	)
 	mediaProcessor := media.NewProcessor(cfg.FFmpegPath, cfg.FFprobePath)
 	migrationService := migration.New(migration.Options{})
+	qualityService := quality.NewService(sqlDB, cfg.FFmpegPath, cfg.FFprobePath)
 
 	if len(cfg.MediaRoots) > 0 {
 		eventWatcher := scanner.NewEventWatcher(scannerService, cfg.WatchRecursive)
@@ -86,7 +88,7 @@ func Run() {
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           api.NewServer(cfg, repository, scannerService, searchClient, metadataService, mediaProcessor, migrationService),
+		Handler:           api.NewServer(cfg, repository, scannerService, searchClient, metadataService, mediaProcessor, migrationService, qualityService),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

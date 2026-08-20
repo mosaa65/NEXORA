@@ -30,6 +30,7 @@ type Config struct {
 }
 
 func Load() Config {
+	loadDotEnv()
 	return Config{
 		HTTPAddr:       envString("NEXORA_HTTP_ADDR", ":8080"),
 		DatabaseURL:    envString("NEXORA_DATABASE_URL", "postgres://nexora:nexora@localhost:15432/nexora?sslmode=disable"),
@@ -102,4 +103,31 @@ func envPathList(key string) []string {
 		}
 	}
 	return roots
+}
+
+func loadDotEnv() {
+	candidates := []string{".env", "server/.env", "../.env", "../../.env"}
+	for _, path := range candidates {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		lines := strings.Split(string(data), "\n")
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+			parts := strings.SplitN(line, "=", 2)
+			if len(parts) == 2 {
+				k := strings.TrimSpace(parts[0])
+				v := strings.TrimSpace(parts[1])
+				v = strings.Trim(v, `"'`+"\r")
+				if _, exists := os.LookupEnv(k); !exists || os.Getenv(k) == "" {
+					_ = os.Setenv(k, v)
+				}
+			}
+		}
+		break
+	}
 }

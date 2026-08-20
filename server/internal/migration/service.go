@@ -10,8 +10,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"strconv"
 	"sort"
+	"strconv"
 	"strings"
 
 	"nexora/server/internal/scanner"
@@ -55,15 +55,19 @@ type PreviewResult struct {
 }
 
 type CopyRequest struct {
-	Sources []string `json:"sources"`
-	Target  string   `json:"target"`
+	Sources      []string `json:"sources"`
+	Target       string   `json:"target"`
+	RemoveSource bool     `json:"removeSource,omitempty"`
 }
 
 type CopyItem struct {
-	Source   string `json:"source"`
-	Target   string `json:"target"`
-	Bytes    int64  `json:"bytes"`
-	Checksum string `json:"checksum"`
+	Source        string `json:"source"`
+	Target        string `json:"target"`
+	Bytes         int64  `json:"bytes"`
+	Checksum      string `json:"checksum"`
+	Resumed       bool   `json:"resumed"`
+	AlreadyCopied bool   `json:"alreadyCopied"`
+	SourceRemoved bool   `json:"sourceRemoved"`
 }
 
 type CopyResult struct {
@@ -213,17 +217,27 @@ func (s *Service) Copy(ctx context.Context, request CopyRequest) (CopyResult, er
 		}
 
 		target := filepath.Join(request.Target, filepath.Base(source))
-		checksum, copied, err := copyWithChecksum(ctx, source, target)
+		checksum, copied, resumed, alreadyCopied, err := copyWithChecksum(ctx, source, target)
 		if err != nil {
 			return result, err
 		}
+		removed := false
+		if request.RemoveSource {
+			if err := os.Remove(source); err != nil {
+				return result, fmt.Errorf("remove verified source %q: %w", source, err)
+			}
+			removed = true
+		}
 		result.TotalBytes += info.Size()
-		result.CompletedBytes += copied
+		result.CompletedBytes += info.Size()
 		result.Items = append(result.Items, CopyItem{
-			Source:   source,
-			Target:   target,
-			Bytes:    copied,
-			Checksum: checksum,
+			Source:        source,
+			Target:        target,
+			Bytes:         copied,
+			Checksum:      checksum,
+			Resumed:       resumed,
+			AlreadyCopied: alreadyCopied,
+			SourceRemoved: removed,
 		})
 	}
 	return result, nil
@@ -306,37 +320,154 @@ func (s *Service) isMediaFile(path string) bool {
 	return ok
 }
 
-func copyWithChecksum(ctx context.Context, source, target string) (string, int64, error) {
-	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-		return "", 0, err
+const partialCopySuffix = ".nexora-part"
+
+// copyWithChecksum writes to a private partial file, resumes it when possible,
+// and atomically publishes the destination only after both file checksums
+// match. This deliberately avoids a rename/move until the original is known
+// to be intact at the destination.
+func copyWithChecksum(ctx context.Context, source, target string) (checksum string, size int64, resumed bool, alreadyCopied bool, err error) {
+	sourcePath, err := filepath.Abs(source)
+	if err != nil {
+		return "", 0, false, false, fmt.Errorf("resolve source path: %w", err)
+	}
+	targetPath, err := filepath.Abs(target)
+	if err != nil {
+		return "", 0, false, false, fmt.Errorf("resolve target path: %w", err)
+	}
+	if normalizePath(sourcePath) == normalizePath(targetPath) {
+		return "", 0, false, false, errors.New("source and target must be different files")
 	}
 
-	in, err := os.Open(source)
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		return "", 0, false, false, err
+	}
+
+	sourceInfo, err := os.Stat(sourcePath)
 	if err != nil {
-		return "", 0, err
+		return "", 0, false, false, err
+	}
+	if sourceInfo.IsDir() {
+		return "", 0, false, false, errors.New("source must be a file")
+	}
+
+	sourceChecksum, err := checksumFile(ctx, sourcePath)
+	if err != nil {
+		return "", 0, false, false, fmt.Errorf("checksum source: %w", err)
+	}
+
+	if targetChecksum, targetErr := checksumFile(ctx, targetPath); targetErr == nil {
+		if targetChecksum != sourceChecksum {
+			return "", 0, false, false, fmt.Errorf("target already exists with different checksum: %s", targetPath)
+		}
+		return sourceChecksum, sourceInfo.Size(), false, true, nil
+	} else if !errors.Is(targetErr, os.ErrNotExist) {
+		return "", 0, false, false, fmt.Errorf("checksum target: %w", targetErr)
+	}
+
+	partialPath := targetPath + partialCopySuffix
+	partialInfo, partialErr := os.Stat(partialPath)
+	if partialErr != nil && !errors.Is(partialErr, os.ErrNotExist) {
+		return "", 0, false, false, partialErr
+	}
+	resumeAt := int64(0)
+	if partialErr == nil {
+		if partialInfo.Size() > sourceInfo.Size() {
+			return "", 0, false, false, fmt.Errorf("partial copy is larger than source: %s", partialPath)
+		}
+		resumeAt = partialInfo.Size()
+		resumed = resumeAt > 0
+	}
+
+	in, err := os.Open(sourcePath)
+	if err != nil {
+		return "", 0, false, false, err
 	}
 	defer in.Close()
-
-	out, err := os.Create(target)
-	if err != nil {
-		return "", 0, err
+	if _, err := in.Seek(resumeAt, io.SeekStart); err != nil {
+		return "", 0, false, false, err
 	}
-	defer out.Close()
 
-	hasher := sha256.New()
-	written, err := io.Copy(io.MultiWriter(out, hasher), in)
+	out, err := os.OpenFile(partialPath, os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
-		return "", 0, err
+		return "", 0, false, false, err
+	}
+	outClosed := false
+	defer func() {
+		if !outClosed {
+			_ = out.Close()
+		}
+	}()
+	if _, err := out.Seek(resumeAt, io.SeekStart); err != nil {
+		return "", 0, false, false, err
+	}
+	if err := out.Truncate(resumeAt); err != nil {
+		return "", 0, false, false, err
+	}
+
+	if _, err := copyWithContext(ctx, out, in); err != nil {
+		return "", 0, false, false, err
 	}
 	if err := out.Sync(); err != nil {
-		return "", 0, err
+		return "", 0, false, false, err
 	}
-	select {
-	case <-ctx.Done():
-		return "", 0, ctx.Err()
-	default:
+	if err := out.Close(); err != nil {
+		return "", 0, false, false, err
 	}
-	return hex.EncodeToString(hasher.Sum(nil)), written, nil
+	outClosed = true
+
+	partialChecksum, err := checksumFile(ctx, partialPath)
+	if err != nil {
+		return "", 0, false, false, fmt.Errorf("checksum copied file: %w", err)
+	}
+	if partialChecksum != sourceChecksum {
+		_ = os.Remove(partialPath)
+		return "", 0, false, false, errors.New("copied file checksum does not match source")
+	}
+	if err := os.Rename(partialPath, targetPath); err != nil {
+		return "", 0, false, false, fmt.Errorf("publish verified copy: %w", err)
+	}
+	return sourceChecksum, sourceInfo.Size(), resumed, false, nil
+}
+
+func checksumFile(ctx context.Context, path string) (string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+	hash := sha256.New()
+	if _, err := copyWithContext(ctx, hash, file); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(hash.Sum(nil)), nil
+}
+
+func copyWithContext(ctx context.Context, destination io.Writer, source io.Reader) (int64, error) {
+	buffer := make([]byte, 1024*1024)
+	var total int64
+	for {
+		if err := ctx.Err(); err != nil {
+			return total, err
+		}
+		read, readErr := source.Read(buffer)
+		if read > 0 {
+			written, writeErr := destination.Write(buffer[:read])
+			total += int64(written)
+			if writeErr != nil {
+				return total, writeErr
+			}
+			if written != read {
+				return total, io.ErrShortWrite
+			}
+		}
+		if errors.Is(readErr, io.EOF) {
+			return total, nil
+		}
+		if readErr != nil {
+			return total, readErr
+		}
+	}
 }
 
 func safePathComponent(input string) string {

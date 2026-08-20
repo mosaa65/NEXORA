@@ -3,12 +3,46 @@ package metadata
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 )
 
 type Service struct {
 	tmdb *TMDBClient
 	mal  *MALClient
+}
+
+// LookupByExternalID fetches another locale for an already-confirmed TMDB ID.
+// It must be used after matching so locale-specific search ranking cannot
+// accidentally select a different title with the same name.
+func (s *Service) LookupByExternalID(ctx context.Context, query Query, externalID string) (Result, error) {
+	if s.tmdb == nil || !s.tmdb.Configured() {
+		return Result{}, ErrNotConfigured
+	}
+	id, err := strconv.Atoi(externalID)
+	if err != nil || id <= 0 {
+		return Result{}, errors.New("invalid tmdb external id")
+	}
+	mediaKind := "movie"
+	if query.Type == "series" || query.Type == "anime" || query.Type == "tv" {
+		mediaKind = "tv"
+	}
+	if query.Language == "" {
+		query.Language = "en-US"
+	}
+	return s.tmdb.fetchDetails(ctx, mediaKind, id, query.Language)
+}
+
+// LookupSeasonByExternalID fetches one known TV season in a requested locale.
+func (s *Service) LookupSeasonByExternalID(ctx context.Context, externalID string, seasonNumber int, language string) (SeasonResult, error) {
+	if s.tmdb == nil || !s.tmdb.Configured() {
+		return SeasonResult{}, ErrNotConfigured
+	}
+	id, err := strconv.Atoi(externalID)
+	if err != nil || id <= 0 || seasonNumber < 0 {
+		return SeasonResult{}, errors.New("invalid tmdb season request")
+	}
+	return s.tmdb.fetchSeasonDetails(ctx, id, seasonNumber, language)
 }
 
 func NewService(tmdb *TMDBClient, mal *MALClient) *Service {

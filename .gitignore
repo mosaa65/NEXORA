@@ -25,6 +25,10 @@ client/tmp/
 .env.*
 !.env.example
 
+# Local caches and logs
+.cache/
+.logs/
+
 # Local generated assets
 server/assets/images/*
 !server/assets/images/.gitkeep

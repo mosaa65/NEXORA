@@ -14,6 +14,8 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/lib/pq"
+
 	"nexora/server/internal/media"
 	"nexora/server/internal/metadata"
 	"nexora/server/internal/scanner"
@@ -48,21 +50,24 @@ type CategorySummary struct {
 }
 
 type VideoFile struct {
-	ID            int64           `json:"id"`
-	MediaItemID   int64           `json:"media_item_id"`
-	SeasonID      int64           `json:"season_id,omitempty"`
-	EpisodeNumber int             `json:"episode_number,omitempty"`
-	TitleAR       string          `json:"title_ar,omitempty"`
-	TitleEN       string          `json:"title_en,omitempty"`
-	FilePath      string          `json:"-"`
-	FileSize      int64           `json:"file_size"`
-	Duration      int             `json:"duration,omitempty"`
-	Resolution    string          `json:"resolution,omitempty"`
-	VideoCodec    string          `json:"video_codec,omitempty"`
-	AudioTracks   json.RawMessage `json:"audio_tracks,omitempty"`
-	Subtitles     json.RawMessage `json:"subtitles,omitempty"`
-	StreamURL     string          `json:"stream_url,omitempty"`
-	CreatedAt     time.Time       `json:"created_at"`
+	ID                    int64           `json:"id"`
+	MediaItemID           int64           `json:"media_item_id"`
+	SeasonID              int64           `json:"season_id,omitempty"`
+	EpisodeNumber         int             `json:"episode_number,omitempty"`
+	TitleAR               string          `json:"title_ar,omitempty"`
+	TitleEN               string          `json:"title_en,omitempty"`
+	FilePath              string          `json:"-"`
+	FileSize              int64           `json:"file_size"`
+	Duration              int             `json:"duration,omitempty"`
+	Resolution            string          `json:"resolution,omitempty"`
+	VideoCodec            string          `json:"video_codec,omitempty"`
+	AudioTracks           json.RawMessage `json:"audio_tracks,omitempty"`
+	Subtitles             json.RawMessage `json:"subtitles,omitempty"`
+	VerificationStatus    string          `json:"verification_status,omitempty"`
+	VerificationError     string          `json:"verification_error,omitempty"`
+	VerificationCheckedAt *time.Time      `json:"verification_checked_at,omitempty"`
+	StreamURL             string          `json:"stream_url,omitempty"`
+	CreatedAt             time.Time       `json:"created_at"`
 }
 
 // DuplicateGroup contains files with the same verified SHA-256 checksum.
@@ -81,10 +86,43 @@ type MissingEpisode struct {
 	Episode      int   `json:"episode_number"`
 }
 
+// CorruptedFile is a persisted FFmpeg verification failure for an indexed file.
+type CorruptedFile struct {
+	ID          int64     `json:"id"`
+	MediaItemID int64     `json:"media_item_id"`
+	Title       string    `json:"title"`
+	FilePath    string    `json:"file_path"`
+	Error       string    `json:"error,omitempty"`
+	CheckedAt   time.Time `json:"checked_at"`
+}
+
 type ChecksumResult struct {
 	Scanned int `json:"scanned"`
 	Updated int `json:"updated"`
 	Failed  int `json:"failed"`
+}
+
+// MetadataSnapshot is the locally cached, provider-owned detail document.
+// The API exposes this only through the NEXORA server, never directly from TMDB.
+type MetadataSnapshot struct {
+	Provider   string          `json:"provider"`
+	ExternalID string          `json:"externalId"`
+	Locale     string          `json:"locale"`
+	Payload    json.RawMessage `json:"payload"`
+	FetchedAt  time.Time       `json:"fetchedAt"`
+	ExpiresAt  time.Time       `json:"expiresAt"`
+}
+
+// SeasonMetadataSnapshot retains a whole TMDB season response locally. Its
+// payload includes the provider's episode list and season-level extras.
+type SeasonMetadataSnapshot struct {
+	Provider     string          `json:"provider"`
+	ExternalID   string          `json:"externalId"`
+	Locale       string          `json:"locale"`
+	SeasonNumber int             `json:"seasonNumber"`
+	Payload      json.RawMessage `json:"payload"`
+	FetchedAt    time.Time       `json:"fetchedAt"`
+	ExpiresAt    time.Time       `json:"expiresAt"`
 }
 
 type SeasonDetail struct {
@@ -152,6 +190,7 @@ type DashboardStats struct {
 	TotalStorageBytes    int64             `json:"total_storage_bytes"`
 	MissingEpisodesCount int               `json:"missing_episodes_count"`
 	DuplicatesCount      int               `json:"duplicates_count"`
+	CorruptedFilesCount  int64             `json:"corrupted_files_count"`
 	Categories           []CategorySummary `json:"categories"`
 	Disks                []StorageDisk     `json:"disks"`
 }
@@ -281,6 +320,9 @@ func (r *Repository) ListVideoFiles(ctx context.Context, mediaItemID int64) ([]V
 			COALESCE(video_codec, ''),
 			COALESCE(audio_tracks, '[]'::jsonb)::text,
 			COALESCE(subtitles, '[]'::jsonb)::text,
+			verification_status,
+			COALESCE(verification_error, ''),
+			verification_checked_at,
 			created_at
 		FROM video_files
 		WHERE media_item_id = $1
@@ -295,6 +337,7 @@ func (r *Repository) ListVideoFiles(ctx context.Context, mediaItemID int64) ([]V
 	for rows.Next() {
 		var file VideoFile
 		var audioTracks, subtitles string
+		var verificationCheckedAt sql.NullTime
 		if err := rows.Scan(
 			&file.ID,
 			&file.MediaItemID,
@@ -309,12 +352,18 @@ func (r *Repository) ListVideoFiles(ctx context.Context, mediaItemID int64) ([]V
 			&file.VideoCodec,
 			&audioTracks,
 			&subtitles,
+			&file.VerificationStatus,
+			&file.VerificationError,
+			&verificationCheckedAt,
 			&file.CreatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan video file: %w", err)
 		}
 		file.AudioTracks = json.RawMessage(audioTracks)
 		file.Subtitles = json.RawMessage(subtitles)
+		if verificationCheckedAt.Valid {
+			file.VerificationCheckedAt = &verificationCheckedAt.Time
+		}
 		files = append(files, file)
 	}
 	if err := rows.Err(); err != nil {
@@ -365,6 +414,58 @@ func (r *Repository) UpdateVideoTechnicalDetails(ctx context.Context, id int64, 
 		return sql.ErrNoRows
 	}
 	return nil
+}
+
+// UpdateVideoVerification persists the result of a full FFmpeg decode check.
+func (r *Repository) UpdateVideoVerification(ctx context.Context, id int64, result media.VerifyResult) error {
+	status := "healthy"
+	if !result.Healthy {
+		status = "corrupted"
+	}
+	updated, err := r.db.ExecContext(ctx, `
+		UPDATE video_files
+		SET verification_status = $1,
+			verification_error = NULLIF($2, ''),
+			verification_checked_at = CURRENT_TIMESTAMP
+		WHERE id = $3
+	`, status, result.ErrorOutput, id)
+	if err != nil {
+		return fmt.Errorf("update video verification: %w", err)
+	}
+	count, err := updated.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("verification affected rows: %w", err)
+	}
+	if count == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+func (r *Repository) ListCorruptedFiles(ctx context.Context) ([]CorruptedFile, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT vf.id, vf.media_item_id,
+			COALESCE(NULLIF(vf.title_en, ''), NULLIF(vf.title_ar, ''), mi.title_en),
+			vf.file_path, COALESCE(vf.verification_error, ''), vf.verification_checked_at
+		FROM video_files vf
+		JOIN media_items mi ON mi.id = vf.media_item_id
+		WHERE vf.verification_status = 'corrupted'
+		ORDER BY vf.verification_checked_at DESC NULLS LAST, vf.file_path ASC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("query corrupted files: %w", err)
+	}
+	defer rows.Close()
+
+	files := make([]CorruptedFile, 0)
+	for rows.Next() {
+		var file CorruptedFile
+		if err := rows.Scan(&file.ID, &file.MediaItemID, &file.Title, &file.FilePath, &file.Error, &file.CheckedAt); err != nil {
+			return nil, fmt.Errorf("scan corrupted file: %w", err)
+		}
+		files = append(files, file)
+	}
+	return files, rows.Err()
 }
 
 func (r *Repository) ListDuplicateGroups(ctx context.Context) ([]DuplicateGroup, error) {
@@ -518,6 +619,58 @@ func (r *Repository) ListCategories(ctx context.Context) ([]CategorySummary, err
 	return categories, nil
 }
 
+func (r *Repository) CreateCategory(ctx context.Context, nameAR, nameEN, slug string) (*CategorySummary, error) {
+	nameAR = strings.TrimSpace(nameAR)
+	nameEN = strings.TrimSpace(nameEN)
+	slug = strings.ToLower(strings.TrimSpace(slug))
+	if slug == "" {
+		slug = strings.ToLower(strings.ReplaceAll(nameEN, " ", "-"))
+	}
+	if nameEN == "" {
+		nameEN = nameAR
+	}
+	if nameAR == "" {
+		nameAR = nameEN
+	}
+
+	var newID int64
+	err := r.db.QueryRowContext(ctx, `
+		INSERT INTO categories (name_ar, name_en, slug)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (slug) DO UPDATE SET name_ar = EXCLUDED.name_ar, name_en = EXCLUDED.name_en
+		RETURNING id;
+	`, nameAR, nameEN, slug).Scan(&newID)
+	if err != nil {
+		return nil, fmt.Errorf("create category: %w", err)
+	}
+
+	return &CategorySummary{
+		ID:         newID,
+		NameAR:     nameAR,
+		NameEN:     nameEN,
+		Slug:       slug,
+		MediaCount: 0,
+		FileCount:  0,
+	}, nil
+}
+
+func (r *Repository) UpdateCategory(ctx context.Context, id int64, nameAR, nameEN, slug string) error {
+	_, err := r.db.ExecContext(ctx, `
+		UPDATE categories
+		SET
+			name_ar = COALESCE(NULLIF($1, ''), name_ar),
+			name_en = COALESCE(NULLIF($2, ''), name_en),
+			slug = COALESCE(NULLIF($3, ''), slug)
+		WHERE id = $4;
+	`, strings.TrimSpace(nameAR), strings.TrimSpace(nameEN), strings.ToLower(strings.TrimSpace(slug)), id)
+	return err
+}
+
+func (r *Repository) DeleteCategory(ctx context.Context, id int64) error {
+	_, err := r.db.ExecContext(ctx, `DELETE FROM categories WHERE id = $1`, id)
+	return err
+}
+
 func nullableString(value sql.NullString) string {
 	if value.Valid {
 		return value.String
@@ -633,25 +786,33 @@ func (r *Repository) ingestScannedFile(ctx context.Context, file scanner.FileInf
 }
 
 func classifyMedia(path string, parsed scanner.ParsedName) (categorySlug string, mediaType string) {
-	lowerPath := strings.ToLower(filepath.ToSlash(path))
-	switch {
-	case strings.Contains(lowerPath, "anime") || strings.Contains(path, "أنمي") || strings.Contains(path, "انمي"):
+	// Use the centralized category detection from the scanner package.
+	detectedSlug := scanner.DetectCategoryFromPath(path)
+
+	switch detectedSlug {
+	case "anime":
 		return "anime", "anime"
-	case strings.Contains(lowerPath, "kids") || strings.Contains(path, "أطفال") || strings.Contains(path, "اطفال") || strings.Contains(lowerPath, "cartoon") || strings.Contains(path, "كرتون") || strings.Contains(path, "رسوم"):
+	case "kids":
 		if parsed.IsEpisode {
 			return "kids", "series"
 		}
 		return "kids", "movie"
-	case strings.Contains(lowerPath, "document") || strings.Contains(path, "وثائقي") || strings.Contains(path, "وثائقية") || strings.Contains(path, "وثائقيات"):
+	case "documentaries":
 		if parsed.IsEpisode {
 			return "documentaries", "series"
 		}
 		return "documentaries", "movie"
-	case strings.Contains(lowerPath, "play") || strings.Contains(path, "مسرح") || strings.Contains(path, "مسرحيات") || strings.Contains(path, "مسرحية"):
+	case "plays":
 		return "plays", "movie"
-	case strings.Contains(lowerPath, "series") || strings.Contains(path, "مسلسل") || strings.Contains(path, "مسلسلات") || parsed.IsEpisode:
+	case "series":
 		return "series", "series"
+	case "movies":
+		return "movies", "movie"
 	default:
+		// No category keyword found in path; fall back to episode detection.
+		if parsed.IsEpisode {
+			return "series", "series"
+		}
 		return "movies", "movie"
 	}
 }
@@ -936,7 +1097,7 @@ func (r *Repository) ListMediaItems(ctx context.Context, opts ListMediaOptions) 
 func (r *Repository) UpdateMediaMetadata(ctx context.Context, id int64, meta metadata.Result) (*search.MediaDocument, error) {
 	var genresArray any
 	if len(meta.Genres) > 0 {
-		genresArray = meta.Genres
+		genresArray = pq.Array(meta.Genres)
 	}
 
 	poster := meta.CachedPosterPath
@@ -947,26 +1108,47 @@ func (r *Repository) UpdateMediaMetadata(ctx context.Context, id int64, meta met
 	if banner == "" {
 		banner = meta.BannerPath
 	}
+	titleAR, titleEN, plotAR, plotEN := localizedMetadataFields(meta)
+	metadataFacets := metadataFacetsJSON(meta)
 
 	result, err := r.db.ExecContext(ctx, `
 		UPDATE media_items
 		SET
 			title_ar = COALESCE(NULLIF($1, ''), title_ar),
 			title_en = COALESCE(NULLIF($2, ''), title_en),
-			plot_en = COALESCE(NULLIF($3, ''), plot_en),
-			release_year = COALESCE(NULLIF($4, 0), release_year),
-			rating = COALESCE(NULLIF($5, 0.0), rating),
-			poster_path = COALESCE(NULLIF($6, ''), poster_path),
-			banner_path = COALESCE(NULLIF($7, ''), banner_path),
-			genres = COALESCE($8, genres)
-		WHERE id = $9;
-	`, meta.Title, meta.Title, meta.Overview, meta.ReleaseYear, meta.Rating, poster, banner, genresArray, id)
+			plot_ar = COALESCE(NULLIF($3, ''), plot_ar),
+			plot_en = COALESCE(NULLIF($4, ''), plot_en),
+			release_year = COALESCE(NULLIF($5, 0), release_year),
+			rating = COALESCE(NULLIF($6, 0.0), rating),
+			poster_path = COALESCE(NULLIF($7, ''), poster_path),
+			banner_path = COALESCE(NULLIF($8, ''), banner_path),
+			genres = COALESCE($9, genres),
+			metadata_provider = COALESCE(NULLIF($10, ''), metadata_provider),
+			metadata_external_id = COALESCE(NULLIF($11, ''), metadata_external_id),
+			metadata_facets = COALESCE($12::jsonb, metadata_facets),
+			metadata_fetched_at = CASE WHEN NULLIF($10, '') IS NULL THEN metadata_fetched_at ELSE CURRENT_TIMESTAMP END,
+			metadata_expires_at = CASE WHEN NULLIF($10, '') IS NULL THEN metadata_expires_at ELSE CURRENT_TIMESTAMP + INTERVAL '30 days' END
+		WHERE id = $13;
+	`, titleAR, titleEN, plotAR, plotEN, meta.ReleaseYear, meta.Rating, poster, banner, genresArray, meta.Provider, meta.ExternalID, metadataFacets, id)
 	if err != nil {
 		return nil, fmt.Errorf("update media metadata: %w", err)
 	}
 	affected, err := result.RowsAffected()
 	if err != nil || affected == 0 {
 		return nil, sql.ErrNoRows
+	}
+	if len(meta.RawPayload) > 0 && meta.Provider != "" && meta.ExternalID != "" {
+		if _, err := r.db.ExecContext(ctx, `
+			INSERT INTO metadata_snapshots (media_item_id, provider, external_id, locale, raw_payload, expires_at)
+			VALUES ($1, $2, $3, $4, $5::jsonb, CURRENT_TIMESTAMP + INTERVAL '30 days')
+			ON CONFLICT (media_item_id, provider, locale)
+			DO UPDATE SET external_id = EXCLUDED.external_id,
+				raw_payload = EXCLUDED.raw_payload,
+				fetched_at = CURRENT_TIMESTAMP,
+				expires_at = EXCLUDED.expires_at
+		`, id, meta.Provider, meta.ExternalID, firstNonEmptyLocale(meta.Locale), string(meta.RawPayload)); err != nil {
+			return nil, fmt.Errorf("cache metadata snapshot: %w", err)
+		}
 	}
 
 	// Fetch single document for search reindexing
@@ -980,6 +1162,128 @@ func (r *Repository) UpdateMediaMetadata(ctx context.Context, id int64, meta met
 		}
 	}
 	return nil, nil
+}
+
+// localizedMetadataFields prevents a locale-specific TMDB response from
+// overwriting the other title/plot column. This is important for records where
+// TMDB falls back to a third language when Arabic text is unavailable.
+func localizedMetadataFields(meta metadata.Result) (titleAR, titleEN, plotAR, plotEN string) {
+	locale := strings.ToLower(strings.TrimSpace(meta.Locale))
+	if strings.HasPrefix(locale, "ar") {
+		return meta.Title, "", meta.Overview, ""
+	}
+	return "", meta.Title, "", meta.Overview
+}
+
+// metadataFacetsJSON extracts stable, filterable English attributes from the
+// complete TMDB document. The full source document remains in
+// metadata_snapshots; this small JSONB projection is indexed on media_items.
+func metadataFacetsJSON(meta metadata.Result) any {
+	if !strings.HasPrefix(strings.ToLower(meta.Locale), "en") || len(meta.RawPayload) == 0 {
+		return nil
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(meta.RawPayload, &raw); err != nil {
+		return nil
+	}
+	mediaType := "movie"
+	if raw["name"] != nil && raw["title"] == nil {
+		mediaType = "tv"
+	}
+	facets := map[string]any{
+		"provider":              meta.Provider,
+		"external_id":           meta.ExternalID,
+		"type":                  mediaType,
+		"title":                 raw["title"],
+		"original_title":        raw["original_title"],
+		"original_language":     raw["original_language"],
+		"release_date":          raw["release_date"],
+		"runtime":               raw["runtime"],
+		"status":                raw["status"],
+		"adult":                 raw["adult"],
+		"popularity":            raw["popularity"],
+		"vote_average":          raw["vote_average"],
+		"vote_count":            raw["vote_count"],
+		"genres":                raw["genres"],
+		"keywords":              raw["keywords"],
+		"production_companies":  raw["production_companies"],
+		"production_countries":  raw["production_countries"],
+		"spoken_languages":      raw["spoken_languages"],
+		"belongs_to_collection": raw["belongs_to_collection"],
+	}
+	encoded, err := json.Marshal(facets)
+	if err != nil {
+		return nil
+	}
+	return string(encoded)
+}
+
+func (r *Repository) GetMetadataSnapshot(ctx context.Context, mediaItemID int64, locale string) (*MetadataSnapshot, error) {
+	locale = firstNonEmptyLocale(locale)
+	var snapshot MetadataSnapshot
+	var payload string
+	err := r.db.QueryRowContext(ctx, `
+		SELECT provider, external_id, locale, raw_payload::text, fetched_at, expires_at
+		FROM metadata_snapshots
+		WHERE media_item_id = $1 AND locale = $2
+	`, mediaItemID, locale).Scan(&snapshot.Provider, &snapshot.ExternalID, &snapshot.Locale, &payload, &snapshot.FetchedAt, &snapshot.ExpiresAt)
+	if err != nil {
+		return nil, err
+	}
+	snapshot.Payload = json.RawMessage(payload)
+	return &snapshot, nil
+}
+
+func (r *Repository) SaveSeasonMetadataSnapshots(ctx context.Context, mediaItemID int64, snapshots []metadata.SeasonResult) error {
+	for _, snapshot := range snapshots {
+		if len(snapshot.RawPayload) == 0 || snapshot.Provider == "" || snapshot.ExternalID == "" {
+			continue
+		}
+		if _, err := r.db.ExecContext(ctx, `
+			INSERT INTO season_metadata_snapshots (media_item_id, provider, external_id, season_number, locale, raw_payload, expires_at)
+			VALUES ($1, $2, $3, $4, $5, $6::jsonb, CURRENT_TIMESTAMP + INTERVAL '30 days')
+			ON CONFLICT (media_item_id, provider, season_number, locale)
+			DO UPDATE SET external_id = EXCLUDED.external_id,
+				raw_payload = EXCLUDED.raw_payload,
+				fetched_at = CURRENT_TIMESTAMP,
+				expires_at = EXCLUDED.expires_at
+		`, mediaItemID, snapshot.Provider, snapshot.ExternalID, snapshot.SeasonNumber, firstNonEmptyLocale(snapshot.Locale), string(snapshot.RawPayload)); err != nil {
+			return fmt.Errorf("save season metadata snapshot: %w", err)
+		}
+	}
+	return nil
+}
+
+func (r *Repository) GetSeasonMetadataSnapshots(ctx context.Context, mediaItemID int64, locale string) ([]SeasonMetadataSnapshot, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT provider, external_id, locale, season_number, raw_payload::text, fetched_at, expires_at
+		FROM season_metadata_snapshots
+		WHERE media_item_id = $1 AND locale = $2
+		ORDER BY season_number ASC
+	`, mediaItemID, firstNonEmptyLocale(locale))
+	if err != nil {
+		return nil, fmt.Errorf("query season metadata snapshots: %w", err)
+	}
+	defer rows.Close()
+
+	snapshots := make([]SeasonMetadataSnapshot, 0)
+	for rows.Next() {
+		var snapshot SeasonMetadataSnapshot
+		var payload string
+		if err := rows.Scan(&snapshot.Provider, &snapshot.ExternalID, &snapshot.Locale, &snapshot.SeasonNumber, &payload, &snapshot.FetchedAt, &snapshot.ExpiresAt); err != nil {
+			return nil, fmt.Errorf("scan season metadata snapshot: %w", err)
+		}
+		snapshot.Payload = json.RawMessage(payload)
+		snapshots = append(snapshots, snapshot)
+	}
+	return snapshots, rows.Err()
+}
+
+func firstNonEmptyLocale(locale string) string {
+	if strings.TrimSpace(locale) == "" {
+		return "en-US"
+	}
+	return locale
 }
 
 func (r *Repository) GetDashboardStats(ctx context.Context) (*DashboardStats, error) {
@@ -1016,6 +1320,7 @@ func (r *Repository) GetDashboardStats(ctx context.Context) (*DashboardStats, er
 	if err == nil {
 		stats.DuplicatesCount = len(duplicates)
 	}
+	_ = r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM video_files WHERE verification_status = 'corrupted'`).Scan(&stats.CorruptedFilesCount)
 
 	// Disks
 	disks, err := r.ListDisks(ctx)
@@ -1076,3 +1381,195 @@ func (r *Repository) SaveDisks(ctx context.Context, disks []StorageDisk) error {
 	return nil
 }
 
+type UpdateMediaRequest struct {
+	TitleAR      string   `json:"title_ar"`
+	TitleEN      string   `json:"title_en"`
+	PlotAR       string   `json:"plot_ar"`
+	PlotEN       string   `json:"plot_en"`
+	ReleaseYear  int      `json:"release_year"`
+	Rating       float64  `json:"rating"`
+	PosterPath   string   `json:"poster_path"`
+	BannerPath   string   `json:"banner_path"`
+	Genres       []string `json:"genres"`
+	Type         string   `json:"type"`
+	CategorySlug string   `json:"category_slug"`
+}
+
+type CreateMediaRequest struct {
+	TitleAR      string   `json:"title_ar"`
+	TitleEN      string   `json:"title_en"`
+	Type         string   `json:"type"`
+	CategorySlug string   `json:"category_slug"`
+	PlotAR       string   `json:"plot_ar"`
+	PlotEN       string   `json:"plot_en"`
+	ReleaseYear  int      `json:"release_year"`
+	Rating       float64  `json:"rating"`
+	PosterPath   string   `json:"poster_path"`
+	BannerPath   string   `json:"banner_path"`
+	Genres       []string `json:"genres"`
+}
+
+func (r *Repository) CreateMediaItem(ctx context.Context, req CreateMediaRequest) (*search.MediaDocument, error) {
+	categorySlug := req.CategorySlug
+	if categorySlug == "" {
+		categorySlug = "movies"
+		if req.Type == "series" || req.Type == "anime" {
+			categorySlug = req.Type
+		}
+	}
+
+	var categoryID int64
+	if err := r.db.QueryRowContext(ctx, `SELECT id FROM categories WHERE slug = $1`, categorySlug).Scan(&categoryID); err != nil {
+		return nil, fmt.Errorf("find category %q: %w", categorySlug, err)
+	}
+
+	titleEN := strings.TrimSpace(req.TitleEN)
+	if titleEN == "" {
+		titleEN = req.TitleAR
+	}
+	if titleEN == "" {
+		return nil, errors.New("title is required")
+	}
+
+	mediaType := req.Type
+	if mediaType == "" {
+		mediaType = "movie"
+	}
+
+	var genresArray any
+	if len(req.Genres) > 0 {
+		genresArray = pq.Array(req.Genres)
+	}
+
+	var newID int64
+	err := r.db.QueryRowContext(ctx, `
+		INSERT INTO media_items (
+			category_id,
+			title_ar,
+			title_en,
+			type,
+			plot_ar,
+			plot_en,
+			release_year,
+			rating,
+			poster_path,
+			banner_path,
+			genres,
+			status
+		)
+		VALUES ($1, NULLIF($2, ''), $3, $4, NULLIF($5, ''), NULLIF($6, ''), NULLIF($7, 0), NULLIF($8, 0.0), NULLIF($9, ''), NULLIF($10, ''), $11, 'completed')
+		RETURNING id;
+	`, categoryID, req.TitleAR, titleEN, mediaType, req.PlotAR, req.PlotEN, req.ReleaseYear, req.Rating, req.PosterPath, req.BannerPath, genresArray).Scan(&newID)
+	if err != nil {
+		return nil, fmt.Errorf("insert media item: %w", err)
+	}
+
+	docs, err := r.ListSearchDocuments(ctx, 10000)
+	if err == nil {
+		for _, doc := range docs {
+			if doc.ID == newID {
+				return &doc, nil
+			}
+		}
+	}
+
+	return &search.MediaDocument{
+		ID:           newID,
+		TitleAR:      req.TitleAR,
+		TitleEN:      titleEN,
+		Type:         mediaType,
+		PlotAR:       req.PlotAR,
+		PlotEN:       req.PlotEN,
+		ReleaseYear:  req.ReleaseYear,
+		Rating:       req.Rating,
+		PosterPath:   req.PosterPath,
+		BannerPath:   req.BannerPath,
+		CategorySlug: categorySlug,
+		Genres:       req.Genres,
+	}, nil
+}
+
+func (r *Repository) UpdateMediaFull(ctx context.Context, id int64, req UpdateMediaRequest) (*search.MediaDocument, error) {
+	var categoryID sql.NullInt64
+	if req.CategorySlug != "" {
+		var catID int64
+		if err := r.db.QueryRowContext(ctx, `SELECT id FROM categories WHERE slug = $1`, req.CategorySlug).Scan(&catID); err == nil {
+			categoryID = sql.NullInt64{Int64: catID, Valid: true}
+		}
+	}
+
+	var genresArray any
+	if len(req.Genres) > 0 {
+		genresArray = pq.Array(req.Genres)
+	}
+
+	result, err := r.db.ExecContext(ctx, `
+		UPDATE media_items
+		SET
+			category_id = COALESCE(NULLIF($1, 0), category_id),
+			title_ar = COALESCE(NULLIF($2, ''), title_ar),
+			title_en = COALESCE(NULLIF($3, ''), title_en),
+			type = COALESCE(NULLIF($4, ''), type),
+			plot_ar = COALESCE(NULLIF($5, ''), plot_ar),
+			plot_en = COALESCE(NULLIF($6, ''), plot_en),
+			release_year = COALESCE(NULLIF($7, 0), release_year),
+			rating = COALESCE(NULLIF($8, 0.0), rating),
+			poster_path = COALESCE(NULLIF($9, ''), poster_path),
+			banner_path = COALESCE(NULLIF($10, ''), banner_path),
+			genres = COALESCE($11, genres)
+		WHERE id = $12;
+	`, categoryID.Int64, req.TitleAR, req.TitleEN, req.Type, req.PlotAR, req.PlotEN, req.ReleaseYear, req.Rating, req.PosterPath, req.BannerPath, genresArray, id)
+	if err != nil {
+		return nil, fmt.Errorf("update media full: %w", err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil || affected == 0 {
+		return nil, sql.ErrNoRows
+	}
+
+	docs, err := r.ListSearchDocuments(ctx, 10000)
+	if err != nil {
+		return nil, err
+	}
+	for _, doc := range docs {
+		if doc.ID == id {
+			return &doc, nil
+		}
+	}
+	return nil, nil
+}
+
+func (r *Repository) DeleteMediaItem(ctx context.Context, id int64) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin delete tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	// 1. Delete associated video_files
+	if _, err := tx.ExecContext(ctx, `DELETE FROM video_files WHERE media_item_id = $1`, id); err != nil {
+		return fmt.Errorf("delete video files: %w", err)
+	}
+
+	// 2. Delete seasons
+	if _, err := tx.ExecContext(ctx, `DELETE FROM seasons WHERE media_item_id = $1`, id); err != nil {
+		return fmt.Errorf("delete seasons: %w", err)
+	}
+
+	// 3. Delete metadata snapshots
+	if _, err := tx.ExecContext(ctx, `DELETE FROM metadata_snapshots WHERE media_item_id = $1`, id); err != nil {
+		return fmt.Errorf("delete snapshots: %w", err)
+	}
+
+	// 4. Delete media item
+	res, err := tx.ExecContext(ctx, `DELETE FROM media_items WHERE id = $1`, id)
+	if err != nil {
+		return fmt.Errorf("delete media item: %w", err)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil || affected == 0 {
+		return sql.ErrNoRows
+	}
+
+	return tx.Commit()
+}

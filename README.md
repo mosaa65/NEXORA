@@ -216,7 +216,7 @@ The modules below represent the core architectural building blocks of NEXORA.
 | Metadata Service (`server/internal/metadata`) | Scraper & Asset Cache | Queries TMDB/MAL APIs, downloads posters/banners, and stores image assets locally on disk. |
 | Media Processor (`server/internal/media`) | FFmpeg & Video Verification | Integrates FFmpeg CLI to generate video thumbnails, check video health, and inspect stream codecs. |
 | Search Engine (`server/internal/search`) | Meilisearch Integration | Syncs PostgreSQL records into Meilisearch indexes and executes fast typo-tolerant client searches. |
-| Migration Engine (`server/internal/migration`) | File Reorganization & Copy | Previews target drive directory structures, executes multi-threaded copies, and validates SHA-256 checksums. |
+| Migration Engine (`server/internal/migration`) | File Reorganization & Copy | Previews target drive directory structures, resumes interrupted copies, atomically publishes only SHA-256-verified destinations, and can remove a verified source on request. |
 | Database Layer (`server/internal/db`) | Persistence & Migrations | Manages PostgreSQL connection pooling via `pgx/v5` and executes SQL migrations. |
 | React Client (`client/src`) | User & Admin Web Interface | Single Page Application presenting the dashboard, category views, details modal, Plyr video player, and admin disk console. |
 
@@ -513,16 +513,19 @@ NEXORA/
 | `/api/search` | `GET` | Forwards instant search queries (`?q=...`) to Meilisearch index. |
 | `/api/media/{id}/files` | `GET` | Returns list of video files associated with a media item. |
 | `/api/media/inspect` | `POST` | Uses FFprobe to extract and persist duration, resolution, codec, audio tracks, and subtitles for `{ "fileId": 42 }`. |
+| `/api/media/verify` | `POST` | Fully decodes a file with FFmpeg and persists its `healthy` / `corrupted` result for `{ "fileId": 42 }`. A direct `{ "path": "..." }` check is also supported. |
 | `/api/library/duplicates` | `GET` | Returns groups of files with matching verified SHA-256 checksums. |
 | `/api/library/missing-episodes` | `GET` | Reports missing episode numbers between 1 and the highest indexed episode per season. |
+| `/api/library/corrupted` | `GET` | Lists indexed files whose latest full FFmpeg verification detected corruption. |
 | `/api/scan` | `GET` | Triggers directory file scan and returns parsed Regex metadata. |
-| `/api/ingest` | `POST` | Scans directory and persists new media records to PostgreSQL. |
+| `/api/ingest` | `POST` | Streams scan results into PostgreSQL in bounded batches, avoiding a full-library in-memory file list. |
+| `/api/index` | `POST` | Runs bounded-batch ingest, technical FFprobe inspection, and Meilisearch synchronization for one or more media roots. |
 | `/api/search/sync` | `POST` | Syncs PostgreSQL media records into Meilisearch index. |
 | `/api/media/checksums` | `POST` | Calculates and stores SHA-256 checksums. Pass `{ "mediaItemId": 12 }` to limit work to one title, or `{}` for all indexed files. |
 | `/api/stream` | `GET` | Streams local video file (`?path=...`) with HTTP Range headers. |
 | `/api/stream/file/{id}` | `GET` | Streams imported video file by database ID with Range headers. |
 | `/api/migration/preview` | `POST` | Generates disk reorganization diff preview. |
-| `/api/migration/copy` | `POST` | Copies files to target directory with SHA-256 validation. |
+| `/api/migration/copy` | `POST` | Copies files to a target directory via resumable `.nexora-part` files and SHA-256 validation. Include `"removeSource": true` only to remove originals after verification. |
 
 ---
 

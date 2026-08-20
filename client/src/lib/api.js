@@ -30,6 +30,26 @@ export async function getCategories() {
   return requestJSON("/api/categories");
 }
 
+export async function createCategory(data) {
+  return requestJSON("/api/categories", {
+    method: "POST",
+    body: JSON.stringify(data)
+  });
+}
+
+export async function updateCategory(id, data) {
+  return requestJSON(`/api/categories/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    body: JSON.stringify(data)
+  });
+}
+
+export async function deleteCategory(id) {
+  return requestJSON(`/api/categories/${encodeURIComponent(id)}`, {
+    method: "DELETE"
+  });
+}
+
 export async function searchLibrary(query, options = {}) {
   const params = new URLSearchParams();
   if (query !== undefined) {
@@ -62,6 +82,7 @@ export async function indexLibrary(roots) {
 
 export async function getDuplicateGroups() { return requestJSON("/api/library/duplicates"); }
 export async function getMissingEpisodes() { return requestJSON("/api/library/missing-episodes"); }
+export async function getQualityReport() { return requestJSON("/api/quality/report"); }
 export async function calculateChecksums(mediaItemId) { return requestJSON("/api/media/checksums", { method: "POST", body: JSON.stringify(mediaItemId ? { mediaItemId } : {}) }); }
 
 export async function previewMigration(root) {
@@ -100,9 +121,37 @@ export async function getMediaDetail(mediaId) {
   return requestJSON(`/api/media/${encodeURIComponent(mediaId)}`);
 }
 
+export async function getMediaMetadataSnapshot(mediaId, locale = "ar-SA") {
+  return requestJSON(`/api/media/${encodeURIComponent(mediaId)}/metadata/raw?locale=${encodeURIComponent(locale)}`);
+}
+
+export async function getMediaSeasonMetadata(mediaId, locale = "ar-SA") {
+  return requestJSON(`/api/media/${encodeURIComponent(mediaId)}/metadata/seasons?locale=${encodeURIComponent(locale)}`);
+}
+
 export async function enrichMedia(mediaId) {
   return requestJSON(`/api/media/${encodeURIComponent(mediaId)}/enrich`, {
     method: "POST"
+  });
+}
+
+export async function createMediaItem(data) {
+  return requestJSON("/api/media", {
+    method: "POST",
+    body: JSON.stringify(data)
+  });
+}
+
+export async function updateMediaItem(mediaId, data) {
+  return requestJSON(`/api/media/${encodeURIComponent(mediaId)}`, {
+    method: "PUT",
+    body: JSON.stringify(data)
+  });
+}
+
+export async function deleteMediaItem(mediaId) {
+  return requestJSON(`/api/media/${encodeURIComponent(mediaId)}`, {
+    method: "DELETE"
   });
 }
 
@@ -140,4 +189,3 @@ export function resolveAPIURL(path) {
   }
   return `${API_BASE}${path.startsWith("/") ? path : `/${path}`}`;
 }
-

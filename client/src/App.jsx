@@ -283,7 +283,12 @@ export default function App() {
 
                 {/* Completely Isolated Admin Console View */}
                 {activeView === "admin" && (
-                  <AdminPage health={health} onSyncIndex={handleSyncIndex} activeAnchor={adminAnchor} />
+                  <AdminPage
+                    health={health}
+                    onSyncIndex={handleSyncIndex}
+                    activeAnchor={adminAnchor}
+                    onNavigateCategory={(cat) => openCategory(cat)}
+                  />
                 )}
               </motion.div>
             </AnimatePresence>
@@ -345,7 +350,7 @@ export default function App() {
                     {/* Dark Character Artwork Backdrop */}
                     <div
                       className="absolute inset-0 bg-cover bg-center opacity-70 transition-all duration-700"
-                      style={{ backgroundImage: `url('${playingMedia.posterPath || "/images/jujutsu_kaisen_poster.png"}')` }}
+                      style={{ backgroundImage: `url('${resolveAPIURL(playingMedia.posterPath) || "/images/jujutsu_kaisen_poster.png"}')` }}
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-black/20" />
 

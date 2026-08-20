@@ -1,10 +1,13 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -13,6 +16,7 @@ import (
 	"nexora/server/internal/media"
 	"nexora/server/internal/metadata"
 	"nexora/server/internal/migration"
+	"nexora/server/internal/quality"
 	"nexora/server/internal/scanner"
 	"nexora/server/internal/search"
 )
@@ -22,6 +26,8 @@ type mockRepo struct {
 	mediaItem  *db.MediaItemDetail
 	stats      *db.DashboardStats
 	disks      []db.StorageDisk
+	verifiedID int64
+	verified   media.VerifyResult
 }
 
 func (m *mockRepo) Health(ctx context.Context) (db.Health, error) {
@@ -32,6 +38,15 @@ func (m *mockRepo) IngestScannedFiles(ctx context.Context, files []scanner.FileI
 }
 func (m *mockRepo) ListCategories(ctx context.Context) ([]db.CategorySummary, error) {
 	return m.categories, nil
+}
+func (m *mockRepo) CreateCategory(ctx context.Context, nameAR, nameEN, slug string) (*db.CategorySummary, error) {
+	return &db.CategorySummary{ID: 10, NameAR: nameAR, NameEN: nameEN, Slug: slug}, nil
+}
+func (m *mockRepo) UpdateCategory(ctx context.Context, id int64, nameAR, nameEN, slug string) error {
+	return nil
+}
+func (m *mockRepo) DeleteCategory(ctx context.Context, id int64) error {
+	return nil
 }
 func (m *mockRepo) ListSearchDocuments(ctx context.Context, limit int) ([]search.MediaDocument, error) {
 	return []search.MediaDocument{}, nil
@@ -48,11 +63,19 @@ func (m *mockRepo) GetVideoFileIDByPath(ctx context.Context, path string) (int64
 func (m *mockRepo) UpdateVideoTechnicalDetails(ctx context.Context, id int64, details media.InspectResult) error {
 	return nil
 }
+func (m *mockRepo) UpdateVideoVerification(ctx context.Context, id int64, result media.VerifyResult) error {
+	m.verifiedID = id
+	m.verified = result
+	return nil
+}
 func (m *mockRepo) ListDuplicateGroups(ctx context.Context) ([]db.DuplicateGroup, error) {
 	return []db.DuplicateGroup{}, nil
 }
 func (m *mockRepo) ListMissingEpisodes(ctx context.Context) ([]db.MissingEpisode, error) {
 	return []db.MissingEpisode{}, nil
+}
+func (m *mockRepo) ListCorruptedFiles(ctx context.Context) ([]db.CorruptedFile, error) {
+	return []db.CorruptedFile{}, nil
 }
 func (m *mockRepo) CalculateChecksums(ctx context.Context, mediaItemID int64) (db.ChecksumResult, error) {
 	return db.ChecksumResult{Scanned: 1, Updated: 1}, nil
@@ -69,6 +92,15 @@ func (m *mockRepo) ListMediaItems(ctx context.Context, opts db.ListMediaOptions)
 func (m *mockRepo) UpdateMediaMetadata(ctx context.Context, id int64, meta metadata.Result) (*search.MediaDocument, error) {
 	return &search.MediaDocument{ID: id, TitleEN: meta.Title, ReleaseYear: meta.ReleaseYear}, nil
 }
+func (m *mockRepo) GetMetadataSnapshot(ctx context.Context, mediaItemID int64, locale string) (*db.MetadataSnapshot, error) {
+	return &db.MetadataSnapshot{Provider: "tmdb", ExternalID: "1", Locale: locale, Payload: json.RawMessage(`{"id":1}`)}, nil
+}
+func (m *mockRepo) SaveSeasonMetadataSnapshots(ctx context.Context, mediaItemID int64, snapshots []metadata.SeasonResult) error {
+	return nil
+}
+func (m *mockRepo) GetSeasonMetadataSnapshots(ctx context.Context, mediaItemID int64, locale string) ([]db.SeasonMetadataSnapshot, error) {
+	return []db.SeasonMetadataSnapshot{}, nil
+}
 func (m *mockRepo) GetDashboardStats(ctx context.Context) (*db.DashboardStats, error) {
 	if m.stats != nil {
 		return m.stats, nil
@@ -80,6 +112,15 @@ func (m *mockRepo) ListDisks(ctx context.Context) ([]db.StorageDisk, error) {
 }
 func (m *mockRepo) SaveDisks(ctx context.Context, disks []db.StorageDisk) error {
 	m.disks = disks
+	return nil
+}
+func (m *mockRepo) CreateMediaItem(ctx context.Context, req db.CreateMediaRequest) (*search.MediaDocument, error) {
+	return &search.MediaDocument{ID: 999, TitleEN: req.TitleEN, TitleAR: req.TitleAR, Type: req.Type}, nil
+}
+func (m *mockRepo) UpdateMediaFull(ctx context.Context, id int64, req db.UpdateMediaRequest) (*search.MediaDocument, error) {
+	return &search.MediaDocument{ID: id, TitleEN: req.TitleEN, TitleAR: req.TitleAR, Type: req.Type}, nil
+}
+func (m *mockRepo) DeleteMediaItem(ctx context.Context, id int64) error {
 	return nil
 }
 
@@ -96,6 +137,12 @@ type mockMetadata struct{}
 
 func (m *mockMetadata) Lookup(ctx context.Context, query metadata.Query) (metadata.Result, error) {
 	return metadata.Result{Title: query.Title, ReleaseYear: 2010, Rating: 8.8, Provider: "tmdb"}, nil
+}
+func (m *mockMetadata) LookupByExternalID(ctx context.Context, query metadata.Query, externalID string) (metadata.Result, error) {
+	return metadata.Result{Title: "Inception", ExternalID: externalID, Locale: query.Language, Provider: "tmdb"}, nil
+}
+func (m *mockMetadata) LookupSeasonByExternalID(ctx context.Context, externalID string, seasonNumber int, language string) (metadata.SeasonResult, error) {
+	return metadata.SeasonResult{Provider: "tmdb", ExternalID: externalID, Locale: language, SeasonNumber: seasonNumber, RawPayload: json.RawMessage(`{"episodes":[]}`)}, nil
 }
 
 type mockProcessor struct{}
@@ -119,6 +166,33 @@ func (m *mockMigration) Copy(ctx context.Context, request migration.CopyRequest)
 	return migration.CopyResult{}, nil
 }
 
+type mockQuality struct{}
+
+func (m *mockQuality) GenerateReport(ctx context.Context) (*quality.QualityReport, error) {
+	return &quality.QualityReport{
+		GeneratedAt:          time.Now().UTC(),
+		TotalMedia:           10,
+		TotalFiles:           50,
+		TotalSizeBytes:       1000000000,
+		TotalWastedBytes:     50000000,
+		DuplicateGroupsCount: 1,
+		MissingEpisodesCount: 2,
+		CorruptedFilesCount:  0,
+	}, nil
+}
+func (m *mockQuality) FindDuplicates(ctx context.Context) ([]db.DuplicateGroup, int64, error) {
+	return []db.DuplicateGroup{}, 0, nil
+}
+func (m *mockQuality) FindMissingEpisodes(ctx context.Context) ([]quality.MissingEpisodeDetail, error) {
+	return []quality.MissingEpisodeDetail{}, nil
+}
+func (m *mockQuality) VerifyFile(ctx context.Context, filePath string) (bool, string, error) {
+	return true, "", nil
+}
+func (m *mockQuality) ListCorruptedFiles(ctx context.Context) ([]quality.CorruptedFileDetail, error) {
+	return []quality.CorruptedFileDetail{}, nil
+}
+
 func setupTestServer() http.Handler {
 	cfg := config.Config{}
 	repo := &mockRepo{
@@ -134,8 +208,9 @@ func setupTestServer() http.Handler {
 	metaSvc := &mockMetadata{}
 	proc := &mockProcessor{}
 	mig := &mockMigration{}
+	qual := &mockQuality{}
 
-	return NewServer(cfg, repo, sc, searchSvc, metaSvc, proc, mig)
+	return NewServer(cfg, repo, sc, searchSvc, metaSvc, proc, mig, qual)
 }
 
 func TestHealthEndpoint(t *testing.T) {
@@ -239,5 +314,91 @@ func TestDisksEndpoint(t *testing.T) {
 
 	if res.Count != 1 || len(res.Disks) != 1 {
 		t.Errorf("expected 1 disk, got: %d", res.Count)
+	}
+}
+
+func TestMediaVerifyPersistsIndexedFileResult(t *testing.T) {
+	cfg := config.Config{}
+	repo := &mockRepo{}
+	handler := NewServer(cfg, repo, scanner.New(scanner.Options{}), &mockSearch{}, &mockMetadata{}, &mockProcessor{}, &mockMigration{}, &mockQuality{})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/media/verify", bytes.NewBufferString(`{"fileId":1}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if repo.verifiedID != 1 || !repo.verified.Healthy {
+		t.Fatalf("verification was not persisted: id=%d result=%#v", repo.verifiedID, repo.verified)
+	}
+}
+
+func TestIndexStreamsFilesInBoundedBatches(t *testing.T) {
+	root := t.TempDir()
+	for _, relativePath := range []string{"one.mp4", filepath.Join("nested", "two.mkv")} {
+		path := filepath.Join(root, relativePath)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("media"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	repo := &mockRepo{}
+	handler := NewServer(
+		config.Config{MediaRoots: []string{root}},
+		repo,
+		scanner.New(scanner.Options{Workers: 2}),
+		&mockSearch{},
+		&mockMetadata{},
+		&mockProcessor{},
+		&mockMigration{},
+		&mockQuality{},
+	)
+	payload, err := json.Marshal(map[string][]string{"roots": []string{root}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/index", bytes.NewReader(payload))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var result indexResult
+	if err := json.NewDecoder(rec.Body).Decode(&result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Scanned != 2 || result.Imported != 2 || result.Inspected != 2 {
+		t.Fatalf("unexpected streaming index result: %#v", result)
+	}
+}
+
+func TestQualityReportEndpoint(t *testing.T) {
+	handler := setupTestServer()
+	req := httptest.NewRequest(http.MethodGet, "/api/quality/report", nil)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got: %d", rec.Code)
+	}
+
+	var report quality.QualityReport
+	if err := json.NewDecoder(rec.Body).Decode(&report); err != nil {
+		t.Fatalf("decode quality report: %v", err)
+	}
+
+	if report.TotalMedia != 10 || report.TotalFiles != 50 {
+		t.Errorf("expected 10 media, 50 files, got: %d, %d", report.TotalMedia, report.TotalFiles)
+	}
+	if report.DuplicateGroupsCount != 1 {
+		t.Errorf("expected 1 duplicate group, got: %d", report.DuplicateGroupsCount)
 	}
 }

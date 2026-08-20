@@ -56,7 +56,9 @@ func cacheRemoteImage(ctx context.Context, client *http.Client, imageURL, imageD
 		return "", err
 	}
 
-	return filepath.ToSlash(destination), nil
+	// AssetImageDir is mounted by the API below /assets/images. Return its URL,
+	// not a filesystem-relative path, so it works from every SPA route.
+	return "/assets/images/" + provider + "/" + fileName, nil
 }
 
 func yearFromDate(input string) int {
