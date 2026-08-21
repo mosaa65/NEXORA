@@ -1,158 +1,353 @@
-import { useEffect, useMemo, useState } from "react";
-import MediaCard from "../components/MediaCard.jsx";
+import React, { useEffect, useMemo, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import HeroSlider from "../components/HeroSlider.jsx";
+import HubBannerCard from "../components/HubBannerCard.jsx";
+import FilterToolbar from "../components/FilterToolbar.jsx";
+import UnifiedMediaCard from "../components/UnifiedMediaCard.jsx";
 import Icon from "../components/Icon.jsx";
 import { getMediaList, resolveAPIURL } from "../lib/api.js";
 
-const categoryTitles = {
-  anime: { titleAr: "الأنمي", label: "أنمي", description: "اكتشف عوالم الأنمي، المواسم والحلقات المفضلة لديك." },
-  movies: { titleAr: "الأفلام", label: "فيلم", description: "تصفح مكتبتك السينمائية واختر فيلم الليلة." },
-  series: { titleAr: "المسلسلات", label: "مسلسل", description: "اختر طريقة الاستكشاف المناسبة لك، ثم انغمس في عالمك المفضل." },
-  kids: { titleAr: "أطفال وكرتون", label: "عمل", description: "محتوى عائلي ممتع ومناسب للصغار." },
-  documentaries: { titleAr: "وثائقيات", label: "وثائقي", description: "معرفة وقصص حقيقية من مكتبتك." },
-  plays: { titleAr: "مسرحيات", label: "مسرحية", description: "عروض مسرحية وكوميدية جاهزة للمشاهدة." }
+const categoryMetas = {
+  anime: {
+    titleAr: "الأنمي والرسوم اليابانية",
+    label: "أنمي",
+    description: "عوالم الأنمي الأسطورية، المواسم الكاملة والحلقات بأعلى جودة وصوت ياباني مع الترجمة العربية.",
+  },
+  movies: {
+    titleAr: "الأفلام السينمائية",
+    label: "فيلم",
+    description: "مكتبة سينمائية متكاملة من أقوى أفلام هوليوود، السينما العربية، الكورية، والهندية بدقة 4K.",
+  },
+  series: {
+    titleAr: "المسلسلات والدراما",
+    label: "مسلسل",
+    description: "أقوى إنتاجات الدراما التركية، العربية، والمسلسلات العالمية الحصرية مع كامل الحلقات والمواسم.",
+  },
+  kids: {
+    titleAr: "الأطفال والكرتون العائلي",
+    label: "عمل",
+    description: "أفلام ديزني وبيكسار، سلاسل الأبطال الخارقين، ومسلسلات الكرتون وسبيستون المدبلجة الممتعة.",
+  },
+  documentaries: {
+    titleAr: "الوثائقيات والمعرفة",
+    label: "وثائقي",
+    description: "سلاسل الطبيعة، التاريخ، والتكنولوجيا من كبرى استوديوهات الإنتاج العالمية.",
+  },
+  plays: {
+    titleAr: "المسرحيات والكوميديا",
+    label: "مسرحية",
+    description: "كلاسيكيات المسرح الكوميدي الخليجي والمصري بجودة ممتازة.",
+  },
 };
 
-const regions = [
-  { id: "turkish", title: "مسلسلات تركية", shortLabel: "تركية", description: "حكايات مشوّقة ورومانسية ودراما من تركيا.", terms: ["تركي", "تركية", "turkish", "turkey"], tint: "from-amber-500/75 via-orange-800/40 to-[#130b20]" },
-  { id: "foreign", title: "مسلسلات أجنبية", shortLabel: "أجنبية", description: "أفضل المسلسلات العالمية، من الجريمة إلى الخيال العلمي.", terms: ["أجنبي", "أجنبية", "english", "american", "british", "hollywood", "أمريكي", "بريطاني"], tint: "from-cyan-500/70 via-blue-900/45 to-[#0b0d1e]" },
-  { id: "arabic", title: "مسلسلات عربية", shortLabel: "عربية", description: "إنتاج عربي متنوع من الدراما والكوميديا والتشويق.", terms: ["عربي", "عربية", "arabic", "مصري", "خليجي"], tint: "from-rose-500/65 via-red-950/45 to-[#170b17]" },
-  { id: "korean", title: "مسلسلات كورية", shortLabel: "كورية", description: "دراما كورية آسرة وقصص قريبة من القلب.", terms: ["كوري", "كورية", "korean", "korea"], tint: "from-pink-500/70 via-fuchsia-950/45 to-[#170918]" },
-  { id: "indian", title: "مسلسلات هندية", shortLabel: "هندية", description: "دراما وحكايات طويلة من شبه القارة الهندية.", terms: ["هندي", "هندية", "indian", "india", "bollywood"], tint: "from-orange-500/75 via-red-950/45 to-[#1b0c12]" },
-  { id: "spanish", title: "مسلسلات إسبانية", shortLabel: "إسبانية", description: "غموض وإثارة ودراما إسبانية مختارة.", terms: ["إسباني", "إسبانية", "spanish", "spain"], tint: "from-violet-500/75 via-indigo-950/45 to-[#100b1d]" }
+const seriesHubs = [
+  {
+    id: "turkish",
+    title: "👑 روائع الدراما التركية",
+    subtitle: "حكايات ملحمية وعاطفية من قمة الإنتاج التركي المدبلج والمترجم",
+    tag: "الأعلى طلباً",
+    originTerm: "تركي",
+    backdrop: "/images/aot_banner_detail.png",
+    accentColor: "from-amber-700/80 via-orange-950/80 to-[#0F0E1A]",
+    borderColor: "border-amber-500/40",
+  },
+  {
+    id: "arabic",
+    title: "🌟 الدراما العربية والخليجية",
+    subtitle: "إنتاجات مصرية، خليجية، وشامية حصرية ومتنوعة لجميع الأذواق",
+    tag: "إنتاج عربي",
+    originTerm: "عربي",
+    backdrop: "/images/jujutsu_kaisen_poster.png",
+    accentColor: "from-rose-700/80 via-purple-950/80 to-[#0F0E1A]",
+    borderColor: "border-rose-500/40",
+  },
+  {
+    id: "foreign",
+    title: "🎬 المسلسلات الأجنبية والعالمية",
+    subtitle: "أضخم أعمال HBO و Netflix و Apple من الجريمة والخيال العلمي",
+    tag: "Global Hits",
+    originTerm: "أجنبي",
+    backdrop: "/images/demon_slayer_poster.png",
+    accentColor: "from-cyan-700/80 via-blue-950/80 to-[#0F0E1A]",
+    borderColor: "border-cyan-500/40",
+  },
+  {
+    id: "korean",
+    title: "🌸 الدراما الكورية (K-Drama)",
+    subtitle: "قصص مشوقة ورومانسية وإثارة آسيوية متصدرة التريند العالمي",
+    tag: "K-Drama",
+    originTerm: "كوري",
+    backdrop: "/images/naruto_poster.png",
+    accentColor: "from-fuchsia-700/80 via-pink-950/80 to-[#0F0E1A]",
+    borderColor: "border-fuchsia-500/40",
+  },
 ];
 
-const genres = ["أكشن", "مغامرة", "دراما", "كوميديا", "رومانسي", "جريمة", "غموض", "إثارة", "تاريخي", "خيال علمي", "رعب", "فانتازيا"];
-const dateGroups = [
-  { id: "new", title: "الأحدث إصداراً", shortLabel: "2024 فما بعد", description: "أحدث الإضافات والإصدارات في المكتبة.", matches: (item) => item.year >= 2024, tint: "from-fuchsia-500/75 via-purple-900/45 to-[#100b1e]" },
-  { id: "2020s", title: "مسلسلات 2020 - 2023", shortLabel: "2020 - 2023", description: "أعمال حديثة تستحق المتابعة.", matches: (item) => item.year >= 2020 && item.year <= 2023, tint: "from-sky-500/75 via-blue-950/45 to-[#08111d]" },
-  { id: "2010s", title: "مسلسلات العقد السابق", shortLabel: "2010 - 2019", description: "أعمال صنعت ذائقة عقد كامل.", matches: (item) => item.year >= 2010 && item.year < 2020, tint: "from-emerald-500/70 via-teal-950/45 to-[#081714]" },
-  { id: "classics", title: "كلاسيكيات خالدة", shortLabel: "قبل 2010", description: "حكايات لا تفقد سحرها مع الوقت.", matches: (item) => item.year > 0 && item.year < 2010, tint: "from-yellow-500/70 via-amber-950/45 to-[#171207]" }
+const kidsHubs = [
+  {
+    id: "disney",
+    title: "🏰 كلاسيكيات ديزني وبيكسار",
+    subtitle: "ملكة الثلج، حكاية لعبة، والأسد الملك بجودة فائقة ودبلجة احترافية",
+    tag: "Disney / Pixar",
+    originTerm: "",
+    genreTerm: "عائلي",
+    backdrop: "/images/jujutsu_kaisen_poster.png",
+    accentColor: "from-sky-700/80 via-indigo-950/80 to-[#0F0E1A]",
+    borderColor: "border-sky-500/40",
+  },
+  {
+    id: "spiderman",
+    title: "🕷️ سلاسل الأبطال الخارقين",
+    subtitle: "مغامرات سبايدرمان، باتمان، وأفلام الرسوم المتحركة الحماسية",
+    tag: "Superheroes",
+    originTerm: "",
+    genreTerm: "أكشن",
+    backdrop: "/images/demon_slayer_poster.png",
+    accentColor: "from-red-700/80 via-rose-950/80 to-[#0F0E1A]",
+    borderColor: "border-red-500/40",
+  },
+  {
+    id: "spacetoon",
+    title: "⭐ ذكريات سبيستون المدبلجة",
+    subtitle: "المحقق كونان، أبطال الديجيتال، وعهد الأصدقاء بحنين الزمن الجميل",
+    tag: "سبيستون",
+    originTerm: "ياباني",
+    genreTerm: "كرتون",
+    backdrop: "/images/naruto_poster.png",
+    accentColor: "from-amber-600/80 via-orange-950/80 to-[#0F0E1A]",
+    borderColor: "border-amber-500/40",
+  },
 ];
 
-function genreGroup(genre) {
-  return { id: `genre-${genre}`, title: `مسلسلات ${genre}`, shortLabel: genre, description: `مجموعة مختارة من مسلسلات ${genre}.`, terms: [genre], tint: "from-purple-500/75 via-fuchsia-950/45 to-[#12091a]" };
-}
-
-function containsTerms(item, terms = []) {
-  const searchable = (item.genres || []).join(" ").toLocaleLowerCase();
-  return terms.some((term) => searchable.includes(term.toLocaleLowerCase()));
-}
-
-function collectionMatches(item, collection) {
-  if (!collection) return true;
-  return collection.matches ? collection.matches(item) : containsTerms(item, collection.terms);
-}
-
-export default function CategoryPage({ selectedCategory, onOpenMedia }) {
+export default function CategoryPage({ selectedCategory = "series", onOpenMedia, onQuickPlay }) {
   const [items, setItems] = useState([]);
   const [totalCount, setTotalCount] = useState(0);
-  const [activeSort, setActiveSort] = useState("latest");
-  const [browseMode, setBrowseMode] = useState("region");
-  const [activeCollection, setActiveCollection] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
 
-  const meta = categoryTitles[selectedCategory] || { titleAr: selectedCategory, label: "عمل", description: "تصفح محتوى مكتبتك المحلية." };
-  const isSeriesHub = selectedCategory === "series" && !activeCollection;
+  // Filter States
+  const [activeOrigin, setActiveOrigin] = useState("all");
+  const [activeGenre, setActiveGenre] = useState("all");
+  const [activeSort, setActiveSort] = useState("newest");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedHub, setSelectedHub] = useState(null);
+
+  const meta = categoryMetas[selectedCategory] || categoryMetas.series;
 
   useEffect(() => {
-    setActiveCollection(null);
-    setBrowseMode("region");
+    // Reset filters on category switch
+    setActiveOrigin("all");
+    setActiveGenre("all");
+    setSearchQuery("");
+    setSelectedHub(null);
+    loadCategoryItems();
   }, [selectedCategory]);
 
   useEffect(() => {
-    let alive = true;
-    setIsLoading(true);
-    getMediaList({ category: selectedCategory, sort: activeSort, limit: 100 })
-      .then((data) => {
-        if (!alive) return;
-        const transformed = (data.items || []).map((item) => ({
-          id: item.id, titleAr: item.title_ar || item.title_en, titleEn: item.title_en, type: item.type,
-          plot: item.plot_ar || item.plot_en || "عمل مميز متاح في مكتبة NEXORA المحلية.", year: item.release_year || 2023,
-          rating: item.rating || 8.5, posterPath: item.poster_path, bannerPath: item.banner_path,
-          categorySlug: item.category_slug || selectedCategory, fileCount: item.file_count || 1, genres: item.genres || []
-        }));
-        setItems(transformed);
-        setTotalCount(data.total || transformed.length);
-      })
-      .catch(() => alive && (setItems([]), setTotalCount(0)))
-      .finally(() => alive && setIsLoading(false));
-    return () => { alive = false; };
+    loadCategoryItems();
   }, [selectedCategory, activeSort]);
 
-  const collections = useMemo(() => {
-    if (browseMode === "genre") return genres.map(genreGroup);
-    if (browseMode === "date") return dateGroups;
-    return regions;
-  }, [browseMode]);
+  async function loadCategoryItems() {
+    setLoading(true);
+    try {
+      const res = await getMediaList({
+        category: selectedCategory,
+        sort: activeSort === "rating" ? "rating" : activeSort === "year" ? "year" : activeSort === "title" ? "title" : "",
+        limit: 150,
+      });
 
-  const visibleItems = useMemo(() => items.filter((item) => collectionMatches(item, activeCollection)), [items, activeCollection]);
-  const heroPath = visibleItems.find((item) => item.bannerPath)?.bannerPath || visibleItems[0]?.posterPath;
-  const heroImage = heroPath ? resolveAPIURL(heroPath) : "/images/aot_banner_detail.png";
+      const transformed = (res?.items || []).map((item) => ({
+        id: item.id,
+        titleAr: item.title_ar || item.title_en,
+        titleEn: item.title_en,
+        type: item.type,
+        plot: item.plot_ar || item.plot_en || "عمل سينمائي متاح على شبكة NEXORA المحلية.",
+        year: item.release_year || 2024,
+        rating: item.rating || 8.5,
+        resolution: "1080p",
+        posterPath: item.poster_path,
+        bannerPath: item.banner_path,
+        categorySlug: item.category_slug || selectedCategory,
+        fileCount: item.file_count || 1,
+        genres: item.genres || [],
+      }));
 
-  function openCollection(collection) {
-    setActiveCollection(collection);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+      setItems(transformed);
+      setTotalCount(res?.total || transformed.length);
+    } catch {
+      setItems([]);
+      setTotalCount(0);
+    } finally {
+      setLoading(false);
+    }
   }
 
-  if (isLoading) return <div className="flex h-64 items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-2 border-fuchsia-500 border-t-transparent" /></div>;
+  // Filter Logic
+  const filteredItems = useMemo(() => {
+    return items.filter((item) => {
+      // 1. Search Query
+      if (searchQuery.trim()) {
+        const query = searchQuery.trim().toLowerCase();
+        const matchesTitle =
+          (item.titleAr && item.titleAr.toLowerCase().includes(query)) ||
+          (item.titleEn && item.titleEn.toLowerCase().includes(query)) ||
+          (item.plot && item.plot.toLowerCase().includes(query));
+        if (!matchesTitle) return false;
+      }
 
-  if (isSeriesHub) {
-    return (
-      <div className="space-y-6 text-right" dir="rtl">
-        <section className="relative overflow-hidden rounded-3xl border border-white/10 bg-[radial-gradient(circle_at_12%_0%,rgba(168,85,247,.27),transparent_30%),linear-gradient(120deg,#140d25,#090a16_56%,#0a172b)] p-6 shadow-panel sm:p-9">
-          <div className="absolute -left-20 top-0 h-64 w-64 rounded-full bg-cyan-500/10 blur-3xl" />
-          <div className="relative flex flex-col gap-7">
-            <div>
-              <p className="mb-2 text-xs font-bold text-fuchsia-300">NEXORA · مساحة المسلسلات</p>
-              <h1 className="text-3xl font-black text-white sm:text-4xl">اكتشف المسلسلات بطريقتك</h1>
-              <p className="mt-2 max-w-xl text-sm leading-7 text-white/55">ابدأ بالبلد، بالنوع، أو بالفترة الزمنية. كل مجموعة تفتح لك صفحة مشاهدة متكاملة بتصميم سينمائي.</p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {[["region", "حسب البلد"], ["genre", "حسب التصنيف"], ["date", "حسب التاريخ"]].map(([id, label]) => (
-                <button key={id} type="button" onClick={() => setBrowseMode(id)} className={`rounded-xl px-4 py-2.5 text-xs font-black transition ${browseMode === id ? "bg-gradient-to-l from-fuchsia-600 to-purple-700 text-white shadow-lg shadow-purple-950/45" : "border border-white/10 bg-black/25 text-white/60 hover:bg-white/10 hover:text-white"}`}>{label}</button>
-              ))}
-            </div>
+      // 2. Hub Filter (if a hub was selected)
+      if (selectedHub) {
+        if (selectedHub.originTerm && !item.genres.some((g) => g.includes(selectedHub.originTerm))) {
+          return false;
+        }
+        if (selectedHub.genreTerm && !item.genres.some((g) => g.includes(selectedHub.genreTerm))) {
+          return false;
+        }
+      }
+
+      // 3. Origin Filter
+      if (activeOrigin !== "all") {
+        const hasOrigin = item.genres.some((g) => g.includes(activeOrigin));
+        if (!hasOrigin) return false;
+      }
+
+      // 4. Genre Filter
+      if (activeGenre !== "all") {
+        const hasGenre = item.genres.some((g) => g.includes(activeGenre));
+        if (!hasGenre) return false;
+      }
+
+      return true;
+    });
+  }, [items, searchQuery, selectedHub, activeOrigin, activeGenre]);
+
+  // Featured Items for Hero Slider
+  const heroItems = useMemo(() => {
+    return items.slice(0, 5);
+  }, [items]);
+
+  const activeHubs = selectedCategory === "series" ? seriesHubs : selectedCategory === "kids" ? kidsHubs : [];
+
+  return (
+    <div className="space-y-8 pb-16 text-right" dir="rtl">
+      {/* 1. Hero Showcase Slider (If not in a sub-hub view) */}
+      {!selectedHub && heroItems.length > 0 && (
+        <HeroSlider
+          items={heroItems}
+          onOpenMedia={onOpenMedia}
+          onQuickPlay={onQuickPlay}
+        />
+      )}
+
+      {/* 2. Sub-Hub Banner Header (If browsing a specific collection) */}
+      {selectedHub && (
+        <div
+          className="relative min-h-[220px] rounded-3xl overflow-hidden border border-fuchsia-500/30 p-6 sm:p-8 flex flex-col justify-end text-right shadow-2xl bg-[#0E0D1B]"
+          style={{ backgroundImage: `url('${selectedHub.backdrop}')`, backgroundSize: "cover", backgroundPosition: "center" }}
+        >
+          <div className="absolute inset-0 bg-gradient-to-t from-[#090812] via-[#090812]/80 to-transparent" />
+
+          <div className="relative z-10 space-y-2">
+            <button
+              onClick={() => setSelectedHub(null)}
+              className="px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white font-bold text-xs backdrop-blur-md border border-white/20 transition flex items-center gap-1.5 w-fit"
+            >
+              <span>‹ العودة لجميع المجموعات</span>
+            </button>
+            <h1 className="text-2xl sm:text-4xl font-black text-white">{selectedHub.title}</h1>
+            <p className="text-xs sm:text-sm text-gray-300 max-w-xl">{selectedHub.subtitle}</p>
           </div>
-        </section>
+        </div>
+      )}
 
-        <section>
-          <div className="mb-4 flex items-center justify-between"><div><h2 className="text-xl font-black text-white">{browseMode === "region" ? "المسلسلات حسب البلد" : browseMode === "genre" ? "المسلسلات حسب التصنيف" : "المسلسلات حسب التاريخ"}</h2><p className="mt-1 text-xs text-white/45">اختر مجموعة للانتقال إلى صفحة المسلسلات الخاصة بها.</p></div><span className="rounded-full bg-white/5 px-3 py-1 text-xs font-bold text-white/50">{totalCount} مسلسل</span></div>
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
-            {collections.map((collection, index) => {
-              const count = items.filter((item) => collectionMatches(item, collection)).length;
-              const cardPath = items.find((item) => collectionMatches(item, collection))?.bannerPath || items.find((item) => collectionMatches(item, collection))?.posterPath;
-              const cardImage = cardPath ? resolveAPIURL(cardPath) : "/images/aot_banner_detail.png";
-              return <button key={collection.id} type="button" onClick={() => openCollection(collection)} className="group relative aspect-square overflow-hidden rounded-2xl border border-white/10 bg-[#0b0a15] text-right shadow-lg transition duration-300 hover:-translate-y-1 hover:border-fuchsia-400/60 hover:shadow-fuchsia-950/40">
-                <img src={cardImage} alt="" className="absolute inset-0 h-full w-full object-cover opacity-45 transition duration-500 group-hover:scale-110 group-hover:opacity-65" />
-                <div className={`absolute inset-0 bg-gradient-to-t ${collection.tint}`} /><div className="absolute inset-0 bg-gradient-to-b from-black/5 via-transparent to-black/75" />
-                <div className="relative flex h-full flex-col justify-between p-4 sm:p-5"><span className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/15 bg-black/25 text-fuchsia-100"><Icon name={browseMode === "genre" ? "spark" : browseMode === "date" ? "book" : "tv"} className="h-4 w-4" /></span><div><p className="text-base font-black text-white sm:text-lg">{collection.title}</p><p className="mt-1 text-[11px] leading-5 text-white/65">{collection.description}</p><div className="mt-3 flex items-center justify-between text-xs font-bold text-white/80"><span>{count} مسلسل</span><span className="transition-transform group-hover:-translate-x-1">‹</span></div></div></div>
-              </button>;
+      {/* 3. Grand Origin Hubs / Collections Section */}
+      {!selectedHub && activeHubs.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-black text-white flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-fuchsia-500 shadow-[0_0_10px_#e879f9]" />
+                مجموعات ومحاور {meta.titleAr}
+              </h2>
+              <p className="text-xs text-gray-400">تصفح الإنتاجات المجمعة حسب المنشأ والسلاسل السينمائية</p>
+            </div>
+            <span className="text-xs font-mono font-bold text-gray-400 bg-white/5 px-3 py-1 rounded-full border border-white/10">
+              {totalCount} {meta.label}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {activeHubs.map((hub) => {
+              const hubCount = items.filter((it) => {
+                if (hub.originTerm && it.genres.some((g) => g.includes(hub.originTerm))) return true;
+                if (hub.genreTerm && it.genres.some((g) => g.includes(hub.genreTerm))) return true;
+                return false;
+              }).length;
+
+              return (
+                <HubBannerCard
+                  key={hub.id}
+                  title={hub.title}
+                  subtitle={hub.subtitle}
+                  count={hubCount}
+                  backdrop={hub.backdrop}
+                  accentColor={hub.accentColor}
+                  borderColor={hub.borderColor}
+                  tag={hub.tag}
+                  onClick={() => {
+                    setSelectedHub(hub);
+                    window.scrollTo({ top: 400, behavior: "smooth" });
+                  }}
+                />
+              );
             })}
           </div>
-        </section>
-      </div>
-    );
-  }
-
-  const title = activeCollection?.title || meta.titleAr;
-  return (
-    <div className="space-y-6 text-right" dir="rtl">
-      <section className="relative min-h-[270px] overflow-hidden rounded-3xl border border-white/10 bg-[#0b0914] shadow-panel sm:min-h-[320px]">
-        <img src={heroImage} alt="" className="absolute inset-0 h-full w-full object-cover opacity-55" />
-        <div className={`absolute inset-0 bg-gradient-to-l ${activeCollection?.tint || "from-fuchsia-700/65 via-[#0b0914]/90 to-[#0b0914]/75"}`} /><div className="absolute inset-0 bg-gradient-to-t from-[#090811] via-[#090811]/35 to-transparent" />
-        <div className="relative flex min-h-[270px] flex-col justify-end p-5 sm:min-h-[320px] sm:p-8">
-          {selectedCategory === "series" && <button type="button" onClick={() => setActiveCollection(null)} className="absolute right-5 top-5 flex items-center gap-1 rounded-full border border-white/15 bg-black/30 px-3 py-2 text-xs font-bold text-white/80 backdrop-blur-md transition hover:bg-black/55 sm:right-8 sm:top-7">العودة للمجموعات <Icon name="arrowRight" className="h-3.5 w-3.5" /></button>}
-          <p className="mb-2 text-xs font-black text-fuchsia-200">NEXORA · مجموعة مختارة</p><h1 className="text-3xl font-black text-white sm:text-5xl">{title}</h1><p className="mt-2 max-w-xl text-sm leading-7 text-white/70">{activeCollection?.description || meta.description}</p>
-          <div className="mt-5 flex flex-wrap gap-2"><span className="rounded-xl border border-white/15 bg-black/25 px-3 py-2 text-xs font-bold text-white">{visibleItems.length} {meta.label}</span><span className="rounded-xl border border-white/15 bg-black/25 px-3 py-2 text-xs font-bold text-white/75">مكتبة محلية · جودة عالية</span></div>
         </div>
-      </section>
+      )}
 
-      <div className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-[#0b0a15]/80 p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2 text-sm font-black text-white"><span className="h-2 w-2 rounded-full bg-fuchsia-400 shadow-[0_0_12px_#e879f9]" />كل الأعمال</div>
-        <div className="flex flex-wrap gap-2 text-xs font-bold">{[["latest", "الأحدث"], ["rating", "الأعلى تقييماً ★"], ["year", "السنة"], ["title", "أبجدي أ-ي"]].map(([id, label]) => <button key={id} type="button" onClick={() => setActiveSort(id)} className={`rounded-xl px-3.5 py-2 transition ${activeSort === id ? "bg-gradient-to-l from-fuchsia-600 to-purple-700 text-white" : "border border-white/10 bg-white/[.03] text-white/55 hover:bg-white/10 hover:text-white"}`}>{label}</button>)}</div>
+      {/* 4. Multi-Dimensional Filter Toolbar */}
+      <FilterToolbar
+        activeOrigin={activeOrigin}
+        onSelectOrigin={setActiveOrigin}
+        activeGenre={activeGenre}
+        onSelectGenre={setActiveGenre}
+        activeSort={activeSort}
+        onSelectSort={setActiveSort}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        showOriginFilter={selectedCategory === "series" || selectedCategory === "movies"}
+        resultCount={filteredItems.length}
+      />
+
+      {/* 5. Items Grid Section */}
+      <div className="space-y-4">
+        {loading ? (
+          <div className="flex items-center justify-center py-20">
+            <div className="text-center space-y-3">
+              <div className="w-10 h-10 border-4 border-fuchsia-500/30 border-t-fuchsia-500 rounded-full animate-spin mx-auto" />
+              <p className="text-xs text-gray-400">جاري تحميل الأعمال الفنية...</p>
+            </div>
+          </div>
+        ) : filteredItems.length === 0 ? (
+          <div className="p-16 rounded-3xl border border-dashed border-white/10 bg-black/30 text-center space-y-3">
+            <span className="text-4xl">🎬</span>
+            <h3 className="text-base font-bold text-white">لا توجد أعمال تطابق الفلاتر المحددة</h3>
+            <p className="text-xs text-gray-400 max-w-sm mx-auto">
+              جرب تغيير خيارات البحث أو إعادة ضبط فلاتر الدولة والتصنيف.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+            {filteredItems.map((media) => (
+              <UnifiedMediaCard
+                key={media.id}
+                media={media}
+                onOpen={onOpenMedia}
+                onQuickPlay={onQuickPlay}
+              />
+            ))}
+          </div>
+        )}
       </div>
-
-      {visibleItems.length === 0 ? <div className="rounded-3xl border border-dashed border-white/15 bg-black/25 p-12 text-center"><span className="text-4xl">🎬</span><p className="mt-3 text-sm font-bold text-white">لا توجد أعمال في {title} بعد</p><p className="mt-1 text-xs text-white/45">أضف وسم البلد أو التصنيف للعمل من لوحة الإدارة ليظهر هنا.</p></div> : <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">{visibleItems.map((item, index) => <MediaCard key={item.id} item={item} onOpen={onOpenMedia} index={index} />)}</div>}
     </div>
   );
 }

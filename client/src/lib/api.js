@@ -80,6 +80,10 @@ export async function indexLibrary(roots) {
   });
 }
 
+export async function classifyOriginsFromFolders() {
+  return requestJSON("/api/library/classify-origins", { method: "POST" });
+}
+
 export async function getDuplicateGroups() { return requestJSON("/api/library/duplicates"); }
 export async function getMissingEpisodes() { return requestJSON("/api/library/missing-episodes"); }
 export async function getQualityReport() { return requestJSON("/api/quality/report"); }
@@ -171,10 +175,82 @@ export async function getDisks() {
 }
 
 export async function scanDisks() {
-  return requestJSON("/api/disks/scan", {
+  return requestJSON("/api/disks/scan", { method: "POST" });
+}
+
+// TMDB Integration API
+export async function getTMDBSettings() {
+  return requestJSON("/api/tmdb/settings");
+}
+
+export async function updateTMDBSettings(settings) {
+  return requestJSON("/api/tmdb/settings", {
+    method: "PUT",
+    body: JSON.stringify(settings)
+  });
+}
+
+export async function getTMDBStats() {
+  return requestJSON("/api/tmdb/stats");
+}
+
+export async function getTMDBModules() {
+  return requestJSON("/api/tmdb/modules");
+}
+
+export async function updateTMDBModules(payload) {
+  return requestJSON("/api/tmdb/modules", {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function testTMDBConnection() {
+  return requestJSON("/api/tmdb/test", {
     method: "POST"
   });
 }
+
+export async function getTMDBRemoteConfiguration() {
+  return requestJSON("/api/tmdb/configuration");
+}
+
+export async function getTMDBPreview(mediaId) {
+  return requestJSON(`/api/tmdb/preview/${encodeURIComponent(mediaId)}`);
+}
+
+// System Directory Explorer API (Browse Windows Drives D:\, E:\)
+export async function getSystemDrives() {
+  return requestJSON("/api/system/drives");
+}
+
+export async function browseSystemDirectory(path) {
+  const params = path ? `?path=${encodeURIComponent(path)}` : "";
+  return requestJSON(`/api/system/browse${params}`);
+}
+
+// Admin Authentication API
+export async function adminLogin(username, password) {
+  return requestJSON("/api/admin/login", {
+    method: "POST",
+    body: JSON.stringify({ username, password })
+  });
+}
+
+export async function checkAdminSession() {
+  const token = localStorage.getItem("nexora_admin_token") || "";
+  return requestJSON("/api/admin/session", {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+}
+
+export async function adminLogout() {
+  localStorage.removeItem("nexora_admin_token");
+  localStorage.removeItem("nexora_admin_user");
+  return requestJSON("/api/admin/logout", { method: "POST" });
+}
+
+
 
 export async function getFileSubtitles(fileId) {
   return requestJSON(`/api/stream/file/${encodeURIComponent(fileId)}/subtitles`);

@@ -15,6 +15,7 @@ const adminSubItems = [
   { id: "admin-categories", label: "إدارة الأقسام والتصنيفات", icon: "mask" },
   { id: "admin-manager", label: "إدارة وتحرير الأعمال", icon: "film" },
   { id: "admin-indexing", label: "فهرسة واختيار المجلدات", icon: "search" },
+  { id: "admin-tmdb", label: "إعدادات مزود TMDB", icon: "spark" },
   { id: "admin-quality", label: "صحة وجودة المكتبة", icon: "spark" },
   { id: "admin-migration", label: "معالج الترتيب والنقل", icon: "arrowLeft" },
   { id: "admin-overview", label: "حالة النظام والخدمات", icon: "dashboard" }

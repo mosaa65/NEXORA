@@ -30,7 +30,7 @@ client/tmp/
 .logs/
 
 # Local generated assets
-server/assets/images/*
+server/assets/**
 !server/assets/images/.gitkeep
 
 # Local toolchains

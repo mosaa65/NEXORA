@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from "react";
-import MediaCard from "../components/MediaCard.jsx";
+import React, { useEffect, useRef, useState } from "react";
+import HeroSlider from "../components/HeroSlider.jsx";
+import UnifiedMediaCard from "../components/UnifiedMediaCard.jsx";
+import HubBannerCard from "../components/HubBannerCard.jsx";
 import Icon from "../components/Icon.jsx";
-import { getDashboardStats, getMediaList, resolveAPIURL } from "../lib/api.js";
+import { getDashboardStats, getMediaList } from "../lib/api.js";
 import { mockLibrary } from "../data/library.js";
-import { horizontalWheel } from "../lib/horizontalScroll.js";
 
 export default function DashboardPage({
   searchQuery,
@@ -11,31 +12,38 @@ export default function DashboardPage({
   searchResults,
   onOpenMedia,
   onQuickPlay,
-  onToggleSidebar
+  onNavigateCategory,
 }) {
   const [items, setItems] = useState([]);
   const [stats, setStats] = useState(null);
-  const carouselRef = useRef(null);
+  const [loading, setLoading] = useState(true);
+
+  const topRatedRef = useRef(null);
+  const seriesRef = useRef(null);
+  const moviesRef = useRef(null);
 
   useEffect(() => {
     let alive = true;
+    setLoading(true);
 
-    getMediaList({ limit: 30, sort: "rating" })
+    getMediaList({ limit: 60, sort: "rating" })
       .then((data) => {
         if (!alive) return;
-        if (data.items && data.items.length > 0) {
+        if (data?.items && data.items.length > 0) {
           const transformed = data.items.map((item) => ({
             id: item.id,
             titleAr: item.title_ar || item.title_en,
             titleEn: item.title_en,
             type: item.type,
-            plot: item.plot_ar || item.plot_en || "عمل سينمائي مميز متاح في مكتبة NEXORA المحلية.",
-            year: item.release_year || 2023,
+            plot: item.plot_ar || item.plot_en || "عمل سينمائي متاح على شبكة NEXORA المحلية.",
+            year: item.release_year || 2024,
             rating: item.rating || 8.5,
+            resolution: "1080p",
             posterPath: item.poster_path,
             bannerPath: item.banner_path,
             categorySlug: item.category_slug,
-            fileCount: item.file_count || 1
+            fileCount: item.file_count || 1,
+            genres: item.genres || [],
           }));
           setItems(transformed);
         } else {
@@ -44,12 +52,14 @@ export default function DashboardPage({
       })
       .catch(() => {
         if (alive) setItems(mockLibrary);
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
       });
 
     getDashboardStats()
       .then((data) => {
-        if (!alive) return;
-        if (data) setStats(data);
+        if (alive && data) setStats(data);
       })
       .catch(() => {});
 
@@ -59,162 +69,213 @@ export default function DashboardPage({
   }, []);
 
   const displayItems = searchResults?.length > 0 && searchQuery ? searchResults : items.length > 0 ? items : mockLibrary;
-  const primaryPick = displayItems[0] || mockLibrary[0];
-  const carouselItems = displayItems.slice(0, 15);
-  const seriesItems = displayItems.filter((item) => item.type === "series" || item.type === "anime").slice(0, 12);
+  const heroItems = displayItems.slice(0, 6);
+  const seriesList = displayItems.filter((i) => i.type === "series" || i.type === "anime").slice(0, 15);
+  const moviesList = displayItems.filter((i) => i.type === "movie").slice(0, 15);
+  const topRatedList = [...displayItems].sort((a, b) => (b.rating || 0) - (a.rating || 0)).slice(0, 15);
 
-  function scrollCarousel(direction) {
-    if (carouselRef.current) {
-      const scrollAmount = direction === "left" ? -280 : 280;
-      carouselRef.current.scrollBy({ left: scrollAmount, behavior: "smooth" });
+  function scroll(ref, direction) {
+    if (ref.current) {
+      const scrollAmount = direction === "left" ? -350 : 350;
+      ref.current.scrollBy({ left: scrollAmount, behavior: "smooth" });
     }
   }
 
-  const metrics = [
-    { label: "إجمالي الأعمال", value: stats?.total_media ? `${stats.total_media}` : `${displayItems.length}` },
-    { label: "ملفات الفيديو", value: stats?.total_files ? `${stats.total_files}` : "133" },
-    { label: "مساحة التخزين", value: stats?.total_storage_bytes ? `${(stats.total_storage_bytes / (1024 * 1024 * 1024)).toFixed(1)} GB` : "249 KB" },
-    { label: "الأقسام النشطة", value: `${stats?.categories?.length || 6}` },
-    { label: "الحلقات المفقودة", value: `${stats?.missing_episodes_count ?? 1}` },
-    { label: "الملفات المكررة", value: `${stats?.duplicates_count ?? 2}` }
-  ];
-
   return (
-    <div className="space-y-6">
-      {/* Hero Showcase Container with Header Integrated Overlay */}
-      <section className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0B0A16]">
-        {/* Full Image Background */}
-        <div
-          className="absolute inset-0 bg-cover bg-right sm:bg-center opacity-85 transition-all duration-1000"
-          style={{ backgroundImage: `url('${resolveAPIURL(primaryPick?.bannerPath || primaryPick?.posterPath) || "/images/tokyo_ghoul_hero.png"}')` }}
+    <div className="space-y-10 pb-16 text-right" dir="rtl">
+      {/* 1. Grand Hero Showcase Slider */}
+      {heroItems.length > 0 && (
+        <HeroSlider
+          items={heroItems}
+          onOpenMedia={onOpenMedia}
+          onQuickPlay={onQuickPlay}
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#0B0A16] via-[#0B0A16]/40 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-l from-[#0B0A16]/95 via-[#0B0A16]/50 to-transparent" />
+      )}
 
-        {/* Integrated Top Bar Header */}
-        <div className="relative z-20 flex items-center justify-between gap-4 p-4 sm:p-6 bg-transparent border-none">
-          {/* Left: Search Bar */}
-          <div className="relative flex-1 max-w-xs sm:max-w-sm">
-            <div className="flex w-full items-center gap-2.5 rounded-full border border-white/20 bg-black/40 px-4 py-2 backdrop-blur-sm focus-within:border-fuchsia-500/60">
-              <Icon name="search" className="h-4 w-4 text-white/60 shrink-0" />
-              <input
-                value={searchQuery}
-                onChange={(event) => onSearchChange(event.target.value)}
-                placeholder="ابحث عن أنمي، فيلم، مسلسل..."
-                className="w-full bg-transparent text-xs font-bold text-white outline-none placeholder:text-white/40 text-right"
-              />
-            </div>
-          </div>
-
-          {/* Right: Brand Emblem */}
-          <div className="flex items-center gap-3">
-            <div className="text-right">
-              <h2 className="text-lg font-black text-white">مكتبتي</h2>
-              <p className="text-[10px] font-bold text-white/50">نظام إدارة الوسائط</p>
-            </div>
-            <div className="flex items-center justify-center text-fuchsia-400">
-              <svg className="h-7 w-7 stroke-current" fill="none" viewBox="0 0 24 24" strokeWidth="2.2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3L2 21h20L12 3z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9l-4 7h8l-4-7z" />
-              </svg>
-            </div>
-          </div>
+      {/* 2. Featured Hub Banners Grid */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-black text-white flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-fuchsia-500 shadow-[0_0_12px_#e879f9]" />
+            مجموعات الاستراحة الحصرية
+          </h2>
+          <span className="text-xs font-bold text-gray-400">تصفح سريع</span>
         </div>
 
-        {/* Hero Banner Content */}
-        <div className="relative z-10 flex flex-col justify-end p-6 sm:p-10 lg:p-12 min-h-[22rem] sm:min-h-[26rem]">
-          <div className="max-w-xl text-right md:text-left">
-            <h1 className="text-4xl font-black text-white sm:text-5xl lg:text-6xl tracking-tight leading-none">
-              {primaryPick.titleAr}
-            </h1>
-            <p className="mt-2 text-base font-bold text-white/70 sm:text-lg">{primaryPick.titleEn}</p>
-            <p className="mt-4 max-w-lg text-xs leading-relaxed text-white/80 sm:text-sm text-right md:text-left">
-              {primaryPick.plot}
-            </p>
-
-            {/* Action Buttons */}
-            <div className="mt-6 flex flex-wrap items-center justify-start gap-3">
-              <button
-                type="button"
-                onClick={() => onQuickPlay(primaryPick)}
-                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-fuchsia-600 via-purple-600 to-fuchsia-700 px-6 py-2.5 text-xs font-black text-white shadow-lg shadow-purple-900/50 transition hover:scale-105 sm:text-sm"
-              >
-                <Icon name="play" className="h-4 w-4 text-white fill-current shrink-0" />
-                <span>تشغيل الآن</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => onOpenMedia(primaryPick)}
-                className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-5 py-2.5 text-xs font-bold text-white backdrop-blur-md transition hover:bg-white/20 sm:text-sm"
-              >
-                المزيد من المعلومات
-              </button>
-            </div>
-          </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <HubBannerCard
+            title="👑 روائع الدراما التركية"
+            subtitle="الحكايات العثمانية والدراما العائلية الرومانسية الكاملة"
+            count={seriesList.length}
+            backdrop="/images/aot_banner_detail.png"
+            accentColor="from-amber-800/90 via-orange-950/80 to-[#0C0B17]"
+            borderColor="border-amber-500/40"
+            tag="الأكثر طلباً"
+            onClick={() => onNavigateCategory && onNavigateCategory("series")}
+          />
+          <HubBannerCard
+            title="🎬 أفلام هوليوود والعالم"
+            subtitle="أحدث أفلام الأكشن والخيال العلمي والإثارة بدقة 4K"
+            count={moviesList.length}
+            backdrop="/images/demon_slayer_poster.png"
+            accentColor="from-cyan-800/90 via-blue-950/80 to-[#0C0B17]"
+            borderColor="border-cyan-500/40"
+            tag="سينما 4K"
+            onClick={() => onNavigateCategory && onNavigateCategory("movies")}
+          />
+          <HubBannerCard
+            title="⚔️ عوالم الأنمي الأسطورية"
+            subtitle="ون بيس، هجوم العمالقة، وجوجوتسو كايسن بمواسمها الكاملة"
+            count={seriesList.length}
+            backdrop="/images/jujutsu_kaisen_poster.png"
+            accentColor="from-purple-800/90 via-fuchsia-950/80 to-[#0C0B17]"
+            borderColor="border-purple-500/40"
+            tag="Anime Top"
+            onClick={() => onNavigateCategory && onNavigateCategory("anime")}
+          />
+          <HubBannerCard
+            title="🏰 ديزني والأطفال العائلي"
+            subtitle="أفلام الرسوم المتحركة وسلاسل الأبطال الخارقين والكرتون"
+            count={moviesList.length}
+            backdrop="/images/naruto_poster.png"
+            accentColor="from-sky-800/90 via-indigo-950/80 to-[#0C0B17]"
+            borderColor="border-sky-500/40"
+            tag="عائلي وأطفال"
+            onClick={() => onNavigateCategory && onNavigateCategory("kids")}
+          />
         </div>
-      </section>
+      </div>
 
-      {/* "الأكثر مشاهدة / الأحدث" Carousel Section */}
-      <section className="space-y-3">
-        <div className="flex items-center justify-between border-b border-white/10 pb-2 text-right">
-          <h2 className="text-lg font-black text-white sm:text-xl">أحدث الأعمال المفهرسة</h2>
+      {/* 3. Carousel: Top Rated Showcase */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg sm:text-xl font-black text-white flex items-center gap-2">
+              <span className="text-amber-400">⭐</span>
+              الأعلى تقييماً في المكتبة (Top Rated)
+            </h2>
+            <p className="text-xs text-gray-400">أقوى الأعمال الفنية المعتمدة من IMDB و TMDB</p>
+          </div>
 
           <div className="flex items-center gap-2">
             <button
-              type="button"
-              onClick={() => scrollCarousel("right")}
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/15 bg-white/5 text-white/80 transition hover:bg-white/15"
-              title="التالي"
+              onClick={() => scroll(topRatedRef, "right")}
+              className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-white transition border border-slate-700"
+              title="السابق"
             >
               ›
             </button>
             <button
-              type="button"
-              onClick={() => scrollCarousel("left")}
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/15 bg-white/5 text-white/80 transition hover:bg-white/15"
-              title="السابق"
+              onClick={() => scroll(topRatedRef, "left")}
+              className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-white transition border border-slate-700"
+              title="التالي"
             >
               ‹
             </button>
           </div>
         </div>
 
-        {/* Carousel Scroll Container */}
         <div
-          ref={carouselRef}
-          onWheel={horizontalWheel}
-          className="flex items-center gap-3 overflow-x-auto pb-2 scrollbar-none scroll-smooth"
+          ref={topRatedRef}
+          className="flex items-stretch gap-4 overflow-x-auto pb-4 scrollbar-none snap-x"
         >
-          {carouselItems.map((item, index) => (
-            <div key={item.id} className="shrink-0">
-              <MediaCard
-                item={item}
+          {topRatedList.map((media) => (
+            <div key={media.id} className="w-40 sm:w-48 shrink-0 snap-start">
+              <UnifiedMediaCard
+                media={media}
                 onOpen={onOpenMedia}
-                index={index}
-                compact
+                onQuickPlay={onQuickPlay}
               />
             </div>
           ))}
         </div>
-      </section>
+      </div>
 
-      {seriesItems.length > 0 && <section className="space-y-3">
-        <div className="flex items-center justify-between border-b border-white/10 pb-2 text-right"><h2 className="text-lg font-black text-white sm:text-xl">مواسم وحلقات متاحة</h2><p className="text-xs text-white/45">اختر العمل لاستعراض مواسمه وحلقاته</p></div>
-        <div onWheel={horizontalWheel} className="flex items-center gap-3 overflow-x-auto pb-2 scrollbar-none scroll-smooth">{seriesItems.map((item, index) => <div key={item.id} className="shrink-0"><MediaCard item={item} onOpen={onOpenMedia} index={index} compact /></div>)}</div>
-      </section>}
+      {/* 4. Carousel: Trending Series & Drama */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg sm:text-xl font-black text-white flex items-center gap-2">
+              <span className="text-fuchsia-400">📺</span>
+              المسلسلات والدراما الأكثر إقبالاً
+            </h2>
+            <p className="text-xs text-gray-400">حلقات ومواسم كاملة جاهزة للمشاهدة المباشرة</p>
+          </div>
 
-      {/* Bottom Statistics Bar */}
-      <section className="rounded-2xl border border-white/10 bg-[#0A0914] p-4 text-center">
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6 divide-x-0 sm:divide-x sm:divide-x-reverse sm:divide-white/10">
-          {metrics.map((stat) => (
-            <div key={stat.label} className="p-1">
-              <p className="text-[11px] font-bold text-white/40">{stat.label}</p>
-              <p className="mt-1 text-lg font-black text-white">{stat.value}</p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => scroll(seriesRef, "right")}
+              className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-white transition border border-slate-700"
+            >
+              ›
+            </button>
+            <button
+              onClick={() => scroll(seriesRef, "left")}
+              className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-white transition border border-slate-700"
+            >
+              ‹
+            </button>
+          </div>
+        </div>
+
+        <div
+          ref={seriesRef}
+          className="flex items-stretch gap-4 overflow-x-auto pb-4 scrollbar-none snap-x"
+        >
+          {seriesList.map((media) => (
+            <div key={media.id} className="w-40 sm:w-48 shrink-0 snap-start">
+              <UnifiedMediaCard
+                media={media}
+                onOpen={onOpenMedia}
+                onQuickPlay={onQuickPlay}
+              />
             </div>
           ))}
         </div>
-      </section>
+      </div>
+
+      {/* 5. Carousel: Blockbuster Movies */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg sm:text-xl font-black text-white flex items-center gap-2">
+              <span className="text-cyan-400">🎬</span>
+              الأفلام والسينما (Blockbuster Cinema)
+            </h2>
+            <p className="text-xs text-gray-400">أحدث الإصدارات العالمية والأجنبية</p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => scroll(moviesRef, "right")}
+              className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-white transition border border-slate-700"
+            >
+              ›
+            </button>
+            <button
+              onClick={() => scroll(moviesRef, "left")}
+              className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-white transition border border-slate-700"
+            >
+              ‹
+            </button>
+          </div>
+        </div>
+
+        <div
+          ref={moviesRef}
+          className="flex items-stretch gap-4 overflow-x-auto pb-4 scrollbar-none snap-x"
+        >
+          {moviesList.map((media) => (
+            <div key={media.id} className="w-40 sm:w-48 shrink-0 snap-start">
+              <UnifiedMediaCard
+                media={media}
+                onOpen={onOpenMedia}
+                onQuickPlay={onQuickPlay}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

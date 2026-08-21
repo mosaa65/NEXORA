@@ -732,6 +732,15 @@ func (r *Repository) ingestScannedFile(ctx context.Context, file scanner.FileInf
 		return fmt.Errorf("find media item %q: %w", title, err)
 	}
 
+	// A library folder such as "مسلسلات/عربي" is a stronger signal than a
+	// metadata search. Keep that owner-provided classification as a tag while
+	// preserving all existing genre tags already attached to the media item.
+	if originTags := scanner.DetectOriginTagsFromPath(file.Path); len(originTags) > 0 {
+		if err := mergeMediaTags(ctx, tx, mediaID, originTags); err != nil {
+			return fmt.Errorf("apply origin tags for %q: %w", title, err)
+		}
+	}
+
 	seasonID := sql.NullInt64{}
 	episodeNumber := sql.NullInt64{}
 	if file.Parsed.IsEpisode {
@@ -815,6 +824,72 @@ func classifyMedia(path string, parsed scanner.ParsedName) (categorySlug string,
 		}
 		return "movies", "movie"
 	}
+}
+
+func mergeMediaTags(ctx context.Context, tx *sql.Tx, mediaID int64, tags []string) error {
+	if len(tags) == 0 {
+		return nil
+	}
+	_, err := tx.ExecContext(ctx, `
+		UPDATE media_items
+		SET genres = ARRAY(
+			SELECT DISTINCT tag
+			FROM unnest(COALESCE(genres, ARRAY[]::text[]) || $1::text[]) AS tag
+		)
+		WHERE id = $2;
+	`, pq.Array(tags), mediaID)
+	return err
+}
+
+// ClassifyOriginsFromPaths repairs existing libraries without re-scanning or
+// calling an external API. It reuses the actual source folders already saved
+// for each video file, so "مسلسلات/عربي" is classified deterministically.
+func (r *Repository) ClassifyOriginsFromPaths(ctx context.Context) (int, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT media_item_id, file_path FROM video_files`)
+	if err != nil {
+		return 0, fmt.Errorf("list file paths for origin classification: %w", err)
+	}
+	defer rows.Close()
+
+	tagsByMedia := make(map[int64]map[string]struct{})
+	for rows.Next() {
+		var mediaID int64
+		var path string
+		if err := rows.Scan(&mediaID, &path); err != nil {
+			return 0, fmt.Errorf("scan file path for origin classification: %w", err)
+		}
+		for _, tag := range scanner.DetectOriginTagsFromPath(path) {
+			if tagsByMedia[mediaID] == nil {
+				tagsByMedia[mediaID] = make(map[string]struct{})
+			}
+			tagsByMedia[mediaID][tag] = struct{}{}
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return 0, fmt.Errorf("iterate file paths for origin classification: %w", err)
+	}
+
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, fmt.Errorf("begin origin classification: %w", err)
+	}
+	defer tx.Rollback()
+
+	updated := 0
+	for mediaID, tagsSet := range tagsByMedia {
+		tags := make([]string, 0, len(tagsSet))
+		for tag := range tagsSet {
+			tags = append(tags, tag)
+		}
+		if err := mergeMediaTags(ctx, tx, mediaID, tags); err != nil {
+			return 0, fmt.Errorf("classify origin for media %d: %w", mediaID, err)
+		}
+		updated++
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("commit origin classification: %w", err)
+	}
+	return updated, nil
 }
 
 func nullableTitleAR(title string) sql.NullString {
@@ -1573,3 +1648,178 @@ func (r *Repository) DeleteMediaItem(ctx context.Context, id int64) error {
 
 	return tx.Commit()
 }
+
+func (r *Repository) GetTMDBSettings(ctx context.Context) (*metadata.TMDBSettings, error) {
+	var s metadata.TMDBSettings
+	var modulesRaw, remoteConfigRaw []byte
+	var fetchMode, imageMode, prefLang, fallbackLang, incImgLang string
+	var posterSize, backdropSize, profileSize, stillSize string
+	var dailyBandwidthMB int64
+	var enableRateLimitDelay bool
+	var rateLimitReqPerSec int
+	var updatedAt time.Time
+
+	err := r.db.QueryRowContext(ctx, `
+		SELECT
+			fetch_mode, image_mode, preferred_language, fallback_language, include_image_language,
+			daily_bandwidth_mb, enable_rate_limit_delay, rate_limit_requests_per_sec,
+			poster_size, backdrop_size, profile_size, still_size,
+			modules, remote_config, updated_at
+		FROM tmdb_settings
+		WHERE id = 1;
+	`).Scan(
+		&fetchMode, &imageMode, &prefLang, &fallbackLang, &incImgLang,
+		&dailyBandwidthMB, &enableRateLimitDelay, &rateLimitReqPerSec,
+		&posterSize, &backdropSize, &profileSize, &stillSize,
+		&modulesRaw, &remoteConfigRaw, &updatedAt,
+	)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			defaults := metadata.DefaultSettings()
+			_ = r.SaveTMDBSettings(ctx, defaults)
+			return &defaults, nil
+		}
+		return nil, fmt.Errorf("get tmdb settings: %w", err)
+	}
+
+	s.FetchMode = metadata.FetchMode(fetchMode)
+	s.ImageMode = metadata.ImageMode(imageMode)
+	s.PreferredLanguage = prefLang
+	s.FallbackLanguage = fallbackLang
+	s.IncludeImageLanguage = incImgLang
+	s.DailyBandwidthMB = dailyBandwidthMB
+	s.EnableRateLimitDelay = enableRateLimitDelay
+	s.RateLimitRequestsPerSec = rateLimitReqPerSec
+	s.PosterSize = posterSize
+	s.BackdropSize = backdropSize
+	s.ProfileSize = profileSize
+	s.StillSize = stillSize
+	s.UpdatedAt = updatedAt
+
+	if len(modulesRaw) > 0 {
+		_ = json.Unmarshal(modulesRaw, &s.Modules)
+	}
+
+	return &s, nil
+}
+
+func (r *Repository) SaveTMDBSettings(ctx context.Context, s metadata.TMDBSettings) error {
+	modulesJSON, err := json.Marshal(s.Modules)
+	if err != nil {
+		return fmt.Errorf("marshal modules: %w", err)
+	}
+
+	_, err = r.db.ExecContext(ctx, `
+		INSERT INTO tmdb_settings (
+			id, fetch_mode, image_mode, preferred_language, fallback_language, include_image_language,
+			daily_bandwidth_mb, enable_rate_limit_delay, rate_limit_requests_per_sec,
+			poster_size, backdrop_size, profile_size, still_size, modules, updated_at
+		) VALUES (
+			1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, CURRENT_TIMESTAMP
+		)
+		ON CONFLICT (id) DO UPDATE SET
+			fetch_mode = EXCLUDED.fetch_mode,
+			image_mode = EXCLUDED.image_mode,
+			preferred_language = EXCLUDED.preferred_language,
+			fallback_language = EXCLUDED.fallback_language,
+			include_image_language = EXCLUDED.include_image_language,
+			daily_bandwidth_mb = EXCLUDED.daily_bandwidth_mb,
+			enable_rate_limit_delay = EXCLUDED.enable_rate_limit_delay,
+			rate_limit_requests_per_sec = EXCLUDED.rate_limit_requests_per_sec,
+			poster_size = EXCLUDED.poster_size,
+			backdrop_size = EXCLUDED.backdrop_size,
+			profile_size = EXCLUDED.profile_size,
+			still_size = EXCLUDED.still_size,
+			modules = EXCLUDED.modules,
+			updated_at = CURRENT_TIMESTAMP;
+	`,
+		string(s.FetchMode), string(s.ImageMode), s.PreferredLanguage, s.FallbackLanguage, s.IncludeImageLanguage,
+		s.DailyBandwidthMB, s.EnableRateLimitDelay, s.RateLimitRequestsPerSec,
+		s.PosterSize, s.BackdropSize, s.ProfileSize, s.StillSize, string(modulesJSON),
+	)
+
+	if err != nil {
+		return fmt.Errorf("save tmdb settings: %w", err)
+	}
+	return nil
+}
+
+type TMDBLogEntry struct {
+	MediaItemID      *int64
+	RequestKind      string
+	Endpoint         string
+	StatusCode       int
+	BytesDownloaded  int64
+	ImagesDownloaded int
+	DurationMS       int
+	ErrorMessage     string
+}
+
+func (r *Repository) LogTMDBUsage(ctx context.Context, entry TMDBLogEntry) error {
+	_, err := r.db.ExecContext(ctx, `
+		INSERT INTO tmdb_usage_log (
+			media_item_id, request_kind, endpoint, status_code, bytes_downloaded, images_downloaded, duration_ms, error_message
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, NULLIF($8, ''));
+	`, entry.MediaItemID, entry.RequestKind, entry.Endpoint, entry.StatusCode, entry.BytesDownloaded, entry.ImagesDownloaded, entry.DurationMS, entry.ErrorMessage)
+	return err
+}
+
+func (r *Repository) GetTMDBUsageSummary(ctx context.Context) (*metadata.TMDBUsageSummary, error) {
+	summary := &metadata.TMDBUsageSummary{}
+
+	// 1. Overall & monthly request counts and total bytes
+	err := r.db.QueryRowContext(ctx, `
+		SELECT
+			COUNT(*),
+			COALESCE(SUM(bytes_downloaded), 0),
+			COALESCE(SUM(images_downloaded), 0),
+			MAX(created_at)
+		FROM tmdb_usage_log;
+	`).Scan(&summary.TotalRequests, &summary.TotalBytesDownloaded, &summary.TotalImagesDownloaded, &summary.LastRequestAt)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, fmt.Errorf("query total tmdb stats: %w", err)
+	}
+
+	// 2. Today's stats (since midnight UTC)
+	_ = r.db.QueryRowContext(ctx, `
+		SELECT
+			COUNT(*),
+			COALESCE(SUM(bytes_downloaded), 0),
+			COALESCE(SUM(images_downloaded), 0)
+		FROM tmdb_usage_log
+		WHERE created_at >= CURRENT_DATE;
+	`).Scan(&summary.RequestsToday, &summary.BytesToday, &summary.ImagesToday)
+
+	summary.MBToday = float64(summary.BytesToday) / (1024.0 * 1024.0)
+
+	// 3. This month's stats
+	_ = r.db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM tmdb_usage_log
+		WHERE created_at >= DATE_TRUNC('month', CURRENT_DATE);
+	`).Scan(&summary.RequestsThisMonth)
+
+	// 4. Enriched vs Pending Media items count
+	_ = r.db.QueryRowContext(ctx, `
+		SELECT
+			COUNT(CASE WHEN metadata_provider IS NOT NULL AND metadata_provider != '' THEN 1 END),
+			COUNT(CASE WHEN metadata_provider IS NULL OR metadata_provider = '' THEN 1 END)
+		FROM media_items;
+	`).Scan(&summary.EnrichedMediaCount, &summary.PendingMediaCount)
+
+	// 5. Get configured quota
+	settings, err := r.GetTMDBSettings(ctx)
+	if err == nil && settings != nil {
+		summary.DailyQuotaMB = settings.DailyBandwidthMB
+		if summary.DailyQuotaMB > 0 {
+			summary.DailyQuotaUsedPercent = (summary.MBToday / float64(summary.DailyQuotaMB)) * 100.0
+			if summary.DailyQuotaUsedPercent > 100.0 {
+				summary.DailyQuotaUsedPercent = 100.0
+			}
+		}
+	}
+
+	return summary, nil
+}
+

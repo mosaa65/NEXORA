@@ -3,6 +3,7 @@ import GlassCard from "../components/GlassCard.jsx";
 import Icon from "../components/Icon.jsx";
 import {
   calculateChecksums,
+  classifyOriginsFromFolders,
   copyMedia,
   createCategory,
   createMediaItem,
@@ -129,6 +130,7 @@ export default function AdminPage({ health, onSyncIndex, activeAnchor, onNavigat
   });
   const [enrichLoading, setEnrichLoading] = useState(false);
   const [bulkEnrichStatus, setBulkEnrichStatus] = useState({ state: "idle", completed: 0, failed: 0, total: 0 });
+  const [originClassifyState, setOriginClassifyState] = useState("idle");
   const [saveLoading, setSaveLoading] = useState(false);
   const [customGenreInput, setCustomGenreInput] = useState("");
 
@@ -427,6 +429,19 @@ export default function AdminPage({ health, onSyncIndex, activeAnchor, onNavigat
     }
     setBulkEnrichStatus({ state: "done", completed, failed, total: targets.length });
     await Promise.all([loadMediaItems(), loadQualityReport()]);
+  }
+
+  async function handleClassifyOrigins() {
+    if (!window.confirm("سيقرأ النظام مجلدات مكتبتك ويضيف تلقائياً وسوماً مثل عربي، تركي، وكوري. لن يحذف أي تصنيف موجود. هل تريد المتابعة؟")) return;
+    setOriginClassifyState("running");
+    try {
+      const result = await classifyOriginsFromFolders();
+      setOriginClassifyState(`done:${result.updated || 0}`);
+      await loadMediaItems();
+    } catch (err) {
+      setOriginClassifyState("error");
+      alert("تعذر التصنيف من المجلدات: " + (err?.message || ""));
+    }
   }
 
   function toggleGenreInModal(genre) {
@@ -856,6 +871,15 @@ export default function AdminPage({ health, onSyncIndex, activeAnchor, onNavigat
               >
                 <span>{bulkEnrichStatus.state === "running" ? `جارٍ التحديث ${bulkEnrichStatus.completed}/${bulkEnrichStatus.total}` : "✨ إصلاح بيانات الأعمال الظاهرة"}</span>
               </button>
+              <button
+                type="button"
+                onClick={handleClassifyOrigins}
+                disabled={originClassifyState === "running"}
+                className="flex items-center justify-center gap-2 rounded-2xl border border-cyan-400/30 bg-cyan-500/10 px-5 py-3 text-xs font-bold text-cyan-100 transition hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-50 whitespace-nowrap"
+                title="يعتمد على أسماء مجلداتك مثل مسلسلات/عربي أو مسلسلات تركية، ولا يحتاج TMDB"
+              >
+                <span>{originClassifyState === "running" ? "جارٍ قراءة المجلدات..." : "🗂️ تصنيف البلد من المجلدات"}</span>
+              </button>
             </div>
 
             {bulkEnrichStatus.state !== "idle" && (
@@ -863,6 +887,7 @@ export default function AdminPage({ health, onSyncIndex, activeAnchor, onNavigat
                 {bulkEnrichStatus.state === "running" ? `يتم الآن توحيد البيانات: ${bulkEnrichStatus.completed} مكتمل، ${bulkEnrichStatus.failed} تعذّر.` : `اكتمل تحديث البيانات: ${bulkEnrichStatus.completed} عمل، وتعذّر ${bulkEnrichStatus.failed}. الآن ستعمل فلاتر البلد والنوع تلقائياً.`}
               </div>
             )}
+            {originClassifyState.startsWith("done:") && <p className="text-xs text-cyan-200">تمت قراءة مجلدات المكتبة وتصنيف {originClassifyState.split(":")[1]} عملاً. افتح صفحة المسلسلات الآن لتظهر المجموعات الصحيحة.</p>}
 
             {/* Row 2: Secondary Dropdown Filters (Country, Quality, Year, Rating) */}
             <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4 pt-3 border-t border-white/10">

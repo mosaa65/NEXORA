@@ -36,6 +36,7 @@ func (m *mockRepo) Health(ctx context.Context) (db.Health, error) {
 func (m *mockRepo) IngestScannedFiles(ctx context.Context, files []scanner.FileInfo) (db.IngestResult, error) {
 	return db.IngestResult{Scanned: len(files), Imported: len(files)}, nil
 }
+func (m *mockRepo) ClassifyOriginsFromPaths(ctx context.Context) (int, error) { return 0, nil }
 func (m *mockRepo) ListCategories(ctx context.Context) ([]db.CategorySummary, error) {
 	return m.categories, nil
 }

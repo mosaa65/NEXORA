@@ -243,6 +243,51 @@ func DetectCategoryFromPath(fullPath string) string {
 	return ""
 }
 
+// DetectOriginTagsFromPath extracts a production-origin hint from the library
+// folder structure. Folder names are intentionally preferred over filenames:
+// a filename can say "Arabic subtitles" while the enclosing directory
+// "مسلسلات تركية" is the owner's deliberate classification.
+func DetectOriginTagsFromPath(fullPath string) []string {
+	segments := strings.Split(strings.ToLower(filepath.ToSlash(filepath.Dir(fullPath))), "/")
+	meaningfulSegments := make([]string, 0, len(segments))
+	for _, segment := range segments {
+		// A "Arabic subtitles" directory describes a sidecar asset, not the
+		// production country of the programme stored above it.
+		if strings.Contains(segment, "subtitle") || strings.Contains(segment, "ترجم") {
+			continue
+		}
+		meaningfulSegments = append(meaningfulSegments, segment)
+	}
+	path := strings.Join(meaningfulSegments, "/")
+	containsAny := func(terms ...string) bool {
+		for _, term := range terms {
+			if strings.Contains(path, strings.ToLower(term)) {
+				return true
+			}
+		}
+		return false
+	}
+
+	switch {
+	case containsAny("تركي", "تركية", "تركيا", "turkish", "turkey"):
+		return []string{"تركي"}
+	case containsAny("كوري", "كورية", "كوريا", "korean", "korea"):
+		return []string{"كوري"}
+	case containsAny("عربي", "عربية", "عرب", "خليجي", "مصري", "مصرية", "سوري", "سورية", "لبناني", "سعودي", "كويتي", "arabic", "egyptian", "gulf"):
+		return []string{"عربي"}
+	case containsAny("هندي", "هندية", "هند", "indian", "india", "bollywood"):
+		return []string{"هندي"}
+	case containsAny("إسباني", "اسباني", "إسبانية", "اسبانية", "spanish", "spain"):
+		return []string{"إسباني"}
+	case containsAny("ياباني", "يابانية", "japanese", "japan"):
+		return []string{"ياباني"}
+	case containsAny("أجنبي", "اجنبي", "أجنبية", "اجنبية", "هوليوود", "أمريكي", "امريكي", "بريطاني", "english", "american", "british", "hollywood"):
+		return []string{"أجنبي"}
+	default:
+		return nil
+	}
+}
+
 // parseSeasonFromFolder extracts a season number from a folder name.
 // Returns 0 if the folder is not a season folder.
 func parseSeasonFromFolder(folder string) int {

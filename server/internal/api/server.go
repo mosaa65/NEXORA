@@ -30,6 +30,7 @@ import (
 type repository interface {
 	Health(ctx context.Context) (db.Health, error)
 	IngestScannedFiles(ctx context.Context, files []scanner.FileInfo) (db.IngestResult, error)
+	ClassifyOriginsFromPaths(ctx context.Context) (int, error)
 	ListCategories(ctx context.Context) ([]db.CategorySummary, error)
 	CreateCategory(ctx context.Context, nameAR, nameEN, slug string) (*db.CategorySummary, error)
 	UpdateCategory(ctx context.Context, id int64, nameAR, nameEN, slug string) error
@@ -56,6 +57,10 @@ type repository interface {
 	CreateMediaItem(ctx context.Context, req db.CreateMediaRequest) (*search.MediaDocument, error)
 	UpdateMediaFull(ctx context.Context, id int64, req db.UpdateMediaRequest) (*search.MediaDocument, error)
 	DeleteMediaItem(ctx context.Context, id int64) error
+	GetTMDBSettings(ctx context.Context) (*metadata.TMDBSettings, error)
+	SaveTMDBSettings(ctx context.Context, s metadata.TMDBSettings) error
+	GetTMDBUsageSummary(ctx context.Context) (*metadata.TMDBUsageSummary, error)
+	LogTMDBUsage(ctx context.Context, entry db.TMDBLogEntry) error
 }
 
 type searchClient interface {
@@ -67,6 +72,9 @@ type metadataService interface {
 	Lookup(ctx context.Context, query metadata.Query) (metadata.Result, error)
 	LookupByExternalID(ctx context.Context, query metadata.Query, externalID string) (metadata.Result, error)
 	LookupSeasonByExternalID(ctx context.Context, externalID string, seasonNumber int, language string) (metadata.SeasonResult, error)
+	GetTMDBSettings() metadata.TMDBSettings
+	SetTMDBSettings(settings metadata.TMDBSettings)
+	FetchTMDBConfiguration(ctx context.Context) (*metadata.TMDBRemoteConfig, error)
 }
 
 type mediaProcessor interface {
@@ -155,6 +163,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/scan", s.handleScan)
 	s.mux.HandleFunc("POST /api/ingest", s.handleIngest)
 	s.mux.HandleFunc("POST /api/index", s.handleIndex)
+	s.mux.HandleFunc("POST /api/library/classify-origins", s.handleClassifyOrigins)
 	s.mux.HandleFunc("POST /api/search/sync", s.handleSearchSync)
 	s.mux.HandleFunc("POST /api/metadata/lookup", s.handleMetadataLookup)
 	s.mux.HandleFunc("POST /api/media/verify", s.handleMediaVerify)
@@ -167,6 +176,23 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/stream/file/{id}", s.handleStreamByID)
 	s.mux.HandleFunc("GET /api/stream/file/{id}/subtitles", s.handleFileSubtitles)
 	s.mux.HandleFunc("GET /api/stream/file/{id}/subtitles/{subId}", s.handleFileSubtitleStream)
+
+	// TMDB Control Panel & Integration Endpoints
+	s.mux.HandleFunc("GET /api/tmdb/settings", s.handleTMDBSettingsGet)
+	s.mux.HandleFunc("PUT /api/tmdb/settings", s.handleTMDBSettingsUpdate)
+	s.mux.HandleFunc("GET /api/tmdb/stats", s.handleTMDBStatsGet)
+	s.mux.HandleFunc("GET /api/tmdb/modules", s.handleTMDBModulesGet)
+	s.mux.HandleFunc("PUT /api/tmdb/modules", s.handleTMDBModulesUpdate)
+	s.mux.HandleFunc("POST /api/tmdb/test", s.handleTMDBTestConnection)
+	s.mux.HandleFunc("GET /api/tmdb/configuration", s.handleTMDBConfigurationGet)
+	s.mux.HandleFunc("GET /api/tmdb/preview/{id}", s.handleTMDBPreviewGet)
+
+	// System Directory Tree Explorer & Admin Auth Endpoints
+	s.mux.HandleFunc("GET /api/system/drives", s.handleSystemDrives)
+	s.mux.HandleFunc("GET /api/system/browse", s.handleSystemBrowse)
+	s.mux.HandleFunc("POST /api/admin/login", s.handleAdminLogin)
+	s.mux.HandleFunc("GET /api/admin/session", s.handleAdminSession)
+	s.mux.HandleFunc("POST /api/admin/logout", s.handleAdminLogout)
 
 	// Static assets serving for downloaded posters/banners/thumbnails
 	if s.config.AssetImageDir != "" {
@@ -283,6 +309,30 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		result.SearchSync = syncResult
 	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+// handleClassifyOrigins repairs country tags from the user's existing folder
+// hierarchy. It is deliberately local-only: no title matching or third-party
+// request can overwrite a folder such as "مسلسلات/عربي".
+func (s *Server) handleClassifyOrigins(w http.ResponseWriter, r *http.Request) {
+	updated, err := s.repository.ClassifyOriginsFromPaths(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+
+	// Country tags are also searchable, so refresh the local search index.
+	if documents, err := s.repository.ListSearchDocuments(r.Context(), 10000); err == nil {
+		if _, err := s.search.IndexDocuments(r.Context(), documents); err != nil {
+			writeJSON(w, http.StatusOK, map[string]any{
+				"ok": true, "updated": updated,
+				"warning": "origin tags updated but search index refresh failed: " + err.Error(),
+			})
+			return
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "updated": updated})
 }
 
 func (s *Server) handleMediaInspect(w http.ResponseWriter, r *http.Request) {
@@ -992,6 +1042,7 @@ func (s *Server) handleMediaDelete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleMediaEnrich(w http.ResponseWriter, r *http.Request) {
+	startTime := time.Now()
 	mediaID, ok := parsePositiveID(r.PathValue("id"))
 	if !ok {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "media id must be a positive integer"})
@@ -1008,6 +1059,11 @@ func (s *Server) handleMediaEnrich(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Sync current settings from DB into metadata service if available
+	if dbSettings, err := s.repository.GetTMDBSettings(r.Context()); err == nil && dbSettings != nil {
+		s.metadata.SetTMDBSettings(*dbSettings)
+	}
+
 	lookupTitle := item.TitleEN
 	if lookupTitle == "" {
 		lookupTitle = item.TitleAR
@@ -1017,9 +1073,18 @@ func (s *Server) handleMediaEnrich(w http.ResponseWriter, r *http.Request) {
 		Title: lookupTitle, Type: item.Type, Year: item.ReleaseYear, Language: "en-US",
 	})
 	if lookupErr != nil {
+		_ = s.repository.LogTMDBUsage(r.Context(), db.TMDBLogEntry{
+			MediaItemID:  &mediaID,
+			RequestKind:  "lookup",
+			Endpoint:     "/search",
+			StatusCode:   502,
+			DurationMS:   int(time.Since(startTime).Milliseconds()),
+			ErrorMessage: lookupErr.Error(),
+		})
 		writeJSON(w, http.StatusBadGateway, map[string]any{"error": "metadata lookup failed: " + lookupErr.Error(), "title": lookupTitle, "mediaId": mediaID})
 		return
 	}
+
 	// The confirmed English search result defines the TMDB ID. Arabic is then
 	// fetched by that same ID, never via a second ambiguous title search.
 	results := []metadata.Result{canonical}
@@ -1032,6 +1097,7 @@ func (s *Server) handleMediaEnrich(w http.ResponseWriter, r *http.Request) {
 			results = []metadata.Result{arabic, canonical}
 		}
 	}
+
 	var doc *search.MediaDocument
 	for _, metaResult := range results {
 		updated, updateErr := s.repository.UpdateMediaMetadata(r.Context(), mediaID, metaResult)
@@ -1070,6 +1136,17 @@ func (s *Server) handleMediaEnrich(w http.ResponseWriter, r *http.Request) {
 			seasonCount++
 		}
 	}
+
+	// Log successful enrich usage
+	_ = s.repository.LogTMDBUsage(r.Context(), db.TMDBLogEntry{
+		MediaItemID:      &mediaID,
+		RequestKind:      "enrich",
+		Endpoint:         "/details",
+		StatusCode:       200,
+		BytesDownloaded:  int64(len(canonical.RawPayload)),
+		ImagesDownloaded: 2, // Poster + Backdrop
+		DurationMS:       int(time.Since(startTime).Milliseconds()),
+	})
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok":            true,
@@ -1342,3 +1419,313 @@ func parsePositiveID(raw string) (int64, bool) {
 	id, err := strconv.ParseInt(raw, 10, 64)
 	return id, err == nil && id > 0
 }
+
+func (s *Server) handleTMDBSettingsGet(w http.ResponseWriter, r *http.Request) {
+	settings, err := s.repository.GetTMDBSettings(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, settings)
+}
+
+func (s *Server) handleTMDBSettingsUpdate(w http.ResponseWriter, r *http.Request) {
+	var settings metadata.TMDBSettings
+	if err := decodeJSON(r, &settings); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+		return
+	}
+
+	if err := s.repository.SaveTMDBSettings(r.Context(), settings); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+
+	// Sync into in-memory service
+	s.metadata.SetTMDBSettings(settings)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "settings": settings})
+}
+
+func (s *Server) handleTMDBStatsGet(w http.ResponseWriter, r *http.Request) {
+	stats, err := s.repository.GetTMDBUsageSummary(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, stats)
+}
+
+func (s *Server) handleTMDBModulesGet(w http.ResponseWriter, r *http.Request) {
+	settings, err := s.repository.GetTMDBSettings(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+	modules := metadata.GetModuleList(settings.Modules)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"fetch_mode": settings.FetchMode,
+		"image_mode": settings.ImageMode,
+		"modules":    modules,
+	})
+}
+
+func (s *Server) handleTMDBModulesUpdate(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		FetchMode *metadata.FetchMode    `json:"fetch_mode,omitempty"`
+		ImageMode *metadata.ImageMode    `json:"image_mode,omitempty"`
+		Modules   *metadata.ModuleConfig `json:"modules,omitempty"`
+	}
+	if err := decodeJSON(r, &request); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+		return
+	}
+
+	current, err := s.repository.GetTMDBSettings(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+
+	if request.FetchMode != nil {
+		current.ApplyProfile(*request.FetchMode)
+	}
+	if request.ImageMode != nil {
+		current.ImageMode = *request.ImageMode
+	}
+	if request.Modules != nil {
+		current.Modules = *request.Modules
+		current.FetchMode = metadata.FetchModeCustom
+	}
+
+	if err := s.repository.SaveTMDBSettings(r.Context(), *current); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+	s.metadata.SetTMDBSettings(*current)
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":       true,
+		"settings": current,
+		"modules":  metadata.GetModuleList(current.Modules),
+	})
+}
+
+func (s *Server) handleTMDBTestConnection(w http.ResponseWriter, r *http.Request) {
+	startTime := time.Now()
+	remoteConfig, err := s.metadata.FetchTMDBConfiguration(r.Context())
+	latency := time.Since(startTime).Milliseconds()
+
+	if err != nil {
+		_ = s.repository.LogTMDBUsage(r.Context(), db.TMDBLogEntry{
+			RequestKind:  "test_connection",
+			Endpoint:     "/configuration",
+			StatusCode:   502,
+			DurationMS:   int(latency),
+			ErrorMessage: err.Error(),
+		})
+		writeJSON(w, http.StatusBadGateway, map[string]any{
+			"connected": false,
+			"error":     err.Error(),
+			"latencyMs": latency,
+		})
+		return
+	}
+
+	_ = s.repository.LogTMDBUsage(r.Context(), db.TMDBLogEntry{
+		RequestKind: "test_connection",
+		Endpoint:    "/configuration",
+		StatusCode:  200,
+		DurationMS:  int(latency),
+	})
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"connected":     true,
+		"latencyMs":     latency,
+		"configuration": remoteConfig,
+		"checkedAt":     time.Now().UTC(),
+	})
+}
+
+func (s *Server) handleTMDBConfigurationGet(w http.ResponseWriter, r *http.Request) {
+	remoteConfig, err := s.metadata.FetchTMDBConfiguration(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, remoteConfig)
+}
+
+func (s *Server) handleTMDBPreviewGet(w http.ResponseWriter, r *http.Request) {
+	mediaID, ok := parsePositiveID(r.PathValue("id"))
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "media id must be a positive integer"})
+		return
+	}
+
+	item, err := s.repository.GetMediaItem(r.Context(), mediaID)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]any{"error": err.Error()})
+		return
+	}
+
+	settings, _ := s.repository.GetTMDBSettings(r.Context())
+	if settings == nil {
+		def := metadata.DefaultSettings()
+		settings = &def
+	}
+
+	// Calculate estimated requests & bytes
+	estimatedRequests := 2 // Search + Details EN
+	estimatedBytes := int64(350 * 1024)
+	if settings.ImageMode == metadata.ImageModeLocal || settings.ImageMode == metadata.ImageModeHybrid {
+		estimatedBytes += 250 * 1024 // Poster + Backdrop download
+	}
+	if settings.Modules.MaxCastImages > 0 && settings.ImageMode == metadata.ImageModeLocal {
+		estimatedBytes += int64(settings.Modules.MaxCastImages * 30 * 1024)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"media_id":           mediaID,
+		"title_en":           item.TitleEN,
+		"title_ar":           item.TitleAR,
+		"type":               item.Type,
+		"fetch_mode":         settings.FetchMode,
+		"image_mode":         settings.ImageMode,
+		"estimatedRequests": estimatedRequests,
+		"estimatedBytes":    estimatedBytes,
+		"estimatedSizeFormatted": fmt.Sprintf("%.2f MB", float64(estimatedBytes)/(1024.0*1024.0)),
+	})
+}
+
+// System Drives & Directory Tree Explorer
+type SystemDirectoryItem struct {
+	Name       string    `json:"name"`
+	Path       string    `json:"path"`
+	IsDir      bool      `json:"is_dir"`
+	ModifiedAt time.Time `json:"modified_at"`
+}
+
+func (s *Server) handleSystemDrives(w http.ResponseWriter, r *http.Request) {
+	if s.diskManager == nil {
+		writeJSON(w, http.StatusNotImplemented, map[string]any{"error": "disk manager unavailable"})
+		return
+	}
+	disksList, err := s.diskManager.ScanDisks(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"drives": disksList})
+}
+
+func (s *Server) handleSystemBrowse(w http.ResponseWriter, r *http.Request) {
+	targetPath := strings.TrimSpace(r.URL.Query().Get("path"))
+	if targetPath == "" {
+		// If empty, return drives
+		s.handleSystemDrives(w, r)
+		return
+	}
+
+	cleanPath := filepath.Clean(targetPath)
+	entries, err := os.ReadDir(cleanPath)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "cannot read directory: " + err.Error()})
+		return
+	}
+
+	dirs := make([]SystemDirectoryItem, 0)
+	for _, entry := range entries {
+		// Skip hidden and system directories
+		if strings.HasPrefix(entry.Name(), ".") || strings.HasPrefix(entry.Name(), "$") {
+			continue
+		}
+		if entry.IsDir() {
+			info, _ := entry.Info()
+			modTime := time.Now()
+			if info != nil {
+				modTime = info.ModTime()
+			}
+			dirs = append(dirs, SystemDirectoryItem{
+				Name:       entry.Name(),
+				Path:       filepath.Join(cleanPath, entry.Name()),
+				IsDir:      true,
+				ModifiedAt: modTime,
+			})
+		}
+	}
+
+	parent := filepath.Dir(cleanPath)
+	if parent == cleanPath {
+		parent = ""
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"current_path": cleanPath,
+		"parent_path":  parent,
+		"directories":  dirs,
+		"count":        len(dirs),
+	})
+}
+
+// Admin Authentication Handlers
+func (s *Server) handleAdminLogin(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "invalid payload"})
+		return
+	}
+
+	// Default admin credentials (or configurable via ENV / DB)
+	adminUser := os.Getenv("NEXORA_ADMIN_USER")
+	if adminUser == "" {
+		adminUser = "admin"
+	}
+	adminPass := os.Getenv("NEXORA_ADMIN_PASS")
+	if adminPass == "" {
+		adminPass = "admin123"
+	}
+
+	if req.Username == adminUser && req.Password == adminPass {
+		// Return token and user profile
+		writeJSON(w, http.StatusOK, map[string]any{
+			"ok":       true,
+			"token":    "nexora_admin_auth_token_active",
+			"user": map[string]any{
+				"username": adminUser,
+				"name":     "مدير النظام الرئيسي",
+				"role":     "superadmin",
+			},
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusUnauthorized, map[string]any{
+		"ok":    false,
+		"error": "اسم المستخدم أو كلمة المرور غير صحيحة",
+	})
+}
+
+func (s *Server) handleAdminSession(w http.ResponseWriter, r *http.Request) {
+	token := r.Header.Get("Authorization")
+	if strings.Contains(token, "nexora_admin_auth_token_active") {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"authenticated": true,
+			"user": map[string]any{
+				"username": "admin",
+				"name":     "مدير النظام الرئيسي",
+				"role":     "superadmin",
+			},
+		})
+		return
+	}
+	writeJSON(w, http.StatusUnauthorized, map[string]any{"authenticated": false})
+}
+
+func (s *Server) handleAdminLogout(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "message": "تم تسجيل الخروج بنجاح"})
+}
+
+

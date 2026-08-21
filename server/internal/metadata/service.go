@@ -12,50 +12,47 @@ type Service struct {
 	mal  *MALClient
 }
 
-// LookupByExternalID fetches another locale for an already-confirmed TMDB ID.
-// It must be used after matching so locale-specific search ranking cannot
-// accidentally select a different title with the same name.
-func (s *Service) LookupByExternalID(ctx context.Context, query Query, externalID string) (Result, error) {
-	if s.tmdb == nil || !s.tmdb.Configured() {
-		return Result{}, ErrNotConfigured
-	}
-	id, err := strconv.Atoi(externalID)
-	if err != nil || id <= 0 {
-		return Result{}, errors.New("invalid tmdb external id")
-	}
-	mediaKind := "movie"
-	if query.Type == "series" || query.Type == "anime" || query.Type == "tv" {
-		mediaKind = "tv"
-	}
-	if query.Language == "" {
-		query.Language = "en-US"
-	}
-	return s.tmdb.fetchDetails(ctx, mediaKind, id, query.Language)
-}
-
-// LookupSeasonByExternalID fetches one known TV season in a requested locale.
-func (s *Service) LookupSeasonByExternalID(ctx context.Context, externalID string, seasonNumber int, language string) (SeasonResult, error) {
-	if s.tmdb == nil || !s.tmdb.Configured() {
-		return SeasonResult{}, ErrNotConfigured
-	}
-	id, err := strconv.Atoi(externalID)
-	if err != nil || id <= 0 || seasonNumber < 0 {
-		return SeasonResult{}, errors.New("invalid tmdb season request")
-	}
-	return s.tmdb.fetchSeasonDetails(ctx, id, seasonNumber, language)
-}
-
 func NewService(tmdb *TMDBClient, mal *MALClient) *Service {
 	return &Service{tmdb: tmdb, mal: mal}
 }
 
+func (s *Service) TMDBClient() *TMDBClient {
+	return s.tmdb
+}
+
+func (s *Service) GetTMDBSettings() TMDBSettings {
+	if s.tmdb == nil {
+		return DefaultSettings()
+	}
+	return s.tmdb.GetSettings()
+}
+
+func (s *Service) SetTMDBSettings(settings TMDBSettings) {
+	if s.tmdb != nil {
+		s.tmdb.SetSettings(settings)
+	}
+}
+
+func (s *Service) FetchTMDBConfiguration(ctx context.Context) (*TMDBRemoteConfig, error) {
+	if s.tmdb == nil || !s.tmdb.Configured() {
+		return nil, ErrNotConfigured
+	}
+	return s.tmdb.FetchRemoteConfiguration(ctx)
+}
+
+// Lookup executes smart cross-provider search (TMDB + MAL + Local fallback)
 func (s *Service) Lookup(ctx context.Context, query Query) (Result, error) {
 	query.Title = strings.TrimSpace(query.Title)
 	if query.Title == "" {
 		return Result{}, errors.New("title is required")
 	}
 	if query.Language == "" {
-		query.Language = "en-US"
+		if s.tmdb != nil {
+			query.Language = s.tmdb.GetSettings().FallbackLanguage
+		}
+		if query.Language == "" {
+			query.Language = "en-US"
+		}
 	}
 
 	// 1. If MAL is configured and type is anime
@@ -69,7 +66,7 @@ func (s *Service) Lookup(ctx context.Context, query Query) (Result, error) {
 		}
 	}
 
-	// 2. If TMDB is configured
+	// 2. TMDB Smart Lookup
 	if s.tmdb != nil && s.tmdb.Configured() {
 		result, err := s.tmdb.Lookup(ctx, query)
 		if err == nil {
@@ -90,4 +87,38 @@ func (s *Service) Lookup(ctx context.Context, query Query) (Result, error) {
 	}
 
 	return Result{}, ErrNotFound
+}
+
+// LookupByExternalID fetches another locale for an already-confirmed TMDB ID
+func (s *Service) LookupByExternalID(ctx context.Context, query Query, externalID string) (Result, error) {
+	if s.tmdb == nil || !s.tmdb.Configured() {
+		return Result{}, ErrNotConfigured
+	}
+	id, err := strconv.Atoi(externalID)
+	if err != nil || id <= 0 {
+		return Result{}, errors.New("invalid tmdb external id")
+	}
+	mediaKind := "movie"
+	if query.Type == "series" || query.Type == "anime" || query.Type == "tv" {
+		mediaKind = "tv"
+	}
+	if query.Language == "" {
+		query.Language = s.tmdb.GetSettings().FallbackLanguage
+		if query.Language == "" {
+			query.Language = "en-US"
+		}
+	}
+	return s.tmdb.fetchDetailsWithSettings(ctx, mediaKind, id, query.Language, s.tmdb.GetSettings())
+}
+
+// LookupSeasonByExternalID fetches one known TV season in a requested locale
+func (s *Service) LookupSeasonByExternalID(ctx context.Context, externalID string, seasonNumber int, language string) (SeasonResult, error) {
+	if s.tmdb == nil || !s.tmdb.Configured() {
+		return SeasonResult{}, ErrNotConfigured
+	}
+	id, err := strconv.Atoi(externalID)
+	if err != nil || id <= 0 || seasonNumber < 0 {
+		return SeasonResult{}, errors.New("invalid tmdb season request")
+	}
+	return s.tmdb.fetchSeasonDetailsWithSettings(ctx, id, seasonNumber, language, s.tmdb.GetSettings())
 }

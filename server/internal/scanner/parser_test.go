@@ -217,6 +217,33 @@ func TestDetectCategoryFromPath(t *testing.T) {
 	}
 }
 
+func TestDetectOriginTagsFromPath(t *testing.T) {
+	tests := []struct {
+		path string
+		want string
+	}{
+		{"D:/Media/مسلسلات/عربي/مسلسل الاختيار/الموسم 1/الحلقة 1.mp4", "عربي"},
+		{"D:/Media/مسلسلات تركية/الطائر الرفراف/Season 01/E01.mkv", "تركي"},
+		{"D:/Media/Series/Korean/Moving/Season 01/E01.mkv", "كوري"},
+		{"D:/Media/Series/English/Breaking Bad/Season 01/E01.mkv", "أجنبي"},
+		// The file name is intentionally ignored: subtitle language is not origin.
+		{"D:/Media/Series/Breaking Bad/Arabic subtitles/E01.mkv", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			tags := DetectOriginTagsFromPath(tt.path)
+			got := ""
+			if len(tags) > 0 {
+				got = tags[0]
+			}
+			if got != tt.want {
+				t.Errorf("DetectOriginTagsFromPath(%q) = %q, want %q", tt.path, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestParseSeasonFromFolder(t *testing.T) {
 	tests := []struct {
 		folder string

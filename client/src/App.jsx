@@ -6,6 +6,7 @@ import DashboardPage from "./pages/DashboardPage.jsx";
 import CategoryPage from "./pages/CategoryPage.jsx";
 import MediaDetailsPage from "./pages/MediaDetailsPage.jsx";
 import AdminPage from "./pages/AdminPage.jsx";
+import TMDBSettingsPage from "./pages/TMDBSettingsPage.jsx";
 import VideoPlayer from "./components/VideoPlayer.jsx";
 import Icon from "./components/Icon.jsx";
 import { categorySeed, detailEpisodes, findMockMedia, getCategoryMeta, mockLibrary, navigationItems } from "./data/library.js";
@@ -281,8 +282,13 @@ export default function App() {
                   />
                 )}
 
+                {/* TMDB Dedicated Settings View */}
+                {(activeView === "tmdb" || (activeView === "admin" && adminAnchor === "admin-tmdb")) && (
+                  <TMDBSettingsPage />
+                )}
+
                 {/* Completely Isolated Admin Console View */}
-                {activeView === "admin" && (
+                {activeView === "admin" && adminAnchor !== "admin-tmdb" && (
                   <AdminPage
                     health={health}
                     onSyncIndex={handleSyncIndex}
