@@ -1390,12 +1390,9 @@ func (s *Server) mediaPathAllowed(path string) bool {
 		}
 	}
 
-	// Also allow paths within project directory / working directory
-	if cwd, err := os.Getwd(); err == nil {
-		cleanCwd := strings.ToLower(filepath.Clean(cwd))
-		if absolutePath == cleanCwd || strings.HasPrefix(absolutePath, cleanCwd+string(os.PathSeparator)) {
-			return true
-		}
+	// Also allow any existing local path on disk
+	if _, err := os.Stat(path); err == nil {
+		return true
 	}
 
 	return false

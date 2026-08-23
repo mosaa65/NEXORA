@@ -10,10 +10,17 @@ async function requestJSON(path, options = {}) {
   });
 
   const text = await response.text();
-  const data = text ? JSON.parse(text) : null;
+  let data = null;
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { error: text };
+    }
+  }
 
   if (!response.ok) {
-    const error = new Error(data?.error || response.statusText);
+    const error = new Error(data?.error || response.statusText || `Request failed with status ${response.status}`);
     error.status = response.status;
     error.payload = data;
     throw error;

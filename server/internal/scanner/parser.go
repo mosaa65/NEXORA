@@ -35,10 +35,10 @@ var (
 	yearRE       = regexp.MustCompile(`(?:^|\s)((?:19|20)\d{2})(?:\s|$)`)
 
 	// seasonFolderRE matches folder names like "Season 01", "Season 1", "الموسم 01",
-	// "الموسم الأول", "الحلقات 1-50", "الحلقات ٥١-١٠٠"
-	seasonFolderRE = regexp.MustCompile(`(?i)^(?:season|s)\s*(\d{1,3})$`)
-	seasonFolderArabicNumRE = regexp.MustCompile(`^(?:الموسم|موسم)\s*(\d{1,3})$`)
-	seasonFolderArabicWordRE = regexp.MustCompile(`^(?:الموسم|موسم)\s*(الأول|الاول|الأولى|الاولى|الثاني|الثانية|الثالث|الثالثة|الرابع|الرابعة|الخامس|الخامسة|السادس|السادسة|السابع|السابعة|الثامن|الثامنة|التاسع|التاسعة|العاشر|العاشرة)$`)
+	// "الموسم الأول", "الحلقات 1-50", "الحلقات ٥١-١٠٠", "Silo الموسم الثالث"
+	seasonFolderRE = regexp.MustCompile(`(?i)(?:^|[\s._-])(?:season|s)\s*(\d{1,3})$`)
+	seasonFolderArabicNumRE = regexp.MustCompile(`(?:^|[\s._-])(?:الموسم|موسم)\s*(\d{1,3})$`)
+	seasonFolderArabicWordRE = regexp.MustCompile(`(?:^|[\s._-])(?:الموسم|موسم)\s*(الأول|الاول|الأولى|الاولى|الثاني|الثانية|الثالث|الثالثة|الرابع|الرابعة|الخامس|الخامسة|السادس|السادسة|السابع|السابعة|الثامن|الثامنة|التاسع|التاسعة|العاشر|العاشرة)$`)
 	episodeRangeFolderRE = regexp.MustCompile(`^(?:الحلقات|حلقات|Episodes?)\s*\d+`)
 
 	// categoryFolderKeywords maps folder name substrings to category slugs.
@@ -92,6 +92,11 @@ var (
 		},
 		{
 			re:            regexp.MustCompile(`(?:^|\s)-\s*(\d{1,4})(?:\s|$)`),
+			episodeGroup:  1,
+			defaultSeason: 1,
+		},
+		{
+			re:            regexp.MustCompile(`(?:\s|^)(\d{1,4})$`),
 			episodeGroup:  1,
 			defaultSeason: 1,
 		},
@@ -205,15 +210,19 @@ func ParseFilePath(fullPath string) ParsedName {
 	}
 
 	// Try to extract season from immediate parent folder
-	// e.g., "Season 01", "الموسم الأول", "الحلقات 1-50"
+	// e.g., "Season 01", "الموسم الأول", "الحلقات 1-50", "Silo الموسم الثالث"
 	if len(ancestors) > 0 {
 		folderSeason := parseSeasonFromFolder(ancestors[0])
 		if folderSeason > 0 && parsed.SeasonNumber <= 0 {
 			parsed.SeasonNumber = folderSeason
 		}
-		// If the parent folder is a season folder and we have episode info,
-		// the grandparent is likely the show title
-		if folderSeason > 0 && len(ancestors) > 1 {
+
+		seasonTitlePrefix := extractTitlePrefixFromSeasonFolder(ancestors[0])
+		if seasonTitlePrefix != "" {
+			enrichTitleFromFolder(&parsed, seasonTitlePrefix)
+		} else if folderSeason > 0 && len(ancestors) > 1 {
+			// If the parent folder is purely a season folder and we have episode info,
+			// the grandparent is likely the show title
 			enrichTitleFromFolder(&parsed, ancestors[1])
 		} else if folderSeason == 0 {
 			// Parent folder might be the show/movie title itself
@@ -227,6 +236,20 @@ func ParseFilePath(fullPath string) ParsedName {
 	}
 
 	return parsed
+}
+
+func extractTitlePrefixFromSeasonFolder(folder string) string {
+	folder = strings.TrimSpace(folder)
+	normalized := normalizeDigits(folder)
+	for _, re := range []*regexp.Regexp{seasonFolderRE, seasonFolderArabicNumRE, seasonFolderArabicWordRE} {
+		if loc := re.FindStringIndex(normalized); loc != nil && loc[0] > 0 {
+			prefix := strings.TrimSpace(folder[:loc[0]])
+			if prefix != "" && DetectCategoryFromPath(prefix) == "" {
+				return prefix
+			}
+		}
+	}
+	return ""
 }
 
 // DetectCategoryFromPath determines the content category by examining the full path.

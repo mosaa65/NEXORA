@@ -120,8 +120,8 @@ func (c *MALClient) Lookup(ctx context.Context, query Query) (Result, error) {
 		}
 	}
 
-	if cached, err := cacheRemoteImage(ctx, c.client, result.PosterPath, c.config.ImageDir, "mal", "poster_"+result.ExternalID); err == nil {
-		result.CachedPosterPath = cached
+	if cached, err := cacheRemoteImage(ctx, c.client, result.PosterPath, c.config.ImageDir, "mal", "poster_"+result.ExternalID, ImageModeLocal); err == nil {
+		result.CachedPosterPath = cached.URL
 	} else {
 		result.Warnings = append(result.Warnings, err.Error())
 	}

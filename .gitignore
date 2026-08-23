@@ -1,38 +1,45 @@
-# OS / editor
+# === OS / Editor ===
 .DS_Store
 Thumbs.db
 .idea/
 .vscode/
+*.swp
+*.swo
+*~
 
-# Go
+# === Go Server ===
 server/bin/
 server/tmp/
 server/*.exe
+server/*.exe~
 server/*.test
 server/coverage.out
 
-# Node / frontend
+# === Node / Frontend ===
 client/node_modules/
 client/dist/
 client/.vite/
 client/tmp/
 
-# Playwright MCP traces
+# === Playwright MCP traces ===
 .playwright-mcp/
 
-# Local environment
+# === Local environment ===
 .env
 .env.*
 !.env.example
 
-# Local caches and logs
+# === Local caches and logs ===
 .cache/
 .logs/
 
-# Local generated assets
+# === Local generated assets ===
 server/assets/**
 !server/assets/images/.gitkeep
 
-# Local toolchains
+# === Local toolchains & personal dev tools ===
 .tools/
-.codebuddy
+.codebuddy/
+
+# === Archive (historical reference, not needed in Git) ===
+_archive/

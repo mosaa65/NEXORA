@@ -1,0 +1,8 @@
+/*
+ * NEXORA Dark Theme (Default)
+ * Applied via [data-theme="dark"] or by default
+ */
+[data-theme="dark"],
+:root {
+  color-scheme: dark;
+}

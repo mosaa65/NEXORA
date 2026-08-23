@@ -1,0 +1,15 @@
+/*
+ * ============================================================
+ *  NEXORA Design System — Entry Point
+ * ============================================================
+ *  Import this file once in main.jsx to activate the entire
+ *  design system: tokens, themes, and utility classes.
+ * ============================================================
+ */
+
+/* 1. Design Tokens (CSS Custom Properties) */
+@import "./tokens.css";
+
+/* 2. Theme Overrides */
+@import "./themes/dark.css";
+@import "./themes/light.css";
