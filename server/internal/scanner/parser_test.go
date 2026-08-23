@@ -160,6 +160,24 @@ func TestParseFilePath(t *testing.T) {
 			wantEp:     10,
 			wantIsEp:   true,
 		},
+		{
+			name:       "Silo season 3 with site watermark filename",
+			path:       "C:/Users/mousa/Desktop/مسلسل اجنبي/Silo الموسم الثالث/الانطلاقه نت 1.mp4",
+			wantTitle:  "Silo",
+			wantEN:     "Silo",
+			wantSeason: 3,
+			wantEp:     1,
+			wantIsEp:   true,
+		},
+		{
+			name:       "Turkish series with ordinal Arabic season and watermark",
+			path:       "D:/Media/مسلسلات تركية/طائر الرفراف الجزء الثاني/akoam_ep05.mp4",
+			wantTitle:  "طائر الرفراف",
+			wantAR:     "طائر الرفراف",
+			wantSeason: 2,
+			wantEp:     5,
+			wantIsEp:   true,
+		},
 	}
 
 	for _, tt := range tests {

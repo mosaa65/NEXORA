@@ -4,10 +4,12 @@ import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,11 +25,55 @@ import (
 )
 
 type Repository struct {
-	db *sql.DB
+	db            *sql.DB
+	assetImageDir string
 }
 
 func NewRepository(database *sql.DB) *Repository {
 	return &Repository{db: database}
+}
+
+func (r *Repository) SetAssetImageDir(dir string) {
+	r.assetImageDir = dir
+}
+
+func (r *Repository) CacheLocalArtwork(sourcePath string) string {
+	if sourcePath == "" {
+		return ""
+	}
+	if r.assetImageDir == "" {
+		return "/api/stream/image?path=" + url.QueryEscape(sourcePath)
+	}
+
+	targetDir := filepath.Join(r.assetImageDir, "local")
+	_ = os.MkdirAll(targetDir, 0o755)
+
+	ext := strings.ToLower(filepath.Ext(sourcePath))
+	if ext == "" {
+		ext = ".jpg"
+	}
+	hash := sha256.Sum256([]byte(filepath.Clean(sourcePath)))
+	hashHex := hex.EncodeToString(hash[:])[:16]
+	destFileName := "local_" + hashHex + ext
+	destPath := filepath.Join(targetDir, destFileName)
+
+	srcStat, err := os.Stat(sourcePath)
+	if err != nil {
+		return "/api/stream/image?path=" + url.QueryEscape(sourcePath)
+	}
+	destStat, err := os.Stat(destPath)
+	if err != nil || destStat.Size() != srcStat.Size() {
+		srcFile, err := os.Open(sourcePath)
+		if err == nil {
+			defer srcFile.Close()
+			destFile, err := os.Create(destPath)
+			if err == nil {
+				defer destFile.Close()
+				_, _ = io.Copy(destFile, srcFile)
+			}
+		}
+	}
+	return "/assets/images/local/" + destFileName
 }
 
 type Health struct {
@@ -685,7 +731,7 @@ func (r *Repository) ingestScannedFile(ctx context.Context, file scanner.FileInf
 	}
 	defer tx.Rollback()
 
-	categorySlug, mediaType := classifyMedia(file.Path, file.Parsed)
+	categorySlug, mediaType := ClassifyMedia(file.Path, file.Parsed)
 
 	var categoryID int64
 	if err := tx.QueryRowContext(ctx, `SELECT id FROM categories WHERE slug = $1`, categorySlug).Scan(&categoryID); err != nil {
@@ -705,6 +751,11 @@ func (r *Repository) ingestScannedFile(ctx context.Context, file scanner.FileInf
 		titleEN = title
 	}
 
+	localPosterURL := ""
+	if file.ArtworkPath != "" {
+		localPosterURL = r.CacheLocalArtwork(file.ArtworkPath)
+	}
+
 	var mediaID int64
 	err = tx.QueryRowContext(ctx, `
 		SELECT id FROM media_items
@@ -720,16 +771,25 @@ func (r *Repository) ingestScannedFile(ctx context.Context, file scanner.FileInf
 				title_en,
 				type,
 				release_year,
+				poster_path,
+				banner_path,
 				status
 			)
-			VALUES ($1, $2, $3, $4, NULLIF($5, 0), 'completed')
+			VALUES ($1, $2, $3, $4, NULLIF($5, 0), NULLIF($6, ''), NULLIF($6, ''), 'completed')
 			RETURNING id;
-		`, categoryID, titleAR, titleEN, mediaType, file.Parsed.ReleaseYear).Scan(&mediaID)
+		`, categoryID, titleAR, titleEN, mediaType, file.Parsed.ReleaseYear, localPosterURL).Scan(&mediaID)
 		if err != nil {
 			return fmt.Errorf("insert media item %q: %w", title, err)
 		}
 	} else if err != nil {
 		return fmt.Errorf("find media item %q: %w", title, err)
+	} else if localPosterURL != "" {
+		_, _ = tx.ExecContext(ctx, `
+			UPDATE media_items
+			SET poster_path = COALESCE(NULLIF(poster_path, ''), $2),
+			    banner_path = COALESCE(NULLIF(banner_path, ''), $2)
+			WHERE id = $1 AND (poster_path IS NULL OR poster_path = '' OR poster_path LIKE '/images/placeholder%');
+		`, mediaID, localPosterURL)
 	}
 
 	// A library folder such as "مسلسلات/عربي" is a stronger signal than a
@@ -794,7 +854,7 @@ func (r *Repository) ingestScannedFile(ctx context.Context, file scanner.FileInf
 	return nil
 }
 
-func classifyMedia(path string, parsed scanner.ParsedName) (categorySlug string, mediaType string) {
+func ClassifyMedia(path string, parsed scanner.ParsedName) (categorySlug string, mediaType string) {
 	// Use the centralized category detection from the scanner package.
 	detectedSlug := scanner.DetectCategoryFromPath(path)
 
@@ -1023,8 +1083,8 @@ func (r *Repository) GetMediaItem(ctx context.Context, id int64) (*MediaItemDeta
 }
 
 func (r *Repository) ListMediaItems(ctx context.Context, opts ListMediaOptions) (*MediaListResult, error) {
-	if opts.Limit <= 0 || opts.Limit > 100 {
-		opts.Limit = 24
+	if opts.Limit <= 0 || opts.Limit > 10000 {
+		opts.Limit = 1000
 	}
 	if opts.Offset < 0 {
 		opts.Offset = 0

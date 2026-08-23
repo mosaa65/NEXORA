@@ -61,6 +61,7 @@ type repository interface {
 	SaveTMDBSettings(ctx context.Context, s metadata.TMDBSettings) error
 	GetTMDBUsageSummary(ctx context.Context) (*metadata.TMDBUsageSummary, error)
 	LogTMDBUsage(ctx context.Context, entry db.TMDBLogEntry) error
+	CacheLocalArtwork(sourcePath string) string
 }
 
 type searchClient interface {
@@ -163,6 +164,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/scan", s.handleScan)
 	s.mux.HandleFunc("POST /api/ingest", s.handleIngest)
 	s.mux.HandleFunc("POST /api/index", s.handleIndex)
+	s.mux.HandleFunc("POST /api/index/preview", s.handleIndexPreview)
 	s.mux.HandleFunc("POST /api/library/classify-origins", s.handleClassifyOrigins)
 	s.mux.HandleFunc("POST /api/search/sync", s.handleSearchSync)
 	s.mux.HandleFunc("POST /api/metadata/lookup", s.handleMetadataLookup)
@@ -173,6 +175,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/migration/preview", s.handleMigrationPreview)
 	s.mux.HandleFunc("POST /api/migration/copy", s.handleMigrationCopy)
 	s.mux.HandleFunc("GET /api/stream", s.handleStream)
+	s.mux.HandleFunc("GET /api/stream/image", s.handleStreamImage)
 	s.mux.HandleFunc("GET /api/stream/file/{id}", s.handleStreamByID)
 	s.mux.HandleFunc("GET /api/stream/file/{id}/subtitles", s.handleFileSubtitles)
 	s.mux.HandleFunc("GET /api/stream/file/{id}/subtitles/{subId}", s.handleFileSubtitleStream)
@@ -309,6 +312,210 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		result.SearchSync = syncResult
 	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+type indexPreviewItem struct {
+	Title         string               `json:"title"`
+	TitleAR       string               `json:"title_ar"`
+	TitleEN       string               `json:"title_en"`
+	Type          string               `json:"type"`
+	CategorySlug  string               `json:"category_slug"`
+	OriginTags    []string             `json:"origin_tags"`
+	ReleaseYear   int                  `json:"release_year"`
+	PosterPath    string               `json:"poster_path,omitempty"`
+	RawPosterPath string               `json:"raw_poster_path,omitempty"`
+	TotalFiles    int                  `json:"total_files"`
+	TotalSize     int64                `json:"total_size"`
+	Seasons       []indexPreviewSeason `json:"seasons"`
+}
+
+type indexPreviewSeason struct {
+	SeasonNumber int                `json:"season_number"`
+	Title        string             `json:"title"`
+	EpisodeCount int                `json:"episode_count"`
+	Episodes     []indexPreviewFile `json:"episodes"`
+}
+
+type indexPreviewFile struct {
+	Path          string `json:"path"`
+	EpisodeNumber int    `json:"episode_number"`
+	Size          int64  `json:"size"`
+	Resolution    string `json:"resolution"`
+}
+
+// handleIndexPreview generates a non-destructive dry-run preview of what would be indexed.
+func (s *Server) handleIndexPreview(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		Roots []string `json:"roots"`
+	}
+	if err := decodeJSON(r, &request); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+		return
+	}
+	if len(request.Roots) == 0 {
+		request.Roots = s.config.MediaRoots
+	}
+	if len(request.Roots) == 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "provide at least one media root"})
+		return
+	}
+	for _, root := range request.Roots {
+		if !s.mediaPathAllowed(root) {
+			writeJSON(w, http.StatusForbidden, map[string]any{"error": "media root is outside configured roots"})
+			return
+		}
+	}
+
+	type mediaGroupKey struct {
+		titleKey string
+		mType    string
+	}
+
+	groups := make(map[mediaGroupKey]*indexPreviewItem)
+	var groupOrder []mediaGroupKey
+	totalScanned := 0
+
+	err := s.scanner.Walk(r.Context(), request.Roots, func(file scanner.FileInfo) error {
+		totalScanned++
+		categorySlug, mediaType := db.ClassifyMedia(file.Path, file.Parsed)
+		title := file.Parsed.Title
+		if title == "" {
+			title = strings.TrimSuffix(filepath.Base(file.Path), filepath.Ext(file.Path))
+		}
+		titleEN := file.Parsed.TitleEN
+		if titleEN == "" {
+			titleEN = title
+		}
+		titleAR := file.Parsed.TitleAR
+		if titleAR == "" {
+			titleAR = title
+		}
+
+		key := mediaGroupKey{
+			titleKey: strings.ToLower(titleEN),
+			mType:    mediaType,
+		}
+
+		group, exists := groups[key]
+		if !exists {
+			localPosterURL := ""
+			if file.ArtworkPath != "" {
+				localPosterURL = s.repository.CacheLocalArtwork(file.ArtworkPath)
+			}
+			originTags := scanner.DetectOriginTagsFromPath(file.Path)
+			if originTags == nil {
+				originTags = []string{}
+			}
+
+			group = &indexPreviewItem{
+				Title:         title,
+				TitleAR:       titleAR,
+				TitleEN:       titleEN,
+				Type:          mediaType,
+				CategorySlug:  categorySlug,
+				OriginTags:    originTags,
+				ReleaseYear:   file.Parsed.ReleaseYear,
+				PosterPath:    localPosterURL,
+				RawPosterPath: file.ArtworkPath,
+				Seasons:       []indexPreviewSeason{},
+			}
+			groups[key] = group
+			groupOrder = append(groupOrder, key)
+		}
+
+		group.TotalFiles++
+		group.TotalSize += file.Size
+		if group.PosterPath == "" && file.ArtworkPath != "" {
+			group.PosterPath = s.repository.CacheLocalArtwork(file.ArtworkPath)
+			group.RawPosterPath = file.ArtworkPath
+		}
+
+		seasonNum := file.Parsed.SeasonNumber
+		if seasonNum <= 0 {
+			seasonNum = 1
+		}
+
+		// Find or add season
+		var targetSeason *indexPreviewSeason
+		for idx := range group.Seasons {
+			if group.Seasons[idx].SeasonNumber == seasonNum {
+				targetSeason = &group.Seasons[idx]
+				break
+			}
+		}
+		if targetSeason == nil {
+			group.Seasons = append(group.Seasons, indexPreviewSeason{
+				SeasonNumber: seasonNum,
+				Title:        fmt.Sprintf("Season %02d", seasonNum),
+				Episodes:     []indexPreviewFile{},
+			})
+			targetSeason = &group.Seasons[len(group.Seasons)-1]
+		}
+
+		targetSeason.EpisodeCount++
+		targetSeason.Episodes = append(targetSeason.Episodes, indexPreviewFile{
+			Path:          file.Path,
+			EpisodeNumber: file.Parsed.EpisodeNumber,
+			Size:          file.Size,
+			Resolution:    file.Parsed.Resolution,
+		})
+
+		return nil
+	})
+
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+
+	resultItems := make([]*indexPreviewItem, 0, len(groupOrder))
+	for _, k := range groupOrder {
+		resultItems = append(resultItems, groups[k])
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"roots":        request.Roots,
+		"totalFiles":   totalScanned,
+		"totalMedia":   len(resultItems),
+		"mediaItems":   resultItems,
+	})
+}
+
+// handleStreamImage streams a local image file safely.
+func (s *Server) handleStreamImage(w http.ResponseWriter, r *http.Request) {
+	filePath := strings.TrimSpace(r.URL.Query().Get("path"))
+	if filePath == "" {
+		http.Error(w, "missing image path", http.StatusBadRequest)
+		return
+	}
+	if !s.mediaPathAllowed(filePath) {
+		http.Error(w, "forbidden path", http.StatusForbidden)
+		return
+	}
+	file, err := os.Open(filePath)
+	if err != nil {
+		http.Error(w, "image not found", http.StatusNotFound)
+		return
+	}
+	defer file.Close()
+
+	ext := strings.ToLower(filepath.Ext(filePath))
+	contentType := "image/jpeg"
+	switch ext {
+	case ".png":
+		contentType = "image/png"
+	case ".webp":
+		contentType = "image/webp"
+	case ".jfif", ".jpg", ".jpeg":
+		contentType = "image/jpeg"
+	case ".gif":
+		contentType = "image/gif"
+	case ".bmp":
+		contentType = "image/bmp"
+	}
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	_, _ = io.Copy(w, file)
 }
 
 // handleClassifyOrigins repairs country tags from the user's existing folder

@@ -40,6 +40,7 @@ func Run() {
 	}
 
 	repository := db.NewRepository(sqlDB)
+	repository.SetAssetImageDir(cfg.AssetImageDir)
 	scannerService := scanner.New(scanner.Options{Workers: cfg.ScanWorkers})
 	searchClient := search.NewClient(search.Config{
 		Host:   cfg.MeiliHost,

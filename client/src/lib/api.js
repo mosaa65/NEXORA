@@ -87,6 +87,13 @@ export async function indexLibrary(roots) {
   });
 }
 
+export async function previewIndex(roots) {
+  return requestJSON("/api/index/preview", {
+    method: "POST",
+    body: JSON.stringify({ roots })
+  });
+}
+
 export async function classifyOriginsFromFolders() {
   return requestJSON("/api/library/classify-origins", { method: "POST" });
 }

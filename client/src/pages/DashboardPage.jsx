@@ -26,7 +26,7 @@ export default function DashboardPage({
     let alive = true;
     setLoading(true);
 
-    getMediaList({ limit: 60, sort: "rating" })
+    getMediaList({ limit: 1000, sort: "rating" })
       .then((data) => {
         if (!alive) return;
         if (data?.items && data.items.length > 0) {

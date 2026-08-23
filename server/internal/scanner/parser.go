@@ -35,11 +35,11 @@ var (
 	yearRE       = regexp.MustCompile(`(?:^|\s)((?:19|20)\d{2})(?:\s|$)`)
 
 	// seasonFolderRE matches folder names like "Season 01", "Season 1", "الموسم 01",
-	// "الموسم الأول", "الحلقات 1-50", "الحلقات ٥١-١٠٠", "Silo الموسم الثالث"
-	seasonFolderRE = regexp.MustCompile(`(?i)(?:^|[\s._-])(?:season|s)\s*(\d{1,3})$`)
-	seasonFolderArabicNumRE = regexp.MustCompile(`(?:^|[\s._-])(?:الموسم|موسم)\s*(\d{1,3})$`)
-	seasonFolderArabicWordRE = regexp.MustCompile(`(?:^|[\s._-])(?:الموسم|موسم)\s*(الأول|الاول|الأولى|الاولى|الثاني|الثانية|الثالث|الثالثة|الرابع|الرابعة|الخامس|الخامسة|السادس|السادسة|السابع|السابعة|الثامن|الثامنة|التاسع|التاسعة|العاشر|العاشرة)$`)
-	episodeRangeFolderRE = regexp.MustCompile(`^(?:الحلقات|حلقات|Episodes?)\s*\d+`)
+	// "الموسم الأول", "الحلقات 1-50", "الحلقات ٥١-١٠٠", "Silo الموسم الثالث", "الجزء 3"
+	seasonFolderRE           = regexp.MustCompile(`(?i)(?:^|[\s._-])(?:season|s)\s*(\d{1,3})$`)
+	seasonFolderArabicNumRE  = regexp.MustCompile(`(?:^|[\s._-])(?:الموسم|موسم|الجزء|جزء)\s*(\d{1,3})$`)
+	seasonFolderArabicWordRE = regexp.MustCompile(`(?:^|[\s._-])(?:الموسم|موسم|الجزء|جزء)\s*(الأول|الاول|الأولى|الاولى|الاولاني|الثاني|الثانية|تاني|الثالث|الثالثة|تالت|الرابع|الرابعة|رابع|الخامس|الخامسة|خامس|السادس|السادسة|سادس|السابع|السابعة|سابع|الثامن|الثامنة|تامن|التاسع|التاسعة|تاسع|العاشر|العاشرة|عاشر|الحادي\s*عشر|الحادية\s*عشرة?|الثاني\s*عشر|الثانية\s*عشرة?|الثالث\s*عشر|الثالثة\s*عشرة?|الرابع\s*عشر|الرابعة\s*عشرة?|الخامس\s*عشر|الخامسة\s*عشرة?|السادس\s*عشر|السادسة\s*عشرة?|السابع\s*عشر|السابعة\s*عشرة?|الثامن\s*عشر|الثامنة\s*عشرة?|التاسع\s*عشر|التاسعة\s*عشرة?|العشرون|العشرين)$`)
+	episodeRangeFolderRE     = regexp.MustCompile(`^(?:الحلقات|حلقات|Episodes?)\s*\d+`)
 
 	// categoryFolderKeywords maps folder name substrings to category slugs.
 	categoryFolderKeywords = []struct {
@@ -50,8 +50,8 @@ var (
 		{[]string{"cartoon", "كرتون", "رسوم", "kids", "أطفال", "اطفال"}, "kids"},
 		{[]string{"documentary", "document", "وثائقي", "وثائقية", "وثائقيات"}, "documentaries"},
 		{[]string{"play", "مسرح", "مسرحيات", "مسرحية"}, "plays"},
-		{[]string{"series", "مسلسل", "مسلسلات"}, "series"},
-		{[]string{"movie", "movies", "أفلام", "افلام", "فيلم", "cinema"}, "movies"},
+		{[]string{"series", "مسلسل", "مسلسلات", "مسلسل اجنبي", "مسلسلات اجنبية", "مسلسلات تركية", "مسلسلات كورية", "مسلسلات عربية"}, "series"},
+		{[]string{"movie", "movies", "أفلام", "افلام", "فيلم", "cinema", "أفلام أجنبية", "افلام اجنبية"}, "movies"},
 	}
 
 	episodePatterns = []episodePattern{
@@ -71,12 +71,12 @@ var (
 			episodeGroup: 2,
 		},
 		{
-			re:           regexp.MustCompile(`(?:الموسم|موسم)\s*(\d{1,2})\s*(?:الحلقة|حلقة|ح)\s*(\d{1,4})(?:\s|$)`),
+			re:           regexp.MustCompile(`(?:الموسم|موسم|الجزء|جزء)\s*(\d{1,2})\s*(?:الحلقة|حلقة|ح)\s*(\d{1,4})(?:\s|$)`),
 			seasonGroup:  1,
 			episodeGroup: 2,
 		},
 		{
-			re:           regexp.MustCompile(`(?:الموسم|موسم)\s*(الأول|الاول|الثاني|الثالث|الرابع|الخامس|السادس|السابع|الثامن|التاسع|العاشر)\s*(?:الحلقة|حلقة|ح)\s*(\d{1,4})(?:\s|$)`),
+			re:           regexp.MustCompile(`(?:الموسم|موسم|الجزء|جزء)\s*(الأول|الاول|الثاني|الثالث|الرابع|الخامس|السادس|السابع|الثامن|التاسع|العاشر)\s*(?:الحلقة|حلقة|ح)\s*(\d{1,4})(?:\s|$)`),
 			seasonGroup:  1,
 			episodeGroup: 2,
 		},
@@ -103,16 +103,26 @@ var (
 	}
 
 	arabicWordToNum = map[string]int{
-		"الأول": 1, "الاول": 1, "الأولى": 1, "الاولى": 1,
-		"الثاني": 2, "الثانية": 2,
-		"الثالث": 3, "الثالثة": 3,
-		"الرابع": 4, "الرابعة": 4,
-		"الخامس": 5, "الخامسة": 5,
-		"السادس": 6, "السادسة": 6,
-		"السابع": 7, "السابعة": 7,
-		"الثامن": 8, "الثامنة": 8,
-		"التاسع": 9, "التاسعة": 9,
-		"العاشر": 10, "العاشرة": 10,
+		"الأول": 1, "الاول": 1, "الأولى": 1, "الاولى": 1, "الاولاني": 1,
+		"الثاني": 2, "الثانية": 2, "تاني": 2,
+		"الثالث": 3, "الثالثة": 3, "تالت": 3,
+		"الرابع": 4, "الرابعة": 4, "رابع": 4,
+		"الخامس": 5, "الخامسة": 5, "خامس": 5,
+		"السادس": 6, "السادسة": 6, "سادس": 6,
+		"السابع": 7, "السابعة": 7, "سابع": 7,
+		"الثامن": 8, "الثامنة": 8, "تامن": 8,
+		"التاسع": 9, "التاسعة": 9, "تاسع": 9,
+		"العاشر": 10, "العاشرة": 10, "عاشر": 10,
+		"الحادي عشر": 11, "الحادية عشر": 11, "الحادية عشرة": 11,
+		"الثاني عشر": 12, "الثانية عشر": 12, "الثانية عشرة": 12,
+		"الثالث عشر": 13, "الثالثة عشر": 13, "الثالثة عشرة": 13,
+		"الرابع عشر": 14, "الرابعة عشر": 14, "الرابعة عشرة": 14,
+		"الخامس عشر": 15, "الخامسة عشر": 15, "الخامسة عشرة": 15,
+		"السادس عشر": 16, "السادسة عشر": 16, "السادسة عشرة": 16,
+		"السابع عشر": 17, "السابعة عشر": 17, "السابعة عشرة": 17,
+		"الثامن عشر": 18, "الثامنة عشر": 18, "الثامنة عشرة": 18,
+		"التاسع عشر": 19, "التاسعة عشر": 19, "التاسعة عشرة": 19,
+		"العشرون": 20, "العشرين": 20,
 	}
 
 	noiseTokens = map[string]struct{}{
@@ -123,6 +133,14 @@ var (
 		"hdr": {}, "hdr10": {}, "dv": {}, "atmos": {}, "remux": {}, "dts": {}, "dts-hd": {},
 		"10bit": {}, "extended": {}, "unrated": {}, "flac": {}, "sub": {}, "dub": {},
 		"مترجم": {}, "مدبلج": {}, "كامل": {}, "نسخة": {}, "جودة": {}, "عالية": {},
+		"الانطلاقه": {}, "الانطلاقة": {}, "انطلاقه": {}, "انطلاقة": {}, "نت": {},
+		"المترجم": {}, "اكوام": {}, "akoam": {}, "ماي": {}, "سيما": {}, "mycima": {},
+		"عرب": {}, "سيد": {}, "arabseed": {}, "فاصل": {}, "اعلاني": {}, "إعلاني": {},
+		"faselhd": {}, "fasel": {}, "ايجي": {}, "بست": {}, "egybest": {}, "شاهد": {},
+		"فور": {}, "يو": {}, "shahid4u": {}, "shahid": {}, "سينما": {}, "للجميع": {},
+		"cimalek": {}, "arabp2p": {}, "dardarkom": {}, "دار": {}, "داركم": {},
+		"topcinema": {}, "توب": {}, "elcinema": {}, "cima4u": {}, "myegy": {},
+		"عربليونز": {}, "arablionz": {}, "wecima": {},
 	}
 )
 
@@ -154,7 +172,7 @@ func ParseFileName(fileName string) ParsedName {
 		}
 
 		if pattern.seasonGroup > 0 {
-			rawSeason := working[match[pattern.seasonGroup*2]:match[pattern.seasonGroup*2+1]]
+			rawSeason := strings.TrimSpace(working[match[pattern.seasonGroup*2]:match[pattern.seasonGroup*2+1]])
 			if num, ok := arabicWordToNum[rawSeason]; ok {
 				parsed.SeasonNumber = num
 			} else {
@@ -174,8 +192,13 @@ func ParseFileName(fileName string) ParsedName {
 	}
 
 	parsed.Title = cleanTitle(titleCandidate)
-	if parsed.Title == "" {
-		parsed.Title = cleanTitle(working)
+	if parsed.Title == "" || isJunkOrWatermarkTitle(parsed.Title) {
+		cleanedFull := cleanTitle(working)
+		if !isJunkOrWatermarkTitle(cleanedFull) {
+			parsed.Title = cleanedFull
+		} else {
+			parsed.Title = ""
+		}
 	}
 
 	parsed.TitleAR, parsed.TitleEN = splitDualTitle(parsed.Title)
@@ -186,18 +209,11 @@ func ParseFileName(fileName string) ParsedName {
 // ParseFilePath extracts metadata from a full file path, using parent folder
 // names to enrich the title, season number, and category classification.
 // This is the primary parser for the ingest pipeline.
-//
-// Folder structure examples it handles:
-//   Anime - أنمي/Attack on Titan - هجوم العمالقة/Season 01/file.mkv
-//   مسلسلات/صراع العروش/الموسم الأول/file.mkv
-//   Movies/Inception (2010)/Inception.2010.1080p.mkv
-//   كرتون/Tom and Jerry - توم وجيري/Season 01/file.mp4
 func ParseFilePath(fullPath string) ParsedName {
 	// Start with filename-only parse
 	parsed := ParseFileName(filepath.Base(fullPath))
 
 	// Walk up the directory tree to extract context from parent folders.
-	// We examine up to 4 ancestors (file -> season? -> title? -> category? -> root?)
 	dir := filepath.Dir(fullPath)
 	ancestors := make([]string, 0, 4)
 	for i := 0; i < 4; i++ {
@@ -213,7 +229,8 @@ func ParseFilePath(fullPath string) ParsedName {
 	// e.g., "Season 01", "الموسم الأول", "الحلقات 1-50", "Silo الموسم الثالث"
 	if len(ancestors) > 0 {
 		folderSeason := parseSeasonFromFolder(ancestors[0])
-		if folderSeason > 0 && parsed.SeasonNumber <= 0 {
+		if folderSeason > 0 {
+			// Folder explicitly defines the season; it always overrides filename default
 			parsed.SeasonNumber = folderSeason
 		}
 
@@ -221,11 +238,11 @@ func ParseFilePath(fullPath string) ParsedName {
 		if seasonTitlePrefix != "" {
 			enrichTitleFromFolder(&parsed, seasonTitlePrefix)
 		} else if folderSeason > 0 && len(ancestors) > 1 {
-			// If the parent folder is purely a season folder and we have episode info,
-			// the grandparent is likely the show title
+			// If immediate parent is pure season folder (e.g. "الموسم الثالث"),
+			// the grandparent folder is the show title (e.g. "Silo")
 			enrichTitleFromFolder(&parsed, ancestors[1])
 		} else if folderSeason == 0 {
-			// Parent folder might be the show/movie title itself
+			// Parent folder is the show/movie title itself
 			enrichTitleFromFolder(&parsed, ancestors[0])
 		}
 	}
@@ -244,6 +261,7 @@ func extractTitlePrefixFromSeasonFolder(folder string) string {
 	for _, re := range []*regexp.Regexp{seasonFolderRE, seasonFolderArabicNumRE, seasonFolderArabicWordRE} {
 		if loc := re.FindStringIndex(normalized); loc != nil && loc[0] > 0 {
 			prefix := strings.TrimSpace(folder[:loc[0]])
+			prefix = cleanTitle(normalizeWorkingName(prefix))
 			if prefix != "" && DetectCategoryFromPath(prefix) == "" {
 				return prefix
 			}
@@ -267,15 +285,11 @@ func DetectCategoryFromPath(fullPath string) string {
 }
 
 // DetectOriginTagsFromPath extracts a production-origin hint from the library
-// folder structure. Folder names are intentionally preferred over filenames:
-// a filename can say "Arabic subtitles" while the enclosing directory
-// "مسلسلات تركية" is the owner's deliberate classification.
+// folder structure. Folder names are intentionally preferred over filenames.
 func DetectOriginTagsFromPath(fullPath string) []string {
 	segments := strings.Split(strings.ToLower(filepath.ToSlash(filepath.Dir(fullPath))), "/")
 	meaningfulSegments := make([]string, 0, len(segments))
 	for _, segment := range segments {
-		// A "Arabic subtitles" directory describes a sidecar asset, not the
-		// production country of the programme stored above it.
 		if strings.Contains(segment, "subtitle") || strings.Contains(segment, "ترجم") {
 			continue
 		}
@@ -323,16 +337,17 @@ func parseSeasonFromFolder(folder string) int {
 		}
 	}
 
-	// Arabic with digits: "الموسم 01", "موسم 3"
+	// Arabic with digits: "الموسم 01", "موسم 3", "الجزء 2"
 	if match := seasonFolderArabicNumRE.FindStringSubmatch(normalized); match != nil {
 		if n, err := strconv.Atoi(match[1]); err == nil {
 			return n
 		}
 	}
 
-	// Arabic with words: "الموسم الأول", "الموسم الثاني"
+	// Arabic with words: "الموسم الأول", "الموسم الثالث", "الجزء الخامس"
 	if match := seasonFolderArabicWordRE.FindStringSubmatch(normalized); match != nil {
-		if n, ok := arabicWordToNum[match[1]]; ok {
+		word := strings.TrimSpace(match[1])
+		if n, ok := arabicWordToNum[word]; ok {
 			return n
 		}
 	}
@@ -346,7 +361,6 @@ func parseSeasonFromFolder(folder string) int {
 }
 
 // enrichTitleFromFolder upgrades the parsed title using a parent folder name
-// when the folder name is richer than the filename-derived title.
 func enrichTitleFromFolder(parsed *ParsedName, folder string) {
 	folder = strings.TrimSpace(folder)
 	if folder == "" {
@@ -373,18 +387,26 @@ func enrichTitleFromFolder(parsed *ParsedName, folder string) {
 		folderAR, folderEN = splitDualTitle(cleaned)
 	}
 
-	// Use folder title if it's richer than the filename title
+	isCurrentJunk := isJunkOrWatermarkTitle(parsed.Title) || parsed.Title == ""
+
 	if folderAR != "" && folderEN != "" && folderAR != folderEN {
 		parsed.Title = folderEN + " - " + folderAR
 		parsed.TitleAR = folderAR
 		parsed.TitleEN = folderEN
-	} else if len(cleaned) > len(parsed.Title) || (folderAR != "" && parsed.TitleAR == "") {
+	} else if isCurrentJunk || len(cleaned) > len(parsed.Title) || (folderAR != "" && parsed.TitleAR == "") || (folderEN != "" && parsed.TitleEN == "") {
 		parsed.Title = cleaned
-		parsed.TitleAR = folderAR
-		parsed.TitleEN = folderEN
+		if folderAR != "" {
+			parsed.TitleAR = folderAR
+		} else if containsArabic(cleaned) {
+			parsed.TitleAR = cleaned
+		}
+		if folderEN != "" {
+			parsed.TitleEN = folderEN
+		} else if !containsArabic(cleaned) {
+			parsed.TitleEN = cleaned
+		}
 	}
 
-	// Always prefer folder Arabic title if filename lacks one
 	if parsed.TitleAR == "" && folderAR != "" {
 		parsed.TitleAR = folderAR
 	}
@@ -447,6 +469,29 @@ func cleanTitle(input string) string {
 	}
 
 	return strings.Join(cleaned, " ")
+}
+
+func isJunkOrWatermarkTitle(title string) bool {
+	t := strings.TrimSpace(title)
+	if t == "" {
+		return true
+	}
+	if _, err := strconv.Atoi(t); err == nil || len(t) <= 1 {
+		return true
+	}
+	words := strings.Fields(strings.ToLower(t))
+	meaningful := 0
+	for _, w := range words {
+		w = strings.Trim(w, " ._-[](){}")
+		if _, isNoise := noiseTokens[w]; isNoise {
+			continue
+		}
+		if _, err := strconv.Atoi(w); err == nil {
+			continue
+		}
+		meaningful++
+	}
+	return meaningful == 0
 }
 
 func splitDualTitle(raw string) (string, string) {

@@ -22,11 +22,21 @@ type Scanner struct {
 }
 
 type FileInfo struct {
-	Path      string     `json:"path"`
-	Size      int64      `json:"size"`
-	ModTime   time.Time  `json:"modTime"`
-	Parsed    ParsedName `json:"parsed"`
-	Extension string     `json:"extension"`
+	Path        string     `json:"path"`
+	Size        int64      `json:"size"`
+	ModTime     time.Time  `json:"modTime"`
+	Parsed      ParsedName `json:"parsed"`
+	Extension   string     `json:"extension"`
+	ArtworkPath string     `json:"artworkPath,omitempty"`
+}
+
+var imageExtensions = map[string]struct{}{
+	".jpg":  {},
+	".jpeg": {},
+	".png":  {},
+	".webp": {},
+	".jfif": {},
+	".bmp":  {},
 }
 
 type scanCandidate struct {
@@ -223,7 +233,53 @@ func (s *Scanner) fileInfo(path string, info fs.FileInfo) FileInfo {
 		// Folder names often carry the canonical bilingual title and season;
 		// relying on the filename alone loses that information for real-world
 		// libraries such as "Series/Title/Season 01/E01.mkv".
-		Parsed:    ParseFilePath(path),
-		Extension: strings.ToLower(filepath.Ext(path)),
+		Parsed:      ParseFilePath(path),
+		Extension:   strings.ToLower(filepath.Ext(path)),
+		ArtworkPath: FindLocalArtwork(path),
 	}
+}
+
+// FindLocalArtwork searches for poster, cover, or folder artwork images in the video's directory or parent directory.
+func FindLocalArtwork(videoPath string) string {
+	dir := filepath.Dir(videoPath)
+	if img := searchDirForArtwork(dir); img != "" {
+		return img
+	}
+	parent := filepath.Dir(dir)
+	if parent != dir && parent != "." && parent != string(filepath.Separator) {
+		if img := searchDirForArtwork(parent); img != "" {
+			return img
+		}
+	}
+	return ""
+}
+
+func searchDirForArtwork(dir string) string {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return ""
+	}
+
+	priorityNames := []string{"poster", "cover", "folder", "front", "default", "thumb", "fanart", "banner"}
+	var fallback string
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		ext := strings.ToLower(filepath.Ext(entry.Name()))
+		if _, ok := imageExtensions[ext]; !ok {
+			continue
+		}
+		base := strings.ToLower(strings.TrimSuffix(entry.Name(), ext))
+		for _, prio := range priorityNames {
+			if strings.Contains(base, prio) {
+				return filepath.Join(dir, entry.Name())
+			}
+		}
+		if fallback == "" {
+			fallback = filepath.Join(dir, entry.Name())
+		}
+	}
+	return fallback
 }

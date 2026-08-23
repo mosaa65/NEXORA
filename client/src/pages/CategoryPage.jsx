@@ -152,7 +152,7 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
       const res = await getMediaList({
         category: selectedCategory,
         sort: activeSort === "rating" ? "rating" : activeSort === "year" ? "year" : activeSort === "title" ? "title" : "",
-        limit: 150,
+        limit: 1000,
       });
 
       const transformed = (res?.items || []).map((item) => ({

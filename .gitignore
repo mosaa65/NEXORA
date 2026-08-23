@@ -43,3 +43,4 @@ server/assets/**
 
 # === Archive (historical reference, not needed in Git) ===
 _archive/
+.codebuddy
