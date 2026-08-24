@@ -163,6 +163,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/hubs/{slug}", s.handleSmartHub)
 	s.mux.HandleFunc("GET /api/hubs/{slug}/media", s.handleSmartHubMedia)
 	s.mux.HandleFunc("GET /api/admin/hubs", s.handleSmartHubsAdmin)
+	s.mux.HandleFunc("POST /api/admin/hubs", s.handleSmartHubCreate)
 	s.mux.HandleFunc("PUT /api/admin/hubs/{slug}", s.handleSmartHubSave)
 	s.mux.HandleFunc("POST /api/media", s.handleMediaCreate)
 	s.mux.HandleFunc("GET /api/media/{id}", s.handleMediaDetail)
@@ -1309,6 +1310,19 @@ func (s *Server) handleSmartHubSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, item)
+}
+func (s *Server) handleSmartHubCreate(w http.ResponseWriter, r *http.Request) {
+	var req db.SmartHubRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeJSON(w, 400, map[string]any{"error": err.Error()})
+		return
+	}
+	item, err := s.repository.SaveSmartHub(r.Context(), "", req)
+	if err != nil {
+		writeJSON(w, 400, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusCreated, item)
 }
 
 func (s *Server) handleMediaDetail(w http.ResponseWriter, r *http.Request) {

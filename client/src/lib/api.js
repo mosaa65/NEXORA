@@ -160,6 +160,7 @@ export async function getSmartHubMedia(slug, options = {}) {
 }
 export async function getAdminSmartHubs() { return requestJSON("/api/admin/hubs"); }
 export async function saveSmartHub(slug, data) { return requestJSON(`/api/admin/hubs/${encodeURIComponent(slug)}`, { method: "PUT", body: JSON.stringify(data) }); }
+export async function createSmartHub(data) { return requestJSON("/api/admin/hubs", { method: "POST", body: JSON.stringify(data) }); }
 
 export async function getCollections() { return requestJSON("/api/admin/collections"); }
 export async function saveCollection(data) {

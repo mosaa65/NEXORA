@@ -904,6 +904,9 @@ func (r *Repository) SaveCollection(ctx context.Context, id int64, req Collectio
 		req.TitleEN = req.TitleAR
 	}
 	req.Slug = strings.ToLower(strings.TrimSpace(req.Slug))
+	if req.Slug == "" || strings.TrimSpace(req.TitleAR) == "" {
+		return nil, errors.New("hub slug and Arabic title are required")
+	}
 	if req.Slug == "" {
 		req.Slug = strings.ReplaceAll(strings.ToLower(req.TitleEN), " ", "-")
 	}
@@ -951,7 +954,7 @@ func (r *Repository) ListSmartHubsAdmin(ctx context.Context) ([]SmartHub, error)
 	return items, rows.Err()
 }
 func (r *Repository) SaveSmartHub(ctx context.Context, slug string, req SmartHubRequest) (*SmartHub, error) {
-	if req.Slug == "" {
+	if strings.TrimSpace(slug) != "" {
 		req.Slug = slug
 	}
 	req.Slug = strings.ToLower(strings.TrimSpace(req.Slug))
@@ -964,7 +967,7 @@ func (r *Repository) SaveSmartHub(ctx context.Context, slug string, req SmartHub
 	}
 	var h SmartHub
 	var raw string
-	err = r.db.QueryRowContext(ctx, `UPDATE hub_definitions SET scope=COALESCE(NULLIF($1,''),scope),title_ar=COALESCE(NULLIF($2,''),title_ar),title_en=$3,description_ar=$4,description_en=$5,artwork_path=$6,artwork_position=COALESCE(NULLIF($7,''),'center center'),accent=COALESCE(NULLIF($8,''),'violet'),icon=COALESCE(NULLIF($9,''),'spark'),rule=$10::jsonb,priority=$11,is_active=$12,min_item_count=$13,updated_at=CURRENT_TIMESTAMP WHERE slug=$14 RETURNING slug,source,scope,title_ar,COALESCE(title_en,''),COALESCE(description_ar,''),COALESCE(description_en,''),COALESCE(artwork_path,''),artwork_position,accent,icon,rule::text,priority,is_active,min_item_count`, req.Scope, req.TitleAR, req.TitleEN, req.DescriptionAR, req.DescriptionEN, req.ArtworkPath, req.ArtworkPosition, req.Accent, req.Icon, string(rule), req.Priority, req.IsActive, req.MinItemCount, slug).Scan(&h.Slug, &h.Source, &h.Scope, &h.TitleAR, &h.TitleEN, &h.DescriptionAR, &h.DescriptionEN, &h.ArtworkPath, &h.ArtworkPosition, &h.Accent, &h.Icon, &raw, &h.Priority, &h.IsActive, &h.MinItemCount)
+	err = r.db.QueryRowContext(ctx, `INSERT INTO hub_definitions (slug,source,scope,title_ar,title_en,description_ar,description_en,artwork_path,artwork_position,accent,icon,rule,priority,is_active,min_item_count) VALUES ($1,'editorial',COALESCE(NULLIF($2,''),'all'),$3,$4,$5,$6,$7,COALESCE(NULLIF($8,''),'center center'),COALESCE(NULLIF($9,''),'violet'),COALESCE(NULLIF($10,''),'spark'),$11::jsonb,$12,$13,$14) ON CONFLICT (slug) DO UPDATE SET scope=EXCLUDED.scope,title_ar=EXCLUDED.title_ar,title_en=EXCLUDED.title_en,description_ar=EXCLUDED.description_ar,description_en=EXCLUDED.description_en,artwork_path=EXCLUDED.artwork_path,artwork_position=EXCLUDED.artwork_position,accent=EXCLUDED.accent,icon=EXCLUDED.icon,rule=EXCLUDED.rule,priority=EXCLUDED.priority,is_active=EXCLUDED.is_active,min_item_count=EXCLUDED.min_item_count,updated_at=CURRENT_TIMESTAMP RETURNING slug,source,scope,title_ar,COALESCE(title_en,''),COALESCE(description_ar,''),COALESCE(description_en,''),COALESCE(artwork_path,''),artwork_position,accent,icon,rule::text,priority,is_active,min_item_count`, req.Slug, req.Scope, req.TitleAR, req.TitleEN, req.DescriptionAR, req.DescriptionEN, req.ArtworkPath, req.ArtworkPosition, req.Accent, req.Icon, string(rule), req.Priority, req.IsActive, req.MinItemCount).Scan(&h.Slug, &h.Source, &h.Scope, &h.TitleAR, &h.TitleEN, &h.DescriptionAR, &h.DescriptionEN, &h.ArtworkPath, &h.ArtworkPosition, &h.Accent, &h.Icon, &raw, &h.Priority, &h.IsActive, &h.MinItemCount)
 	if err != nil {
 		return nil, err
 	}
