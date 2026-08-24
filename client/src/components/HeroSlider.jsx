@@ -17,7 +17,7 @@ export default function HeroSlider({ items = [], onOpenMedia, onQuickPlay }) {
   if (!items || items.length === 0) return null;
 
   const current = items[currentIndex] || items[0];
-  const backdropURL = resolveAPIURL(current.bannerPath || current.posterPath) || "/images/aot_banner_detail.png";
+  const backdropURL = resolveAPIURL(current.bannerPath || current.posterPath) || "/nexora-library-backdrop.PNG";
 
   return (
     <div className="relative w-full h-[400px] sm:h-[480px] lg:h-[540px] rounded-[2.5rem] overflow-hidden border border-white/10 shadow-2xl bg-[#0B0A16] group" dir="rtl">

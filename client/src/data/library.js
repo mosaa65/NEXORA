@@ -110,8 +110,8 @@ export const mockLibrary = [
     rating: 8.7,
     fileCount: 48,
     plot: "في طوكيو حيث تعيش غيلان بين البشر بالتخفي، تنقلب حياة الشاب (كانيكي) عندما تلتهمه إحدى الغيلان بدلاً من أن تصبح عشاءه، فيتحول إلى نصف بشري ونصف غول محاصر بين عالمين.",
-    posterPath: "/images/tokyo_ghoul_hero.png",
-    bannerPath: "/images/tokyo_ghoul_hero.png",
+    posterPath: "/nexora-poster-placeholder.PNG",
+    bannerPath: "/nexora-library-backdrop.PNG",
     highlights: ["أنمي", "فانتازيا مظلمة", "رعب"],
     seasons: [1, 2, 3, 4]
   },
@@ -129,8 +129,8 @@ export const mockLibrary = [
     rating: 9.0,
     fileCount: 88,
     plot: "منذ مائة عام، ظهرت العمالقة فجأة ودمرت معظم البشرية. يعيش الباقون في عالم محاط بأسوار ضخمة لحمايتهم من العمالقة... عندما يُخترق السور الأول، يبدأ إيرين غيغار رحلة الانتقام والبحث عن الحقيقة.",
-    posterPath: "/images/attack_on_titan_poster.png",
-    bannerPath: "/images/attack_on_titan_poster.png",
+    posterPath: "/nexora-poster-placeholder.PNG",
+    bannerPath: "/nexora-library-backdrop.PNG",
     highlights: ["خيال مظلم", "دراما", "أكشن"],
     views: "2.3M",
     seasons: [
@@ -155,8 +155,8 @@ export const mockLibrary = [
     rating: 9.1,
     fileCount: 55,
     plot: "يتعهد تانجيرو كاماتو بالانتقام لعائلته وإعادة أخته نيزوكو إلى هيئتها البشرية بعد تحولها إلى شيطان، منضماً إلى فيلق قتلة الشياطين.",
-    posterPath: "/images/demon_slayer_poster.png",
-    bannerPath: "/images/demon_slayer_poster.png",
+    posterPath: "/nexora-poster-placeholder.PNG",
+    bannerPath: "/nexora-library-backdrop.PNG",
     highlights: ["أكشن", "شياطين", "سيوف"],
     seasons: [1, 2, 3]
   },
@@ -174,8 +174,8 @@ export const mockLibrary = [
     rating: 9.0,
     fileCount: 47,
     plot: "ينتلع الفتى إيتادوري يوجي إصبع الساحر الأسطوري ريومن سوكونا، فيصبح وعاءً له وينضم لمدرسة جوجوتسو لمكافحة اللعنات.",
-    posterPath: "/images/jujutsu_kaisen_poster.png",
-    bannerPath: "/images/jujutsu_kaisen_poster.png",
+    posterPath: "/nexora-poster-placeholder.PNG",
+    bannerPath: "/nexora-library-backdrop.PNG",
     highlights: ["لعنات", "خوارق", "معارك"],
     seasons: [1, 2]
   },
@@ -193,8 +193,8 @@ export const mockLibrary = [
     rating: 9.0,
     fileCount: 1086,
     plot: "ينطلق مونكي دي لوفي وطاقم قبعة القش في رحلة أسطورية عبر البحار للبحث عن الكنز الأعظم ون بيس وليصبح ملك القراصنة.",
-    posterPath: "/images/one_piece_poster.png",
-    bannerPath: "/images/one_piece_poster.png",
+    posterPath: "/nexora-poster-placeholder.PNG",
+    bannerPath: "/nexora-library-backdrop.PNG",
     highlights: ["مغامرة", "قراصنة", "كوميديا"],
     seasons: [1, 2, 3, 4, 5]
   },
@@ -212,7 +212,7 @@ export const mockLibrary = [
     rating: 8.3,
     fileCount: 24,
     plot: "سايتاما بطل خارق يقضي على أي خصم بلكمة واحدة فقط، ويبحث عن مواجهة حقيقية تعيد له حماس القتال.",
-    posterPath: "/images/attack_on_titan_poster.png",
+    posterPath: "/nexora-poster-placeholder.PNG",
     highlights: ["أبطال خارقون", "كوميديا", "قتال"],
     seasons: [1, 2]
   },
@@ -230,8 +230,8 @@ export const mockLibrary = [
     rating: 8.6,
     fileCount: 500,
     plot: "يعود ناروتو بعد سنوات التدريب يسعى لحماية قريته واستعادة صديقه ساسكي وتحقيق حلمه بلقب الهوكاجي.",
-    posterPath: "/images/naruto_poster.png",
-    bannerPath: "/images/naruto_poster.png",
+    posterPath: "/nexora-poster-placeholder.PNG",
+    bannerPath: "/nexora-library-backdrop.PNG",
     highlights: ["نينجا", "صداقة", "معارك"],
     seasons: [1, 2, 3]
   },
@@ -249,7 +249,7 @@ export const mockLibrary = [
     rating: 8.5,
     fileCount: 366,
     plot: "يحصل إيتشيغو كوروساكي على قوى الشينيغامي لحماية البشر والأرواح من الوحوش الجائعة.",
-    posterPath: "/images/jujutsu_kaisen_poster.png",
+    posterPath: "/nexora-poster-placeholder.PNG",
     highlights: ["شينيغامي", "سيوف", "أرواح"],
     seasons: [1, 2]
   },
@@ -267,7 +267,7 @@ export const mockLibrary = [
     rating: 8.4,
     fileCount: 1100,
     plot: "يتناول سينشي كودو عقاراً يقلص جسده إلى طفل فيتخذ اسم كونان إيدوجاوا ويحل أعقد القضايا أثناء تتبع العصابة السوداء.",
-    posterPath: "/images/tokyo_ghoul_hero.png",
+    posterPath: "/nexora-poster-placeholder.PNG",
     highlights: ["غموض", "تحقيق", "ذكاء"],
     seasons: [1, 2, 3]
   },
@@ -285,7 +285,7 @@ export const mockLibrary = [
     rating: 8.4,
     fileCount: 131,
     plot: "يخوض غوكو ومحاربو الزد مواجهات أسطورية ضد آلهة الدمار ومحاربي الأكوان في بطولات القوة.",
-    posterPath: "/images/demon_slayer_poster.png",
+    posterPath: "/nexora-poster-placeholder.PNG",
     highlights: ["تحولات", "معارك خارقة", "أكوان"],
     seasons: [1, 2, 3, 4, 5]
   }

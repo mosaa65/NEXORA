@@ -15,7 +15,7 @@ import TMDBSettingsPage from "./pages/TMDBSettingsPage.jsx";
 import AdminLoginPage from "./pages/AdminLoginPage.jsx";
 import VideoPlayer from "./components/VideoPlayer.jsx";
 import { categorySeed, findMockMedia, getCategoryMeta, mockLibrary } from "./data/library.js";
-import { getCategories, getHealth, getMediaDetail, getFileSubtitles, searchLibrary, syncIndex, resolveAPIURL } from "./lib/api.js";
+import { getCategories, getHealth, getMediaDetail, getFileSubtitles, getMediaList, syncIndex, resolveAPIURL } from "./lib/api.js";
 
 // Helper Wrapper for Category View
 function CategoryRouteWrapper({ onOpenMedia, onQuickPlay }) {
@@ -44,8 +44,8 @@ function MediaDetailsRouteWrapper({ onOpenCategory, onQuickPlay }) {
         plot: "ملحمة إيرين ييغر وفيلق الاستكشاف في صراع البقاء الأخير.",
         year: 2023,
         rating: 9.1,
-        posterPath: "/images/aot_poster_detail.png",
-        bannerPath: "/images/aot_banner_detail.png",
+        posterPath: "/nexora-poster-placeholder.PNG",
+        bannerPath: "/nexora-library-backdrop.PNG",
         categorySlug: "anime",
         fileCount: 28,
         genres: ["أكشن", "دراما", "أنمي", "فانتازيا"],
@@ -110,10 +110,12 @@ export default function App() {
     }
 
     setIsSearching(true);
-    searchLibrary(deferredQuery, { limit: 30 })
+    // Catalogue search deliberately goes through PostgreSQL-backed /api/media.
+    // Meilisearch remains available for administration, but card data must have
+    // the same local offline-first contract as every other catalogue surface.
+    getMediaList({ q: deferredQuery, limit: 30 })
       .then((payload) => {
-        const hits = payload?.hits || [];
-        setSearchResults(hits);
+        setSearchResults(payload?.items || []);
       })
       .catch(() => setSearchResults([]))
       .finally(() => setIsSearching(false));

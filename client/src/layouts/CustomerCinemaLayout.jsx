@@ -28,15 +28,13 @@ export default function CustomerCinemaLayout({
       navigate("/");
     } else if (viewId === "favorites") {
       navigate("/favorites");
-    } else if (viewId === "admin") {
-      navigate("/admin");
     } else {
       navigate(`/catalog/${viewId}`);
     }
   }
 
   return (
-    <div className="relative min-h-screen bg-[#08070E] text-white selection:bg-fuchsia-600/40 selection:text-white font-sans text-right" dir="rtl">
+    <div className="relative min-h-screen bg-[var(--bg-base)] text-[var(--text-primary)] selection:bg-[var(--color-accent-light)] font-sans text-right" dir="rtl">
       {/* Background Ambient Glow */}
       <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
         <div className="absolute -right-40 -top-40 h-[500px] w-[500px] rounded-full bg-purple-900/15 blur-[120px]" />
@@ -54,7 +52,7 @@ export default function CustomerCinemaLayout({
         />
 
         {/* Main Content Area */}
-        <div className="flex min-w-0 flex-1 flex-col gap-6">
+        <div className="flex min-w-0 flex-1 flex-col gap-6 lg:pr-[18.5rem] xl:pr-[19rem]">
           {/* Top Bar Header */}
           <TopBar
             health={health}
@@ -62,7 +60,6 @@ export default function CustomerCinemaLayout({
             searchQuery={searchQuery}
             onSearchChange={onSearchChange}
             onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
-            onOpenAdmin={() => navigate("/admin")}
           />
 
           {/* Page Outlet */}

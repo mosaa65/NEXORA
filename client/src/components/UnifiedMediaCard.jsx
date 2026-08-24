@@ -1,84 +1,123 @@
-import React from "react";
 import { motion } from "framer-motion";
 import Icon from "./Icon";
 import { resolveAPIURL } from "../lib/api";
 
-export default function UnifiedMediaCard({ media, onOpen, onQuickPlay }) {
-  if (!media) return null;
+const typeLabels = { movie: "فيلم", series: "مسلسل", anime: "أنمي", documentary: "وثائقي", play: "مسرحية", season: "موسم" };
+const typeIcons = { movie: "film", series: "tv", anime: "spark", documentary: "film", play: "mask", season: "tv" };
+const typeStyles = {
+  movie: "border-sky-300/25 bg-sky-950/70 text-sky-100",
+  series: "border-violet-300/25 bg-violet-950/70 text-violet-100",
+  anime: "border-fuchsia-300/25 bg-fuchsia-950/70 text-fuchsia-100",
+  documentary: "border-cyan-300/25 bg-cyan-950/70 text-cyan-100",
+  play: "border-amber-300/25 bg-amber-950/70 text-amber-100",
+  season: "border-indigo-300/25 bg-indigo-950/70 text-indigo-100",
+};
+const statusLabels = { completed: "مكتمل", ongoing: "يعرض الآن", upcoming: "قادم", cancelled: "ملغي" };
+const statusStyles = {
+  completed: "border-emerald-300/35 bg-emerald-500/20 text-emerald-50 shadow-[0_5px_18px_rgba(16,185,129,.20)]",
+  ongoing: "border-fuchsia-300/35 bg-fuchsia-500/20 text-fuchsia-50 shadow-[0_5px_18px_rgba(217,70,239,.22)]",
+  upcoming: "border-sky-300/35 bg-sky-500/20 text-sky-50 shadow-[0_5px_18px_rgba(14,165,233,.20)]",
+  cancelled: "border-slate-300/25 bg-slate-500/20 text-slate-100",
+};
+const statusDotStyles = { completed: "bg-emerald-300", ongoing: "bg-fuchsia-300", upcoming: "bg-sky-300", cancelled: "bg-slate-300" };
 
-  const posterURL = resolveAPIURL(media.posterPath) || "/images/jujutsu_kaisen_poster.png";
+function formatSize(bytes) {
+  const value = Number(bytes || 0);
+  if (!Number.isFinite(value) || value <= 0) return "";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const unit = Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1);
+  const amount = value / 1024 ** unit;
+  return `${amount >= 10 || unit === 0 ? amount.toFixed(0) : amount.toFixed(1)} ${units[unit]}`;
+}
+
+function formatRuntime(minutes) {
+  const value = Number(minutes || 0);
+  if (!Number.isFinite(value) || value <= 0) return "";
+  return value < 60 ? `${value} د` : `${Math.floor(value / 60)}س${value % 60 ? ` ${value % 60}د` : ""}`;
+}
+
+function compactDetails(media, isSeason) {
+  const isEpisodic = isSeason || media.type === "series" || media.type === "anime";
+  const facts = [];
+  if (isSeason) {
+    if (media.seasonNumber) facts.push(`الموسم ${media.seasonNumber}`);
+    if (media.fileCount) facts.push(`${media.fileCount} حلقة`);
+  } else if (isEpisodic) {
+    if (media.seasonCount) facts.push(`${media.seasonCount} مواسم`);
+    if (media.tmdbSeasonCount && media.tmdbSeasonCount !== media.seasonCount) facts.push(`TMDB ${media.tmdbSeasonCount} مواسم`);
+  } else {
+    if (media.year) facts.push(String(media.year));
+    const runtime = formatRuntime(media.runtimeMinutes);
+    if (runtime) facts.push(runtime);
+  }
+  const size = formatSize(media.totalSize);
+  if (size) facts.push(size);
+  return facts.slice(0, 5);
+}
+
+/** The single, offline-first card for catalogue grids, carousels and seasons. */
+export default function UnifiedMediaCard({ media, onOpen, variant = "standard", layout = "grid" }) {
+  if (!media) return null;
+  const item = {
+    titleAr: media.titleAr ?? media.title_ar ?? "", titleEn: media.titleEn ?? media.title_en ?? "", type: media.type,
+    year: media.year ?? media.releaseYear ?? media.release_year, rating: Number(media.rating || 0), posterPath: media.posterPath ?? media.poster_path,
+    status: media.status, seasonCount: Number(media.seasonCount ?? media.season_count ?? 0), seasonNumber: Number(media.seasonNumber ?? media.season_number ?? 0),
+    tmdbSeasonCount: Number(media.tmdbSeasonCount ?? media.tmdb_season_count ?? 0), tmdbEpisodeCount: Number(media.tmdbEpisodeCount ?? media.tmdb_episode_count ?? 0),
+    fileCount: Number(media.fileCount ?? media.file_count ?? 0), totalSize: media.totalSize ?? media.total_size, bestResolution: media.bestResolution ?? media.best_resolution,
+    runtimeMinutes: media.runtimeMinutes ?? media.runtime_minutes, hasArabicAudio: media.hasArabicAudio ?? media.has_arabic_audio,
+    hasArabicSubtitles: media.hasArabicSubtitles ?? media.has_arabic_subtitles, isSeason: Boolean(media.isSeason || media.type === "season"),
+  };
+  const title = item.titleAr || item.titleEn || "عنوان غير متوفر";
+  const englishTitle = item.titleEn && item.titleEn !== title ? item.titleEn : "";
+  const titleIsArabic = /[\u0600-\u06FF]/.test(title);
+  const mediaKind = item.isSeason ? "season" : item.type;
+  const posterURL = resolveAPIURL(item.posterPath) || "/nexora-poster-placeholder.PNG";
+  const facts = compactDetails(item, item.isSeason);
+  const status = statusLabels[item.status];
+  const statusStyle = statusStyles[item.status] || "border-white/15 bg-black/50 text-white";
+  const statusDotStyle = statusDotStyles[item.status] || "bg-white/70";
+  const compact = variant === "compact";
+
+  if (layout === "list") {
+    return (
+      <motion.button type="button" onClick={() => onOpen?.(media)} whileHover={{ x: -3 }} whileTap={{ scale: 0.99 }} transition={{ duration: 0.2 }}
+        className="group flex w-full items-stretch overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] text-right shadow-[var(--shadow-sm)] transition-[border-color,box-shadow] hover:border-fuchsia-400/55 hover:shadow-[var(--shadow-md)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]" dir="rtl" aria-label={`فتح تفاصيل ${title}`}>
+        <div className="relative w-24 shrink-0 overflow-hidden bg-black sm:w-32"><img src={posterURL} alt="" loading="lazy" onError={(event) => { event.currentTarget.src = "/nexora-poster-placeholder.PNG"; }} className="h-full min-h-[132px] w-full object-cover transition-transform duration-500 group-hover:scale-105" /><div className="absolute inset-0 bg-gradient-to-l from-black/35 to-transparent" />{item.bestResolution && <span className="absolute bottom-2 right-2 rounded-md border border-cyan-300/30 bg-cyan-950/75 px-1.5 py-0.5 text-[9px] font-black text-cyan-100 backdrop-blur">{item.bestResolution}</span>}</div>
+        <div className="flex min-w-0 flex-1 flex-col justify-center p-3.5 sm:p-4">
+          <div className="flex items-center justify-between gap-3"><div className="flex flex-wrap items-center gap-1.5"><span className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[9px] font-extrabold ${typeStyles[mediaKind] || "border-white/15 bg-black/55 text-white"}`}><Icon name={typeIcons[mediaKind] || "film"} className="h-3 w-3" />{typeLabels[mediaKind] || "مكتبة"}</span>{status && <span className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[9px] font-extrabold ${statusStyle}`}><i className={`h-1.5 w-1.5 rounded-full ${statusDotStyle}`} />{status}</span>}</div>{item.rating > 0 && <span className="inline-flex items-center gap-1 text-[11px] font-black tabular-nums text-amber-500"><Icon name="star" className="h-3.5 w-3.5 fill-current stroke-0" />{item.rating.toFixed(1)}</span>}</div>
+          <h3 dir={titleIsArabic ? "rtl" : "ltr"} className={`mt-2 truncate text-sm font-extrabold text-[var(--text-primary)] ${titleIsArabic ? "text-right" : "text-left"}`}>{title}</h3>{englishTitle && <p dir="ltr" className="mt-0.5 truncate text-left text-[11px] text-[var(--text-muted)]">{englishTitle}</p>}
+          <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] font-semibold text-[var(--text-secondary)]">{facts.map((fact) => <span key={fact} className="rounded-md bg-[var(--bg-surface)] px-1.5 py-0.5">{fact}</span>)}{item.hasArabicAudio && <span className="rounded-md bg-emerald-400/10 px-1.5 py-0.5 text-emerald-700">صوت عربي</span>}{!item.hasArabicAudio && item.hasArabicSubtitles && <span className="rounded-md bg-sky-400/10 px-1.5 py-0.5 text-sky-700">ترجمة عربية</span>}</div>
+        </div>
+        <div className="flex w-10 items-center justify-center border-r border-[var(--border-subtle)] text-[var(--text-muted)] transition-colors group-hover:text-[var(--color-accent)]"><span aria-hidden="true">‹</span></div>
+      </motion.button>
+    );
+  }
 
   return (
-    <motion.div
-      whileHover={{ scale: 1.04, y: -6 }}
-      transition={{ duration: 0.22 }}
-      className="group relative flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0C0B17] shadow-xl hover:shadow-2xl hover:shadow-purple-900/40 hover:border-fuchsia-500/50 transition-all cursor-pointer text-right"
-      onClick={() => onOpen && onOpen(media)}
-      dir="rtl"
-    >
-      {/* Poster Image Container */}
-      <div className="relative aspect-[2/3] w-full overflow-hidden bg-slate-900">
-        <img
-          src={posterURL}
-          alt={media.titleAr || media.titleEn}
-          loading="lazy"
-          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-108"
-        />
-
-        {/* Ambient Dark Bottom Fade */}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#0C0B17] via-transparent to-transparent opacity-80 group-hover:opacity-60 transition-opacity" />
-
-        {/* Top Badges (Resolution & Type) */}
-        <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5 flex-wrap z-10">
-          {media.resolution && (
-            <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-black bg-black/70 text-cyan-300 backdrop-blur-md border border-cyan-500/30 shadow">
-              {media.resolution}
-            </span>
-          )}
-          {media.fileCount > 1 && (
-            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-950/80 text-purple-300 backdrop-blur-md border border-purple-500/30">
-              {media.fileCount} حلقات
-            </span>
-          )}
-        </div>
-
-        {/* Rating Badge (Top Left) */}
-        {media.rating > 0 && (
-          <div className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-md text-[10px] font-bold bg-black/70 text-amber-300 backdrop-blur-md border border-amber-500/30 shadow flex items-center gap-0.5 z-10">
-            <span>⭐</span>
-            <span>{media.rating.toFixed(1)}</span>
+    <motion.button type="button" onClick={() => onOpen?.(media)} whileHover={{ y: -5 }} whileTap={{ scale: 0.985 }} transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+      className="group relative flex w-full flex-col overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] text-right shadow-[var(--shadow-md)] transition-[border-color,box-shadow] duration-300 hover:border-fuchsia-400/55 hover:shadow-[var(--shadow-lg)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]"
+      aria-label={`فتح تفاصيل ${title}`} dir="rtl">
+      <div className="relative aspect-[3/4] w-full overflow-hidden bg-[#151225]">
+        <img src={posterURL} alt={`بوستر ${title}`} loading="lazy" onError={(event) => { event.currentTarget.src = "/nexora-poster-placeholder.PNG"; }} className="h-full w-full object-cover transition-transform duration-700 motion-reduce:transition-none group-hover:scale-[1.055]" />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(5,4,12,.34)_0%,transparent_36%,rgba(8,7,14,.08)_52%,#0d0c17_100%)]" />
+        <div className="absolute inset-x-2.5 top-2.5 flex items-start justify-between gap-2">
+          <div className="flex max-w-[75%] flex-wrap items-center justify-end gap-1.5">
+            <span className={`inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[10px] font-extrabold shadow-sm backdrop-blur-md ${typeStyles[mediaKind] || "border-white/15 bg-black/55 text-white/95"}`}><Icon name={typeIcons[mediaKind] || "film"} className="h-3 w-3 shrink-0" />{typeLabels[mediaKind] || "مكتبة"}</span>
+            {status && <span className={`inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[10px] font-extrabold backdrop-blur-md ${statusStyle}`}><i className={`h-1.5 w-1.5 rounded-full ${statusDotStyle} ${item.status === "ongoing" ? "animate-pulse" : ""}`} />{status}</span>}
           </div>
-        )}
-
-        {/* Quick Play Floating Button (On Hover) */}
-        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-black/30 backdrop-blur-[2px]">
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onQuickPlay && onQuickPlay(media);
-            }}
-            className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-tr from-fuchsia-600 to-purple-600 text-white shadow-xl shadow-purple-900/80 hover:scale-110 transition-transform"
-            title="تشغيل فوري"
-          >
-            <Icon name="play" className="h-5 w-5 fill-current" />
-          </button>
+          {item.rating > 0 && <span className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-amber-300/25 bg-black/55 px-2 py-1 text-[10px] font-black tabular-nums text-amber-100 shadow-sm backdrop-blur-md"><Icon name="star" className="h-3 w-3 fill-current stroke-0 text-amber-300" />{item.rating.toFixed(1)}</span>}
+        </div>
+        <div className="absolute inset-x-2.5 bottom-2.5 flex items-end justify-between gap-2">
+          {item.bestResolution ? <span className="rounded-md border border-cyan-300/30 bg-cyan-950/70 px-2 py-1 text-[10px] font-black tracking-wide text-cyan-100 shadow-sm backdrop-blur-md">{item.bestResolution}</span> : <span />}
+          <span className="translate-y-1 rounded-full border border-white/10 bg-black/35 px-2.5 py-1 text-[10px] font-bold text-white/90 opacity-0 backdrop-blur-md transition duration-200 group-hover:translate-y-0 group-hover:opacity-100 motion-reduce:transition-none">التفاصيل <span aria-hidden="true">‹</span></span>
         </div>
       </div>
-
-      {/* Media Details Footer */}
-      <div className="p-3 flex flex-col justify-between flex-1 space-y-1 bg-[#0C0B17]">
-        <h4 className="text-xs sm:text-sm font-bold text-white group-hover:text-fuchsia-300 transition-colors line-clamp-1">
-          {media.titleAr || media.titleEn}
-        </h4>
-
-        <div className="flex items-center justify-between text-[11px] text-gray-400 font-medium pt-0.5">
-          <span>{media.year || (media.releaseYear ? media.releaseYear : "—")}</span>
-          <span className="text-[10px] text-purple-300 bg-purple-500/10 px-1.5 py-0.2 rounded border border-purple-500/20">
-            {media.type === "movie" ? "فيلم" : media.type === "series" ? "مسلسل" : "أنمي"}
-          </span>
-        </div>
+      <div className={`relative min-h-[94px] ${compact ? "p-2.5" : "p-3"}`}>
+        <div className="absolute inset-x-3 top-0 h-px bg-[var(--border-subtle)]" />
+        <h3 dir={titleIsArabic ? "rtl" : "ltr"} className={`line-clamp-2 text-[13px] font-extrabold leading-5 text-[var(--text-primary)] transition-colors group-hover:text-[var(--color-accent-hover)] sm:text-sm ${titleIsArabic ? "text-right" : "text-left tracking-[0.01em]"}`}>{title}</h3>
+        {englishTitle && <p dir="ltr" className="mt-0.5 truncate text-left text-[10px] font-medium tracking-wide text-[var(--text-muted)]">{englishTitle}</p>}
+        <div className="mt-2 flex min-h-5 flex-wrap items-center gap-x-1.5 gap-y-1 text-[10px] font-semibold leading-5 text-[var(--text-secondary)]">{facts.map((fact, index) => <span key={`${fact}-${index}`} className="inline-flex items-center gap-1 rounded-md bg-[var(--bg-surface)] px-1.5 py-px">{index > 0 && <i className="h-1 w-1 rounded-full bg-[var(--text-muted)]" />}{fact}</span>)}{item.hasArabicAudio && <span className="rounded-md border border-emerald-300/10 bg-emerald-400/10 px-1.5 py-px text-[9px] font-bold text-emerald-700 dark:text-emerald-200">صوت عربي</span>}{!item.hasArabicAudio && item.hasArabicSubtitles && <span className="rounded-md border border-sky-300/10 bg-sky-400/10 px-1.5 py-px text-[9px] font-bold text-sky-700 dark:text-sky-200">ترجمة عربية</span>}</div>
       </div>
-    </motion.div>
+    </motion.button>
   );
 }

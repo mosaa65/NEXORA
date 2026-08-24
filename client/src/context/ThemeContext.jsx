@@ -1,11 +1,15 @@
 import React, { createContext, useCallback, useEffect, useState } from "react";
 
 const STORAGE_KEY = "nexora_theme";
+const FONT_STORAGE_KEY = "nexora_font";
 const VALID_THEMES = ["dark", "light"];
+const VALID_FONTS = ["plex", "cairo"];
 
 export const ThemeContext = createContext({
   theme: "dark",
+  font: "plex",
   setTheme: () => {},
+  setFont: () => {},
   toggleTheme: () => {},
 });
 
@@ -21,6 +25,13 @@ export function ThemeProvider({ children }) {
     } catch {}
     return "dark";
   });
+  const [font, setFontState] = useState(() => {
+    try {
+      const stored = localStorage.getItem(FONT_STORAGE_KEY);
+      if (stored && VALID_FONTS.includes(stored)) return stored;
+    } catch {}
+    return "plex";
+  });
 
   // Apply theme to document
   useEffect(() => {
@@ -30,8 +41,16 @@ export function ThemeProvider({ children }) {
     } catch {}
   }, [theme]);
 
+  useEffect(() => {
+    document.documentElement.setAttribute("data-font", font);
+    try { localStorage.setItem(FONT_STORAGE_KEY, font); } catch {}
+  }, [font]);
+
   const setTheme = useCallback((t) => {
     if (VALID_THEMES.includes(t)) setThemeState(t);
+  }, []);
+  const setFont = useCallback((value) => {
+    if (VALID_FONTS.includes(value)) setFontState(value);
   }, []);
 
   const toggleTheme = useCallback(() => {
@@ -39,7 +58,7 @@ export function ThemeProvider({ children }) {
   }, []);
 
   return (
-    <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme, setTheme, toggleTheme, font, setFont }}>
       {children}
     </ThemeContext.Provider>
   );

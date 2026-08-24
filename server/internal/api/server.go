@@ -47,6 +47,7 @@ type repository interface {
 	CalculateChecksums(ctx context.Context, mediaItemID int64) (db.ChecksumResult, error)
 	GetMediaItem(ctx context.Context, id int64) (*db.MediaItemDetail, error)
 	ListMediaItems(ctx context.Context, opts db.ListMediaOptions) (*db.MediaListResult, error)
+	ListShowcases(ctx context.Context, opts db.ShowcaseOptions) (*db.ShowcaseResult, error)
 	UpdateMediaMetadata(ctx context.Context, id int64, meta metadata.Result) (*search.MediaDocument, error)
 	GetMetadataSnapshot(ctx context.Context, mediaItemID int64, locale string) (*db.MetadataSnapshot, error)
 	SaveSeasonMetadataSnapshots(ctx context.Context, mediaItemID int64, snapshots []metadata.SeasonResult) error
@@ -145,6 +146,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("DELETE /api/categories/{id}", s.handleCategoryDelete)
 	s.mux.HandleFunc("GET /api/search", s.handleSearch)
 	s.mux.HandleFunc("GET /api/media", s.handleMediaList)
+	s.mux.HandleFunc("GET /api/showcases", s.handleShowcases)
 	s.mux.HandleFunc("POST /api/media", s.handleMediaCreate)
 	s.mux.HandleFunc("GET /api/media/{id}", s.handleMediaDetail)
 	s.mux.HandleFunc("PUT /api/media/{id}", s.handleMediaUpdateFull)
@@ -1159,6 +1161,26 @@ func (s *Server) handleMediaList(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
+func (s *Server) handleShowcases(w http.ResponseWriter, r *http.Request) {
+	limit := 6
+	if rawLimit := r.URL.Query().Get("limit"); rawLimit != "" {
+		if parsed, err := strconv.Atoi(rawLimit); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+
+	result, err := s.repository.ListShowcases(r.Context(), db.ShowcaseOptions{
+		Context:      strings.TrimSpace(r.URL.Query().Get("context")),
+		CategorySlug: strings.TrimSpace(r.URL.Query().Get("category")),
+		Limit:        limit,
+	})
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
 func (s *Server) handleMediaDetail(w http.ResponseWriter, r *http.Request) {
 	mediaID, ok := parsePositiveID(r.PathValue("id"))
 	if !ok {
@@ -1931,5 +1953,4 @@ func (s *Server) handleAdminSession(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleAdminLogout(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "message": "تم تسجيل الخروج بنجاح"})
 }
-
 

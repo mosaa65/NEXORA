@@ -372,12 +372,12 @@ export default function AdminMediaPage() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {filteredMediaItems.map((item) => {
-            const poster = item.poster_path || "/images/tokyo_ghoul_hero.png";
+            const poster = item.poster_path || "/nexora-poster-placeholder.PNG";
             return (
               <div key={item.id} className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-white/10 bg-[#0E0C1A] hover:border-fuchsia-500/50 hover:shadow-xl hover:shadow-purple-950/50 transition duration-300">
                 <div className="relative aspect-[2/3] w-full overflow-hidden bg-black/60">
                   <img src={poster} alt={item.title_en} className="h-full w-full object-cover group-hover:scale-105 transition duration-500"
-                    onError={(e) => { e.target.src = "/images/tokyo_ghoul_hero.png"; }} />
+                    onError={(e) => { e.target.src = "/nexora-poster-placeholder.PNG"; }} />
                   <div className="absolute inset-0 bg-gradient-to-t from-[#0E0C1A] via-transparent to-black/40" />
                   <div className="absolute top-2.5 right-2.5 left-2.5 flex items-center justify-between">
                     <span className="flex items-center gap-1 rounded-lg bg-black/70 px-2 py-1 text-[11px] font-bold text-amber-300 backdrop-blur-md">

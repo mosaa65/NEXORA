@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import HeroSlider from "../components/HeroSlider.jsx";
+import ShowcaseHero from "../components/ShowcaseHero.jsx";
 import HubBannerCard from "../components/HubBannerCard.jsx";
 import FilterToolbar from "../components/FilterToolbar.jsx";
-import UnifiedMediaCard from "../components/UnifiedMediaCard.jsx";
+import MediaCollection from "../components/MediaCollection.jsx";
 import Icon from "../components/Icon.jsx";
 import { getMediaList, resolveAPIURL } from "../lib/api.js";
 
@@ -47,7 +47,7 @@ const seriesHubs = [
     subtitle: "حكايات ملحمية وعاطفية من قمة الإنتاج التركي المدبلج والمترجم",
     tag: "الأعلى طلباً",
     originTerm: "تركي",
-    backdrop: "/images/aot_banner_detail.png",
+    backdrop: "/nexora-library-backdrop.PNG",
     accentColor: "from-amber-700/80 via-orange-950/80 to-[#0F0E1A]",
     borderColor: "border-amber-500/40",
   },
@@ -57,7 +57,7 @@ const seriesHubs = [
     subtitle: "إنتاجات مصرية، خليجية، وشامية حصرية ومتنوعة لجميع الأذواق",
     tag: "إنتاج عربي",
     originTerm: "عربي",
-    backdrop: "/images/jujutsu_kaisen_poster.png",
+    backdrop: "/nexora-library-backdrop.PNG",
     accentColor: "from-rose-700/80 via-purple-950/80 to-[#0F0E1A]",
     borderColor: "border-rose-500/40",
   },
@@ -67,7 +67,7 @@ const seriesHubs = [
     subtitle: "أضخم أعمال HBO و Netflix و Apple من الجريمة والخيال العلمي",
     tag: "Global Hits",
     originTerm: "أجنبي",
-    backdrop: "/images/demon_slayer_poster.png",
+    backdrop: "/nexora-library-backdrop.PNG",
     accentColor: "from-cyan-700/80 via-blue-950/80 to-[#0F0E1A]",
     borderColor: "border-cyan-500/40",
   },
@@ -77,7 +77,7 @@ const seriesHubs = [
     subtitle: "قصص مشوقة ورومانسية وإثارة آسيوية متصدرة التريند العالمي",
     tag: "K-Drama",
     originTerm: "كوري",
-    backdrop: "/images/naruto_poster.png",
+    backdrop: "/nexora-library-backdrop.PNG",
     accentColor: "from-fuchsia-700/80 via-pink-950/80 to-[#0F0E1A]",
     borderColor: "border-fuchsia-500/40",
   },
@@ -91,7 +91,7 @@ const kidsHubs = [
     tag: "Disney / Pixar",
     originTerm: "",
     genreTerm: "عائلي",
-    backdrop: "/images/jujutsu_kaisen_poster.png",
+    backdrop: "/nexora-library-backdrop.PNG",
     accentColor: "from-sky-700/80 via-indigo-950/80 to-[#0F0E1A]",
     borderColor: "border-sky-500/40",
   },
@@ -102,7 +102,7 @@ const kidsHubs = [
     tag: "Superheroes",
     originTerm: "",
     genreTerm: "أكشن",
-    backdrop: "/images/demon_slayer_poster.png",
+    backdrop: "/nexora-library-backdrop.PNG",
     accentColor: "from-red-700/80 via-rose-950/80 to-[#0F0E1A]",
     borderColor: "border-red-500/40",
   },
@@ -113,7 +113,7 @@ const kidsHubs = [
     tag: "سبيستون",
     originTerm: "ياباني",
     genreTerm: "كرتون",
-    backdrop: "/images/naruto_poster.png",
+    backdrop: "/nexora-library-backdrop.PNG",
     accentColor: "from-amber-600/80 via-orange-950/80 to-[#0F0E1A]",
     borderColor: "border-amber-500/40",
   },
@@ -157,17 +157,25 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
 
       const transformed = (res?.items || []).map((item) => ({
         id: item.id,
-        titleAr: item.title_ar || item.title_en,
+        titleAr: item.title_ar,
         titleEn: item.title_en,
         type: item.type,
-        plot: item.plot_ar || item.plot_en || "عمل سينمائي متاح على شبكة NEXORA المحلية.",
-        year: item.release_year || 2024,
-        rating: item.rating || 8.5,
-        resolution: "1080p",
+        plot: item.plot_ar || item.plot_en || "",
+        year: item.release_year,
+        rating: item.rating,
         posterPath: item.poster_path,
         bannerPath: item.banner_path,
         categorySlug: item.category_slug || selectedCategory,
-        fileCount: item.file_count || 1,
+        fileCount: item.file_count,
+        status: item.status,
+        seasonCount: item.season_count,
+        tmdbSeasonCount: item.tmdb_season_count,
+        tmdbEpisodeCount: item.tmdb_episode_count,
+        totalSize: item.total_size,
+        bestResolution: item.best_resolution,
+        runtimeMinutes: item.runtime_minutes,
+        hasArabicAudio: item.has_arabic_audio,
+        hasArabicSubtitles: item.has_arabic_subtitles,
         genres: item.genres || [],
       }));
 
@@ -220,7 +228,7 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
     });
   }, [items, searchQuery, selectedHub, activeOrigin, activeGenre]);
 
-  // Featured Items for Hero Slider
+  // Fallback content while the database-backed showcase is loading.
   const heroItems = useMemo(() => {
     return items.slice(0, 5);
   }, [items]);
@@ -229,12 +237,18 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
 
   return (
     <div className="space-y-8 pb-16 text-right" dir="rtl">
-      {/* 1. Hero Showcase Slider (If not in a sub-hub view) */}
+      {/* 1. Unified database-backed showcase (If not in a sub-hub view) */}
       {!selectedHub && heroItems.length > 0 && (
-        <HeroSlider
-          items={heroItems}
+        <ShowcaseHero
+          context="category"
+          category={selectedCategory}
+          fallbackItems={heroItems}
           onOpenMedia={onOpenMedia}
-          onQuickPlay={onQuickPlay}
+          onNavigate={(target) => {
+            if (target?.category && target.category !== selectedCategory) {
+              window.location.hash = `#/catalog/${target.category}`;
+            }
+          }}
         />
       )}
 
@@ -336,16 +350,7 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-            {filteredItems.map((media) => (
-              <UnifiedMediaCard
-                key={media.id}
-                media={media}
-                onOpen={onOpenMedia}
-                onQuickPlay={onQuickPlay}
-              />
-            ))}
-          </div>
+          <MediaCollection items={filteredItems} onOpen={onOpenMedia} />
         )}
       </div>
     </div>

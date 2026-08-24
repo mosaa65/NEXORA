@@ -1,18 +1,25 @@
-@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700;800&family=Cairo:wght@400;500;600;700;800;900&display=swap");
+@font-face { font-family: "NEXORA Arabic"; src: url("/fonts/ibm-plex-arabic-400.ttf") format("truetype"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "NEXORA Arabic"; src: url("/fonts/ibm-plex-arabic-500.ttf") format("truetype"); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: "NEXORA Arabic"; src: url("/fonts/ibm-plex-arabic-600.ttf") format("truetype"); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: "NEXORA Arabic"; src: url("/fonts/ibm-plex-arabic-700.ttf") format("truetype"); font-weight: 700 900; font-style: normal; font-display: swap; }
+@font-face { font-family: "NEXORA Cairo"; src: url("/fonts/cairo-400.ttf") format("truetype"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "NEXORA Cairo"; src: url("/fonts/cairo-500.ttf") format("truetype"); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: "NEXORA Cairo"; src: url("/fonts/cairo-600.ttf") format("truetype"); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: "NEXORA Cairo"; src: url("/fonts/cairo-700.ttf") format("truetype"); font-weight: 700 900; font-style: normal; font-display: swap; }
+@font-face { font-family: "NEXORA Latin"; src: url("/fonts/manrope-400.ttf") format("truetype"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "NEXORA Latin"; src: url("/fonts/manrope-500.ttf") format("truetype"); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: "NEXORA Latin"; src: url("/fonts/manrope-600.ttf") format("truetype"); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: "NEXORA Latin"; src: url("/fonts/manrope-700.ttf") format("truetype"); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "NEXORA Latin"; src: url("/fonts/manrope-800.ttf") format("truetype"); font-weight: 800 900; font-style: normal; font-display: swap; }
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  color-scheme: dark;
-  background:
-    radial-gradient(circle at top left, rgba(90, 50, 244, 0.16), transparent 26%),
-    radial-gradient(circle at top right, rgba(25, 183, 255, 0.12), transparent 28%),
-    radial-gradient(circle at bottom right, rgba(236, 72, 153, 0.08), transparent 24%),
-    linear-gradient(180deg, #02030a 0%, #070912 48%, #05060b 100%);
-  --surface: rgba(10, 12, 22, 0.74);
-  --surface-border: rgba(255, 255, 255, 0.1);
+  background: var(--bg-base);
+  --surface: var(--bg-surface);
+  --surface-border: var(--border-default);
 }
 
 html,
@@ -24,13 +31,9 @@ body,
 body {
   margin: 0;
   min-width: 320px;
-  font-family: "Cairo", "Space Grotesk", sans-serif;
-  background:
-    radial-gradient(circle at top left, rgba(90, 50, 244, 0.18), transparent 24%),
-    radial-gradient(circle at bottom right, rgba(25, 183, 255, 0.13), transparent 28%),
-    radial-gradient(circle at center, rgba(255, 255, 255, 0.03), transparent 55%),
-    linear-gradient(180deg, #02030a 0%, #070912 52%, #05060b 100%);
-  color: rgba(255, 255, 255, 0.96);
+  font-family: var(--font-family);
+  background: var(--bg-base);
+  color: var(--text-primary);
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   font-feature-settings: "kern" 1, "ss01" 1;
@@ -42,8 +45,8 @@ body::before {
   inset: 0;
   pointer-events: none;
   background:
-    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+    linear-gradient(var(--border-subtle) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border-subtle) 1px, transparent 1px);
   background-size: 68px 68px;
   mask-image: radial-gradient(circle at center, black 40%, transparent 100%);
   opacity: 0.14;
@@ -67,8 +70,8 @@ body::after {
 }
 
 ::selection {
-  background: rgba(25, 183, 255, 0.3);
-  color: white;
+  background: var(--color-info-light);
+  color: var(--text-primary);
 }
 
 .glass-panel {
@@ -76,18 +79,18 @@ body::after {
   overflow: hidden;
   border: 1px solid var(--surface-border);
   border-radius: 2rem;
-  background: linear-gradient(180deg, rgba(12, 14, 24, 0.82), rgba(8, 10, 18, 0.7));
+  background: var(--gradient-card);
   backdrop-filter: blur(24px);
   box-shadow:
-    0 24px 80px rgba(0, 0, 0, 0.5),
-    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    var(--shadow-xl),
+    inset 0 1px 0 var(--border-subtle);
 }
 
 .glass-panel::before {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 40%);
+  background: linear-gradient(135deg, var(--bg-elevated), transparent 40%);
   opacity: 0.6;
   pointer-events: none;
 }
@@ -110,18 +113,18 @@ body::after {
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--bg-surface);
 }
 
 ::-webkit-scrollbar-thumb {
   border: 3px solid transparent;
-  background: linear-gradient(180deg, rgba(25, 183, 255, 0.72), rgba(90, 50, 244, 0.72));
+  background: linear-gradient(180deg, var(--color-info), var(--color-primary));
   background-clip: padding-box;
   border-radius: 999px;
 }
 
 input::placeholder {
-  color: rgba(255, 255, 255, 0.34);
+  color: var(--text-muted);
 }
 
 button {
@@ -139,7 +142,7 @@ select {
   --plyr-color-main: #c084fc;
   --plyr-video-background: #000;
   --plyr-control-radius: 12px;
-  --plyr-font-family: "Cairo", "Space Grotesk", sans-serif;
+  --plyr-font-family: var(--font-family);
 }
 
 .nexora-player .plyr {
@@ -160,4 +163,3 @@ select {
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   background: linear-gradient(180deg, rgba(5, 7, 16, 0.1), rgba(10, 9, 20, 0.95));
 }
-

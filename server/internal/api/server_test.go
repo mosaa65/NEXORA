@@ -90,6 +90,9 @@ func (m *mockRepo) GetMediaItem(ctx context.Context, id int64) (*db.MediaItemDet
 func (m *mockRepo) ListMediaItems(ctx context.Context, opts db.ListMediaOptions) (*db.MediaListResult, error) {
 	return &db.MediaListResult{Total: 1, Limit: opts.Limit, Offset: opts.Offset, Items: []search.MediaDocument{{ID: 1, TitleEN: "Inception"}}}, nil
 }
+func (m *mockRepo) ListShowcases(ctx context.Context, opts db.ShowcaseOptions) (*db.ShowcaseResult, error) {
+	return &db.ShowcaseResult{Context: opts.Context, Slides: []db.ShowcaseSlide{{ID: "media-1", Kind: "featured", MediaID: 1, TitleEN: "Inception"}}}, nil
+}
 func (m *mockRepo) UpdateMediaMetadata(ctx context.Context, id int64, meta metadata.Result) (*search.MediaDocument, error) {
 	return &search.MediaDocument{ID: id, TitleEN: meta.Title, ReleaseYear: meta.ReleaseYear}, nil
 }

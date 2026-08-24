@@ -17,10 +17,10 @@ export default function TopBar({
       <button
         type="button"
         onClick={onToggleSidebar}
-        className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white lg:hidden"
+        className="flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--text-primary)] lg:hidden"
         title="القائمة"
       >
-        ☰
+        <Icon name="menu" className="h-5 w-5" />
       </button>
 
       {/* Search Input Box */}
@@ -35,7 +35,7 @@ export default function TopBar({
             }}
             onFocus={() => setShowSearchDropdown(true)}
             placeholder="ابحث عن أنمي، فيلم، مسلسل..."
-            className="w-full bg-transparent text-xs font-bold text-white outline-none placeholder:text-white/40 sm:text-sm text-right"
+            className="w-full bg-transparent text-sm font-bold text-white outline-none placeholder:text-white/40 sm:text-base text-right"
           />
           {searchQuery && (
             <button
@@ -107,11 +107,11 @@ export default function TopBar({
       {/* Brand Name Emblem in Header (for Tablet & Desktop) */}
       <div className="flex items-center gap-3">
         <div className="text-right">
-          <h2 className="text-base font-black text-white">مكتبتي</h2>
-          <p className="text-[10px] font-bold text-white/40">نظام إدارة الوسائط</p>
+          <h2 className="text-lg font-black text-white">مكتبتي</h2>
+          <p className="text-xs font-bold text-white/50">نظام إدارة الوسائط</p>
         </div>
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-fuchsia-600 to-purple-800 text-white shadow-lg shadow-purple-900/50">
-          <svg className="h-5 w-5 stroke-current" fill="none" viewBox="0 0 24 24" strokeWidth="2">
+        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-fuchsia-600 to-purple-800 text-white shadow-lg shadow-purple-900/50">
+          <svg className="h-6 w-6 stroke-current" fill="none" viewBox="0 0 24 24" strokeWidth="2">
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 3L2 21h20L12 3z" />
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 9l-4 7h8l-4-7z" />
           </svg>

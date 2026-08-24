@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import HeroSlider from "../components/HeroSlider.jsx";
+import ShowcaseHero from "../components/ShowcaseHero.jsx";
 import UnifiedMediaCard from "../components/UnifiedMediaCard.jsx";
 import HubBannerCard from "../components/HubBannerCard.jsx";
 import Icon from "../components/Icon.jsx";
@@ -32,17 +32,25 @@ export default function DashboardPage({
         if (data?.items && data.items.length > 0) {
           const transformed = data.items.map((item) => ({
             id: item.id,
-            titleAr: item.title_ar || item.title_en,
+            titleAr: item.title_ar,
             titleEn: item.title_en,
             type: item.type,
-            plot: item.plot_ar || item.plot_en || "عمل سينمائي متاح على شبكة NEXORA المحلية.",
-            year: item.release_year || 2024,
-            rating: item.rating || 8.5,
-            resolution: "1080p",
+            plot: item.plot_ar || item.plot_en || "",
+            year: item.release_year,
+            rating: item.rating,
             posterPath: item.poster_path,
             bannerPath: item.banner_path,
             categorySlug: item.category_slug,
-            fileCount: item.file_count || 1,
+            fileCount: item.file_count,
+            status: item.status,
+            seasonCount: item.season_count,
+            tmdbSeasonCount: item.tmdb_season_count,
+            tmdbEpisodeCount: item.tmdb_episode_count,
+            totalSize: item.total_size,
+            bestResolution: item.best_resolution,
+            runtimeMinutes: item.runtime_minutes,
+            hasArabicAudio: item.has_arabic_audio,
+            hasArabicSubtitles: item.has_arabic_subtitles,
             genres: item.genres || [],
           }));
           setItems(transformed);
@@ -83,12 +91,13 @@ export default function DashboardPage({
 
   return (
     <div className="space-y-10 pb-16 text-right" dir="rtl">
-      {/* 1. Grand Hero Showcase Slider */}
+      {/* 1. Database-backed editorial showcase */}
       {heroItems.length > 0 && (
-        <HeroSlider
-          items={heroItems}
+        <ShowcaseHero
+          context="home"
+          fallbackItems={heroItems}
           onOpenMedia={onOpenMedia}
-          onQuickPlay={onQuickPlay}
+          onNavigate={(target) => target?.category && onNavigateCategory?.(target.category)}
         />
       )}
 
@@ -107,7 +116,7 @@ export default function DashboardPage({
             title="👑 روائع الدراما التركية"
             subtitle="الحكايات العثمانية والدراما العائلية الرومانسية الكاملة"
             count={seriesList.length}
-            backdrop="/images/aot_banner_detail.png"
+            backdrop="/nexora-library-backdrop.PNG"
             accentColor="from-amber-800/90 via-orange-950/80 to-[#0C0B17]"
             borderColor="border-amber-500/40"
             tag="الأكثر طلباً"
@@ -117,7 +126,7 @@ export default function DashboardPage({
             title="🎬 أفلام هوليوود والعالم"
             subtitle="أحدث أفلام الأكشن والخيال العلمي والإثارة بدقة 4K"
             count={moviesList.length}
-            backdrop="/images/demon_slayer_poster.png"
+            backdrop="/nexora-library-backdrop.PNG"
             accentColor="from-cyan-800/90 via-blue-950/80 to-[#0C0B17]"
             borderColor="border-cyan-500/40"
             tag="سينما 4K"
@@ -127,7 +136,7 @@ export default function DashboardPage({
             title="⚔️ عوالم الأنمي الأسطورية"
             subtitle="ون بيس، هجوم العمالقة، وجوجوتسو كايسن بمواسمها الكاملة"
             count={seriesList.length}
-            backdrop="/images/jujutsu_kaisen_poster.png"
+            backdrop="/nexora-library-backdrop.PNG"
             accentColor="from-purple-800/90 via-fuchsia-950/80 to-[#0C0B17]"
             borderColor="border-purple-500/40"
             tag="Anime Top"
@@ -137,7 +146,7 @@ export default function DashboardPage({
             title="🏰 ديزني والأطفال العائلي"
             subtitle="أفلام الرسوم المتحركة وسلاسل الأبطال الخارقين والكرتون"
             count={moviesList.length}
-            backdrop="/images/naruto_poster.png"
+            backdrop="/nexora-library-backdrop.PNG"
             accentColor="from-sky-800/90 via-indigo-950/80 to-[#0C0B17]"
             borderColor="border-sky-500/40"
             tag="عائلي وأطفال"
@@ -180,7 +189,7 @@ export default function DashboardPage({
           className="flex items-stretch gap-4 overflow-x-auto pb-4 scrollbar-none snap-x"
         >
           {topRatedList.map((media) => (
-            <div key={media.id} className="w-40 sm:w-48 shrink-0 snap-start">
+            <div key={media.id} className="w-44 sm:w-52 shrink-0 snap-start">
               <UnifiedMediaCard
                 media={media}
                 onOpen={onOpenMedia}
@@ -223,7 +232,7 @@ export default function DashboardPage({
           className="flex items-stretch gap-4 overflow-x-auto pb-4 scrollbar-none snap-x"
         >
           {seriesList.map((media) => (
-            <div key={media.id} className="w-40 sm:w-48 shrink-0 snap-start">
+            <div key={media.id} className="w-44 sm:w-52 shrink-0 snap-start">
               <UnifiedMediaCard
                 media={media}
                 onOpen={onOpenMedia}
@@ -266,7 +275,7 @@ export default function DashboardPage({
           className="flex items-stretch gap-4 overflow-x-auto pb-4 scrollbar-none snap-x"
         >
           {moviesList.map((media) => (
-            <div key={media.id} className="w-40 sm:w-48 shrink-0 snap-start">
+            <div key={media.id} className="w-44 sm:w-52 shrink-0 snap-start">
               <UnifiedMediaCard
                 media={media}
                 onOpen={onOpenMedia}

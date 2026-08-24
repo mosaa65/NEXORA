@@ -41,6 +41,15 @@ type MediaDocument struct {
 	CategoryAR   string   `json:"category_ar,omitempty"`
 	CategoryEN   string   `json:"category_en,omitempty"`
 	FileCount    int      `json:"file_count"`
+	Status       string   `json:"status,omitempty"`
+	SeasonCount  int      `json:"season_count,omitempty"`
+	TMDBSeasonCount int   `json:"tmdb_season_count,omitempty"`
+	TMDBEpisodeCount int  `json:"tmdb_episode_count,omitempty"`
+	TotalSize    int64    `json:"total_size,omitempty"`
+	BestResolution string `json:"best_resolution,omitempty"`
+	RuntimeMinutes int   `json:"runtime_minutes,omitempty"`
+	HasArabicAudio bool  `json:"has_arabic_audio,omitempty"`
+	HasArabicSubtitles bool `json:"has_arabic_subtitles,omitempty"`
 }
 
 type SyncResult struct {
@@ -146,7 +155,7 @@ func (c *Client) SearchDocuments(ctx context.Context, query string, limit int, f
 	payload := map[string]any{
 		"q":                   query,
 		"limit":               limit,
-		"attributesToRetrieve": []string{"id", "title_ar", "title_en", "type", "plot_ar", "plot_en", "release_year", "rating", "poster_path", "banner_path", "genres", "category_slug", "category_ar", "category_en", "file_count"},
+		"attributesToRetrieve": []string{"id", "title_ar", "title_en", "type", "plot_ar", "plot_en", "release_year", "rating", "poster_path", "banner_path", "genres", "category_slug", "category_ar", "category_en", "file_count", "status", "season_count", "tmdb_season_count", "tmdb_episode_count", "total_size", "best_resolution", "runtime_minutes", "has_arabic_audio", "has_arabic_subtitles"},
 	}
 	if strings.TrimSpace(filter) != "" {
 		payload["filter"] = filter

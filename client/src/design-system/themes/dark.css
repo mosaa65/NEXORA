@@ -6,3 +6,5 @@
 :root {
   color-scheme: dark;
 }
+
+[data-font="cairo"] { --font-arabic: "NEXORA Cairo", sans-serif; }

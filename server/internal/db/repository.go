@@ -202,6 +202,21 @@ type MediaItemDetail struct {
 	Files        []VideoFile    `json:"files,omitempty"`
 }
 
+// mediaCardSummary is deliberately returned with every catalogue/search item.
+// It is calculated from persisted database data only; browser card rendering
+// never needs to contact TMDB or inspect individual files.
+type mediaCardSummary struct {
+	Status              string
+	SeasonCount         int
+	TMDBSeasonCount     int
+	TMDBEpisodeCount    int
+	TotalSize           int64
+	BestResolution      string
+	RuntimeMinutes      int
+	HasArabicAudio      bool
+	HasArabicSubtitles  bool
+}
+
 type ListMediaOptions struct {
 	CategorySlug string
 	Type         string
@@ -216,6 +231,45 @@ type MediaListResult struct {
 	Limit  int                    `json:"limit"`
 	Offset int                    `json:"offset"`
 	Items  []search.MediaDocument `json:"items"`
+}
+
+// ShowcaseOptions selects locally persisted editorial collections and media
+// summaries for the reusable hero. It never consults a remote metadata source.
+type ShowcaseOptions struct {
+	Context      string
+	CategorySlug string
+	Limit        int
+}
+
+type ShowcaseTarget struct {
+	Category string          `json:"category,omitempty"`
+	Filters  json.RawMessage `json:"filters,omitempty"`
+}
+
+type ShowcaseSlide struct {
+	ID              string          `json:"id"`
+	Kind            string          `json:"kind"`
+	MediaID         int64           `json:"media_id,omitempty"`
+	TitleAR         string          `json:"title_ar,omitempty"`
+	TitleEN         string          `json:"title_en,omitempty"`
+	DescriptionAR   string          `json:"description_ar,omitempty"`
+	DescriptionEN   string          `json:"description_en,omitempty"`
+	ArtworkPath     string          `json:"artwork_path,omitempty"`
+	ArtworkPosition string          `json:"artwork_position,omitempty"`
+	Accent          string          `json:"accent,omitempty"`
+	ItemCount       int             `json:"item_count,omitempty"`
+	Type            string          `json:"type,omitempty"`
+	Status          string          `json:"status,omitempty"`
+	ReleaseYear     int             `json:"release_year,omitempty"`
+	Rating          float64         `json:"rating,omitempty"`
+	BestResolution  string          `json:"best_resolution,omitempty"`
+	Genres          []string        `json:"genres,omitempty"`
+	Target          *ShowcaseTarget `json:"target,omitempty"`
+}
+
+type ShowcaseResult struct {
+	Context string          `json:"context"`
+	Slides  []ShowcaseSlide `json:"slides"`
 }
 
 type StorageDisk struct {
@@ -265,6 +319,17 @@ func (r *Repository) ListSearchDocuments(ctx context.Context, limit int) ([]sear
 	}
 
 	rows, err := r.db.QueryContext(ctx, `
+		WITH file_summary AS (
+			SELECT media_item_id, COUNT(*)::int AS file_count, COALESCE(SUM(file_size), 0)::bigint AS total_size,
+				MAX(duration) FILTER (WHERE episode_number IS NULL)::int / 60 AS local_runtime_minutes,
+				CASE MAX(CASE WHEN resolution ~* '(2160|4k)' THEN 4 WHEN resolution ~* '1440' THEN 3 WHEN resolution ~* '1080' THEN 2 WHEN resolution ~* '720' THEN 1 ELSE 0 END)
+					WHEN 4 THEN '4K' WHEN 3 THEN '1440p' WHEN 2 THEN '1080p' WHEN 1 THEN '720p' ELSE '' END AS best_resolution,
+				BOOL_OR(LOWER(COALESCE(audio_tracks::text, '')) LIKE '%"language":"ara"%' OR LOWER(COALESCE(audio_tracks::text, '')) LIKE '%"language":"ar"%') AS has_arabic_audio,
+				BOOL_OR(LOWER(COALESCE(subtitles::text, '')) LIKE '%"language":"ara"%' OR LOWER(COALESCE(subtitles::text, '')) LIKE '%"language":"ar"%') AS has_arabic_subtitles
+			FROM video_files GROUP BY media_item_id
+		), season_summary AS (
+			SELECT media_item_id, COUNT(*)::int AS season_count FROM seasons GROUP BY media_item_id
+		)
 		SELECT
 			mi.id,
 			mi.title_ar,
@@ -280,11 +345,14 @@ func (r *Repository) ListSearchDocuments(ctx context.Context, limit int) ([]sear
 			c.slug,
 			c.name_ar,
 			c.name_en,
-			COUNT(vf.id) AS file_count
+			COALESCE(fs.file_count, 0), mi.status, COALESCE(ss.season_count, 0),
+			COALESCE(NULLIF(mi.metadata_facets->>'number_of_seasons', '')::int, 0), COALESCE(NULLIF(mi.metadata_facets->>'number_of_episodes', '')::int, 0), COALESCE(fs.total_size, 0),
+			COALESCE(fs.best_resolution, ''), COALESCE(NULLIF(mi.metadata_facets->>'runtime', '')::int, fs.local_runtime_minutes, 0),
+			COALESCE(fs.has_arabic_audio, false), COALESCE(fs.has_arabic_subtitles, false)
 		FROM media_items mi
 		LEFT JOIN categories c ON c.id = mi.category_id
-		LEFT JOIN video_files vf ON vf.media_item_id = mi.id
-		GROUP BY mi.id, c.id
+		LEFT JOIN file_summary fs ON fs.media_item_id = mi.id
+		LEFT JOIN season_summary ss ON ss.media_item_id = mi.id
 		ORDER BY mi.created_at DESC, mi.id DESC
 		LIMIT $1;
 	`, limit)
@@ -300,7 +368,8 @@ func (r *Repository) ListSearchDocuments(ctx context.Context, limit int) ([]sear
 		var releaseYear sql.NullInt64
 		var rating sql.NullFloat64
 		var genresText string
-		var fileCount int64
+		var fileCount int
+		var summary mediaCardSummary
 
 		if err := rows.Scan(
 			&doc.ID,
@@ -317,7 +386,8 @@ func (r *Repository) ListSearchDocuments(ctx context.Context, limit int) ([]sear
 			&categorySlug,
 			&categoryAR,
 			&categoryEN,
-			&fileCount,
+			&fileCount, &summary.Status, &summary.SeasonCount, &summary.TMDBSeasonCount, &summary.TMDBEpisodeCount, &summary.TotalSize, &summary.BestResolution,
+			&summary.RuntimeMinutes, &summary.HasArabicAudio, &summary.HasArabicSubtitles,
 		); err != nil {
 			return nil, fmt.Errorf("scan search document: %w", err)
 		}
@@ -336,7 +406,16 @@ func (r *Repository) ListSearchDocuments(ctx context.Context, limit int) ([]sear
 		if rating.Valid {
 			doc.Rating = rating.Float64
 		}
-		doc.FileCount = int(fileCount)
+		doc.FileCount = fileCount
+		doc.Status = summary.Status
+		doc.SeasonCount = summary.SeasonCount
+		doc.TMDBSeasonCount = summary.TMDBSeasonCount
+		doc.TMDBEpisodeCount = summary.TMDBEpisodeCount
+		doc.TotalSize = summary.TotalSize
+		doc.BestResolution = summary.BestResolution
+		doc.RuntimeMinutes = summary.RuntimeMinutes
+		doc.HasArabicAudio = summary.HasArabicAudio
+		doc.HasArabicSubtitles = summary.HasArabicSubtitles
 		if err := json.Unmarshal([]byte(genresText), &doc.Genres); err != nil {
 			doc.Genres = nil
 		}
@@ -1139,6 +1218,17 @@ func (r *Repository) ListMediaItems(ctx context.Context, opts ListMediaOptions) 
 	}
 
 	query := fmt.Sprintf(`
+		WITH file_summary AS (
+			SELECT media_item_id, COUNT(*)::int AS file_count, COALESCE(SUM(file_size), 0)::bigint AS total_size,
+				MAX(duration) FILTER (WHERE episode_number IS NULL)::int / 60 AS local_runtime_minutes,
+				CASE MAX(CASE WHEN resolution ~* '(2160|4k)' THEN 4 WHEN resolution ~* '1440' THEN 3 WHEN resolution ~* '1080' THEN 2 WHEN resolution ~* '720' THEN 1 ELSE 0 END)
+					WHEN 4 THEN '4K' WHEN 3 THEN '1440p' WHEN 2 THEN '1080p' WHEN 1 THEN '720p' ELSE '' END AS best_resolution,
+				BOOL_OR(LOWER(COALESCE(audio_tracks::text, '')) LIKE '%%"language":"ara"%%' OR LOWER(COALESCE(audio_tracks::text, '')) LIKE '%%"language":"ar"%%') AS has_arabic_audio,
+				BOOL_OR(LOWER(COALESCE(subtitles::text, '')) LIKE '%%"language":"ara"%%' OR LOWER(COALESCE(subtitles::text, '')) LIKE '%%"language":"ar"%%') AS has_arabic_subtitles
+			FROM video_files GROUP BY media_item_id
+		), season_summary AS (
+			SELECT media_item_id, COUNT(*)::int AS season_count FROM seasons GROUP BY media_item_id
+		)
 		SELECT
 			mi.id,
 			mi.title_ar,
@@ -1154,12 +1244,15 @@ func (r *Repository) ListMediaItems(ctx context.Context, opts ListMediaOptions) 
 			c.slug,
 			c.name_ar,
 			c.name_en,
-			COUNT(vf.id) AS file_count
+			COALESCE(fs.file_count, 0), mi.status, COALESCE(ss.season_count, 0),
+			COALESCE(NULLIF(mi.metadata_facets->>'number_of_seasons', '')::int, 0), COALESCE(NULLIF(mi.metadata_facets->>'number_of_episodes', '')::int, 0), COALESCE(fs.total_size, 0),
+			COALESCE(fs.best_resolution, ''), COALESCE(NULLIF(mi.metadata_facets->>'runtime', '')::int, fs.local_runtime_minutes, 0),
+			COALESCE(fs.has_arabic_audio, false), COALESCE(fs.has_arabic_subtitles, false)
 		FROM media_items mi
 		LEFT JOIN categories c ON c.id = mi.category_id
-		LEFT JOIN video_files vf ON vf.media_item_id = mi.id
+		LEFT JOIN file_summary fs ON fs.media_item_id = mi.id
+		LEFT JOIN season_summary ss ON ss.media_item_id = mi.id
 		WHERE %s
-		GROUP BY mi.id, c.id
 		ORDER BY %s
 		LIMIT $%d OFFSET $%d;
 	`, whereSQL, orderBy, argIdx, argIdx+1)
@@ -1179,7 +1272,8 @@ func (r *Repository) ListMediaItems(ctx context.Context, opts ListMediaOptions) 
 		var releaseYear sql.NullInt64
 		var rating sql.NullFloat64
 		var genresText string
-		var fileCount int64
+		var fileCount int
+		var summary mediaCardSummary
 
 		if err := rows.Scan(
 			&doc.ID,
@@ -1196,7 +1290,8 @@ func (r *Repository) ListMediaItems(ctx context.Context, opts ListMediaOptions) 
 			&categorySlug,
 			&categoryAR,
 			&categoryEN,
-			&fileCount,
+			&fileCount, &summary.Status, &summary.SeasonCount, &summary.TMDBSeasonCount, &summary.TMDBEpisodeCount, &summary.TotalSize, &summary.BestResolution,
+			&summary.RuntimeMinutes, &summary.HasArabicAudio, &summary.HasArabicSubtitles,
 		); err != nil {
 			return nil, fmt.Errorf("scan list item: %w", err)
 		}
@@ -1215,7 +1310,16 @@ func (r *Repository) ListMediaItems(ctx context.Context, opts ListMediaOptions) 
 		if rating.Valid {
 			doc.Rating = rating.Float64
 		}
-		doc.FileCount = int(fileCount)
+		doc.FileCount = fileCount
+		doc.Status = summary.Status
+		doc.SeasonCount = summary.SeasonCount
+		doc.TMDBSeasonCount = summary.TMDBSeasonCount
+		doc.TMDBEpisodeCount = summary.TMDBEpisodeCount
+		doc.TotalSize = summary.TotalSize
+		doc.BestResolution = summary.BestResolution
+		doc.RuntimeMinutes = summary.RuntimeMinutes
+		doc.HasArabicAudio = summary.HasArabicAudio
+		doc.HasArabicSubtitles = summary.HasArabicSubtitles
 		_ = json.Unmarshal([]byte(genresText), &doc.Genres)
 
 		items = append(items, doc)
@@ -1227,6 +1331,74 @@ func (r *Repository) ListMediaItems(ctx context.Context, opts ListMediaOptions) 
 		Offset: opts.Offset,
 		Items:  items,
 	}, nil
+}
+
+// ListShowcases returns editorial collections followed by featured local works.
+// Both layers are read from PostgreSQL; no remote metadata is contacted here.
+func (r *Repository) ListShowcases(ctx context.Context, opts ShowcaseOptions) (*ShowcaseResult, error) {
+	if opts.Limit <= 0 || opts.Limit > 12 {
+		opts.Limit = 6
+	}
+	categorySlug := strings.TrimSpace(opts.CategorySlug)
+	result := &ShowcaseResult{Context: strings.TrimSpace(opts.Context), Slides: make([]ShowcaseSlide, 0, opts.Limit)}
+
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT c.slug, COALESCE(c.title_ar, ''), c.title_en, COALESCE(c.description_ar, ''), COALESCE(c.description_en, ''),
+			COALESCE(c.artwork_path, ''), c.artwork_position, c.accent,
+			COUNT(ci.media_item_id)::int, COALESCE(c.target_category_slug, ''), c.target_filters::text
+		FROM collections c
+		LEFT JOIN collection_items ci ON ci.collection_id = c.id
+		WHERE c.is_active = true
+			AND ($1 = '' OR c.target_category_slug = '' OR c.target_category_slug = $1)
+		GROUP BY c.id
+		ORDER BY c.priority DESC, c.id DESC
+		LIMIT $2`, categorySlug, opts.Limit)
+	if err != nil {
+		return nil, fmt.Errorf("list showcase collections: %w", err)
+	}
+	for rows.Next() {
+		var slug, titleAR, titleEN, descriptionAR, descriptionEN, artworkPath, artworkPosition, accent, targetCategory, filtersText string
+		var itemCount int
+		if err := rows.Scan(&slug, &titleAR, &titleEN, &descriptionAR, &descriptionEN, &artworkPath, &artworkPosition, &accent, &itemCount, &targetCategory, &filtersText); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("scan showcase collection: %w", err)
+		}
+		result.Slides = append(result.Slides, ShowcaseSlide{
+			ID: "collection-" + slug, Kind: "collection", TitleAR: titleAR, TitleEN: titleEN,
+			DescriptionAR: descriptionAR, DescriptionEN: descriptionEN, ArtworkPath: artworkPath,
+			ArtworkPosition: artworkPosition, Accent: accent, ItemCount: itemCount,
+			Target: &ShowcaseTarget{Category: targetCategory, Filters: json.RawMessage(filtersText)},
+		})
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, fmt.Errorf("iterate showcase collections: %w", err)
+	}
+	rows.Close()
+
+	remaining := opts.Limit - len(result.Slides)
+	if remaining <= 0 {
+		return result, nil
+	}
+	mediaResult, err := r.ListMediaItems(ctx, ListMediaOptions{CategorySlug: categorySlug, Sort: "rating", Limit: remaining})
+	if err != nil {
+		return nil, err
+	}
+	for _, item := range mediaResult.Items {
+		artwork := item.BannerPath
+		if artwork == "" {
+			artwork = item.PosterPath
+		}
+		result.Slides = append(result.Slides, ShowcaseSlide{
+			ID: fmt.Sprintf("media-%d", item.ID), Kind: "featured", MediaID: item.ID,
+			TitleAR: item.TitleAR, TitleEN: item.TitleEN, DescriptionAR: item.PlotAR,
+			DescriptionEN: item.PlotEN, ArtworkPath: artwork, ArtworkPosition: "center center",
+			Accent: "violet", Type: item.Type, Status: item.Status, ReleaseYear: item.ReleaseYear,
+			Rating: item.Rating, BestResolution: item.BestResolution, Genres: item.Genres,
+		})
+	}
+
+	return result, nil
 }
 
 func (r *Repository) UpdateMediaMetadata(ctx context.Context, id int64, meta metadata.Result) (*search.MediaDocument, error) {
@@ -1245,6 +1417,7 @@ func (r *Repository) UpdateMediaMetadata(ctx context.Context, id int64, meta met
 	}
 	titleAR, titleEN, plotAR, plotEN := localizedMetadataFields(meta)
 	metadataFacets := metadataFacetsJSON(meta)
+	status := metadataStatus(meta)
 
 	result, err := r.db.ExecContext(ctx, `
 		UPDATE media_items
@@ -1261,10 +1434,11 @@ func (r *Repository) UpdateMediaMetadata(ctx context.Context, id int64, meta met
 			metadata_provider = COALESCE(NULLIF($10, ''), metadata_provider),
 			metadata_external_id = COALESCE(NULLIF($11, ''), metadata_external_id),
 			metadata_facets = COALESCE($12::jsonb, metadata_facets),
+			status = COALESCE(NULLIF($13, ''), status),
 			metadata_fetched_at = CASE WHEN NULLIF($10, '') IS NULL THEN metadata_fetched_at ELSE CURRENT_TIMESTAMP END,
 			metadata_expires_at = CASE WHEN NULLIF($10, '') IS NULL THEN metadata_expires_at ELSE CURRENT_TIMESTAMP + INTERVAL '30 days' END
-		WHERE id = $13;
-	`, titleAR, titleEN, plotAR, plotEN, meta.ReleaseYear, meta.Rating, poster, banner, genresArray, meta.Provider, meta.ExternalID, metadataFacets, id)
+		WHERE id = $14;
+	`, titleAR, titleEN, plotAR, plotEN, meta.ReleaseYear, meta.Rating, poster, banner, genresArray, meta.Provider, meta.ExternalID, metadataFacets, status, id)
 	if err != nil {
 		return nil, fmt.Errorf("update media metadata: %w", err)
 	}
@@ -1335,6 +1509,9 @@ func metadataFacetsJSON(meta metadata.Result) any {
 		"release_date":          raw["release_date"],
 		"runtime":               raw["runtime"],
 		"status":                raw["status"],
+		"number_of_seasons":     raw["number_of_seasons"],
+		"number_of_episodes":    raw["number_of_episodes"],
+		"episode_run_time":      raw["episode_run_time"],
 		"adult":                 raw["adult"],
 		"popularity":            raw["popularity"],
 		"vote_average":          raw["vote_average"],
@@ -1351,6 +1528,28 @@ func metadataFacetsJSON(meta metadata.Result) any {
 		return nil
 	}
 	return string(encoded)
+}
+
+// metadataStatus turns TMDB's provider status into one of the UI's stable
+// database values. It is saved during enrichment, so browsing stays offline.
+func metadataStatus(meta metadata.Result) string {
+	if len(meta.RawPayload) == 0 {
+		return ""
+	}
+	var raw struct { Status string `json:"status"` }
+	if json.Unmarshal(meta.RawPayload, &raw) != nil {
+		return ""
+	}
+	switch strings.ToLower(strings.TrimSpace(raw.Status)) {
+	case "released", "ended":
+		return "completed"
+	case "returning series", "in production", "post production", "planned", "rumored", "pilot":
+		return "ongoing"
+	case "canceled", "cancelled":
+		return "cancelled"
+	default:
+		return ""
+	}
 }
 
 func (r *Repository) GetMetadataSnapshot(ctx context.Context, mediaItemID int64, locale string) (*MetadataSnapshot, error) {
@@ -1882,4 +2081,3 @@ func (r *Repository) GetTMDBUsageSummary(ctx context.Context) (*metadata.TMDBUsa
 
 	return summary, nil
 }
-

@@ -135,6 +135,16 @@ export async function getMediaList(options = {}) {
   return requestJSON(`/api/media?${params.toString()}`);
 }
 
+// The showcase endpoint is database-first: editorial collections and media
+// summaries have already been persisted by NEXORA before the UI renders them.
+export async function getShowcases(options = {}) {
+  const params = new URLSearchParams();
+  if (options.context) params.set("context", options.context);
+  if (options.category) params.set("category", options.category);
+  if (options.limit) params.set("limit", String(options.limit));
+  return requestJSON(`/api/showcases?${params.toString()}`);
+}
+
 export async function getMediaDetail(mediaId) {
   return requestJSON(`/api/media/${encodeURIComponent(mediaId)}`);
 }
