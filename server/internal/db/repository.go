@@ -977,7 +977,7 @@ func (r *Repository) SaveSmartHub(ctx context.Context, slug string, req SmartHub
 }
 
 func (r *Repository) ListSmartHubs(ctx context.Context, scope string) ([]SmartHub, error) {
-	rows, err := r.db.QueryContext(ctx, `SELECT slug,source,scope,title_ar,COALESCE(title_en,''),COALESCE(description_ar,''),COALESCE(description_en,''),COALESCE(artwork_path,''),artwork_position,accent,icon,rule::text,priority,min_item_count FROM hub_definitions WHERE is_active=true AND ($1='' OR scope='all' OR scope=$1) ORDER BY priority DESC,id DESC`, strings.TrimSpace(scope))
+	rows, err := r.db.QueryContext(ctx, `SELECT slug,source,scope,title_ar,COALESCE(title_en,''),COALESCE(description_ar,''),COALESCE(description_en,''),COALESCE(artwork_path,''),artwork_position,accent,icon,rule::text,priority,is_active,min_item_count FROM hub_definitions WHERE is_active=true AND ($1='' OR scope='all' OR scope=$1) ORDER BY priority DESC,id DESC`, strings.TrimSpace(scope))
 	if err != nil {
 		return nil, fmt.Errorf("list smart hubs: %w", err)
 	}
@@ -987,13 +987,14 @@ func (r *Repository) ListSmartHubs(ctx context.Context, scope string) ([]SmartHu
 		var h SmartHub
 		var ruleText string
 		var minItemCount int
-		if err := rows.Scan(&h.Slug, &h.Source, &h.Scope, &h.TitleAR, &h.TitleEN, &h.DescriptionAR, &h.DescriptionEN, &h.ArtworkPath, &h.ArtworkPosition, &h.Accent, &h.Icon, &ruleText, &h.Priority, &minItemCount); err != nil {
+		if err := rows.Scan(&h.Slug, &h.Source, &h.Scope, &h.TitleAR, &h.TitleEN, &h.DescriptionAR, &h.DescriptionEN, &h.ArtworkPath, &h.ArtworkPosition, &h.Accent, &h.Icon, &ruleText, &h.Priority, &h.IsActive, &minItemCount); err != nil {
 			return nil, err
 		}
 		if err := json.Unmarshal([]byte(ruleText), &h.Rule); err != nil {
 			return nil, fmt.Errorf("decode hub rule %s: %w", h.Slug, err)
 		}
 		h.ID = h.Slug
+		h.MinItemCount = minItemCount
 		count, err := r.ListMediaItems(ctx, listOptionsFromHubRule(h.Rule, ListMediaOptions{Limit: 1}))
 		if err != nil {
 			return nil, err
@@ -1503,7 +1504,7 @@ func (r *Repository) ListMediaItems(ctx context.Context, opts ListMediaOptions) 
 		argIdx++
 	}
 	if len(opts.TagsAny) > 0 {
-		whereClauses = append(whereClauses, fmt.Sprintf("COALESCE(mi.genres, ARRAY[]::text[]) && $%d::text[]", argIdx))
+		whereClauses = append(whereClauses, fmt.Sprintf("COALESCE(mi.genres::text[], ARRAY[]::text[]) && $%d::text[]", argIdx))
 		args = append(args, pq.Array(opts.TagsAny))
 		argIdx++
 	}
