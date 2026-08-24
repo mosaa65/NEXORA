@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 	"unicode"
@@ -218,6 +219,7 @@ type mediaCardSummary struct {
 }
 
 type ListMediaOptions struct {
+	IDs          []int64
 	CategorySlug string
 	Type         string
 	Types        []string
@@ -237,6 +239,42 @@ type MediaListResult struct {
 	Limit  int                    `json:"limit"`
 	Offset int                    `json:"offset"`
 	Items  []search.MediaDocument `json:"items"`
+}
+
+// ProviderCollection is a locally persisted TMDB-style film franchise. It is
+// deliberately not the editorial Collection type below: provider identity is
+// stable while an editorial collection is controlled by the library owner.
+type ProviderCollection struct {
+	ID             int64  `json:"id"`
+	Slug           string `json:"slug"`
+	Provider       string `json:"provider"`
+	ExternalID     string `json:"external_id"`
+	Kind           string `json:"kind"`
+	TitleAR        string `json:"title_ar,omitempty"`
+	TitleEN        string `json:"title_en"`
+	OverviewAR     string `json:"overview_ar,omitempty"`
+	OverviewEN     string `json:"overview_en,omitempty"`
+	PosterPath     string `json:"poster_path,omitempty"`
+	BackdropPath   string `json:"backdrop_path,omitempty"`
+	PartsCount     int    `json:"parts_count"`
+	LocalItemCount int    `json:"local_item_count"`
+	IsFeatured     bool   `json:"is_featured"`
+	IsHidden       bool   `json:"is_hidden"`
+}
+
+type Person struct {
+	ID                 int64   `json:"id"`
+	Slug               string  `json:"slug"`
+	Provider           string  `json:"provider"`
+	ExternalID         string  `json:"external_id"`
+	NameAR             string  `json:"name_ar,omitempty"`
+	NameEN             string  `json:"name_en"`
+	KnownForDepartment string  `json:"known_for_department,omitempty"`
+	ProfilePath        string  `json:"profile_path,omitempty"`
+	Popularity         float64 `json:"popularity,omitempty"`
+	LocalMediaCount    int     `json:"local_media_count"`
+	IsFeatured         bool    `json:"is_featured"`
+	IsHidden           bool    `json:"is_hidden"`
 }
 
 // ShowcaseOptions selects locally persisted editorial collections and media
@@ -1510,6 +1548,11 @@ func (r *Repository) ListMediaItems(ctx context.Context, opts ListMediaOptions) 
 		args = append(args, strings.TrimSpace(opts.Type))
 		argIdx++
 	}
+	if len(opts.IDs) > 0 {
+		whereClauses = append(whereClauses, fmt.Sprintf("mi.id = ANY($%d::bigint[])", argIdx))
+		args = append(args, pq.Array(opts.IDs))
+		argIdx++
+	}
 	if len(opts.Types) > 0 {
 		whereClauses = append(whereClauses, fmt.Sprintf("mi.type = ANY($%d::text[])", argIdx))
 		args = append(args, pq.Array(opts.Types))
@@ -1814,6 +1857,16 @@ func (r *Repository) UpdateMediaMetadata(ctx context.Context, id int64, meta met
 		`, id, meta.Provider, meta.ExternalID, firstNonEmptyLocale(meta.Locale), string(meta.RawPayload)); err != nil {
 			return nil, fmt.Errorf("cache metadata snapshot: %w", err)
 		}
+		// The movie document is the authoritative place where TMDB declares its
+		// belongs_to_collection relation. Persist the relation immediately so all
+		// browser reads remain database-only. Full collection details are fetched
+		// later by the dedicated, opt-in sync job.
+		if err := r.syncCollectionFromMetadata(ctx, id, meta); err != nil {
+			return nil, fmt.Errorf("sync provider collection: %w", err)
+		}
+		if err := r.syncCreditsFromMetadata(ctx, id, meta); err != nil {
+			return nil, fmt.Errorf("sync provider credits: %w", err)
+		}
 	}
 
 	// Fetch single document for search reindexing
@@ -1827,6 +1880,222 @@ func (r *Repository) UpdateMediaMetadata(ctx context.Context, id int64, meta met
 		}
 	}
 	return nil, nil
+}
+
+func (r *Repository) syncCollectionFromMetadata(ctx context.Context, mediaID int64, meta metadata.Result) error {
+	if meta.Provider != "tmdb" || len(meta.RawPayload) == 0 {
+		return nil
+	}
+	var raw struct {
+		Collection *struct {
+			ID           int64  `json:"id"`
+			Name         string `json:"name"`
+			PosterPath   string `json:"poster_path"`
+			BackdropPath string `json:"backdrop_path"`
+		} `json:"belongs_to_collection"`
+	}
+	if err := json.Unmarshal(meta.RawPayload, &raw); err != nil || raw.Collection == nil || raw.Collection.ID <= 0 {
+		return nil
+	}
+	c := raw.Collection
+	slug := fmt.Sprintf("tmdb-collection-%d", c.ID)
+	var id int64
+	err := r.db.QueryRowContext(ctx, `
+		INSERT INTO provider_collections (provider,external_id,kind,slug,title_ar,title_en,poster_path,backdrop_path,metadata_fetched_at,metadata_expires_at)
+		VALUES ('tmdb',$1,'movie_collection',$2,
+			CASE WHEN $3 LIKE 'ar%%' THEN $4 ELSE NULL END,
+			CASE WHEN $3 LIKE 'ar%%' THEN $5 ELSE $4 END,
+			NULLIF($6,''),NULLIF($7,''),CURRENT_TIMESTAMP,CURRENT_TIMESTAMP + INTERVAL '30 days')
+		ON CONFLICT (provider,external_id) DO UPDATE SET
+			title_ar=COALESCE(EXCLUDED.title_ar,provider_collections.title_ar),
+			title_en=COALESCE(NULLIF(EXCLUDED.title_en,''),provider_collections.title_en),
+			poster_path=COALESCE(EXCLUDED.poster_path,provider_collections.poster_path),
+			backdrop_path=COALESCE(EXCLUDED.backdrop_path,provider_collections.backdrop_path),
+			updated_at=CURRENT_TIMESTAMP
+		RETURNING id`, fmt.Sprint(c.ID), slug, strings.ToLower(meta.Locale), c.Name, c.Name, c.PosterPath, c.BackdropPath).Scan(&id)
+	if err != nil {
+		return err
+	}
+	_, err = r.db.ExecContext(ctx, `
+		INSERT INTO media_collection_links (media_item_id,collection_id,source,verified_at)
+		VALUES ($1,$2,'tmdb',CURRENT_TIMESTAMP)
+		ON CONFLICT (media_item_id,collection_id) DO UPDATE SET verified_at=EXCLUDED.verified_at`, mediaID, id)
+	if err != nil {
+		return err
+	}
+	_, err = r.db.ExecContext(ctx, `UPDATE provider_collections pc SET local_item_count=(SELECT COUNT(*) FROM media_collection_links WHERE collection_id=pc.id), updated_at=CURRENT_TIMESTAMP WHERE pc.id=$1`, id)
+	return err
+}
+
+func (r *Repository) syncCreditsFromMetadata(ctx context.Context, mediaID int64, meta metadata.Result) error {
+	if meta.Provider != "tmdb" || len(meta.RawPayload) == 0 {
+		return nil
+	}
+	var raw struct {
+		Credits struct {
+			Cast []struct {
+				ID                 int64   `json:"id"`
+				CreditID           string  `json:"credit_id"`
+				Name               string  `json:"name"`
+				KnownForDepartment string  `json:"known_for_department"`
+				ProfilePath        string  `json:"profile_path"`
+				LocalProfilePath   string  `json:"local_profile_path"`
+				Popularity         float64 `json:"popularity"`
+				Character          string  `json:"character"`
+				Order              int     `json:"order"`
+			} `json:"cast"`
+			Crew []struct {
+				ID                 int64   `json:"id"`
+				CreditID           string  `json:"credit_id"`
+				Name               string  `json:"name"`
+				KnownForDepartment string  `json:"known_for_department"`
+				ProfilePath        string  `json:"profile_path"`
+				LocalProfilePath   string  `json:"local_profile_path"`
+				Popularity         float64 `json:"popularity"`
+				Job                string  `json:"job"`
+				Department         string  `json:"department"`
+			} `json:"crew"`
+		} `json:"credits"`
+	}
+	if err := json.Unmarshal(meta.RawPayload, &raw); err != nil {
+		return nil
+	}
+	upsertPerson := func(id int64, name, department, profile string, popularity float64) (int64, error) {
+		if id <= 0 || strings.TrimSpace(name) == "" {
+			return 0, nil
+		}
+		slug := fmt.Sprintf("tmdb-person-%d", id)
+		var personID int64
+		err := r.db.QueryRowContext(ctx, `INSERT INTO people (provider,external_id,slug,name_ar,name_en,known_for_department,profile_path,popularity,metadata_fetched_at,metadata_expires_at) VALUES ('tmdb',$1,$2,CASE WHEN $3 LIKE 'ar%%' THEN $4 ELSE NULL END,CASE WHEN $3 LIKE 'ar%%' THEN $5 ELSE $4 END,NULLIF($6,''),NULLIF($7,''),NULLIF($8,0),CURRENT_TIMESTAMP,CURRENT_TIMESTAMP + INTERVAL '30 days') ON CONFLICT (provider,external_id) DO UPDATE SET name_ar=COALESCE(EXCLUDED.name_ar,people.name_ar),name_en=COALESCE(NULLIF(EXCLUDED.name_en,''),people.name_en),known_for_department=COALESCE(NULLIF(EXCLUDED.known_for_department,''),people.known_for_department),profile_path=COALESCE(EXCLUDED.profile_path,people.profile_path),popularity=COALESCE(EXCLUDED.popularity,people.popularity),updated_at=CURRENT_TIMESTAMP RETURNING id`, fmt.Sprint(id), slug, strings.ToLower(meta.Locale), name, name, department, profile, popularity).Scan(&personID)
+		return personID, err
+	}
+	for index, cast := range raw.Credits.Cast {
+		if index >= 12 {
+			break
+		}
+		if strings.TrimSpace(cast.CreditID) == "" {
+			continue
+		}
+		profile := cast.LocalProfilePath
+		if profile == "" {
+			profile = cast.ProfilePath
+		}
+		personID, err := upsertPerson(cast.ID, cast.Name, cast.KnownForDepartment, profile, cast.Popularity)
+		if err != nil {
+			return err
+		}
+		if personID == 0 {
+			continue
+		}
+		_, err = r.db.ExecContext(ctx, `INSERT INTO media_credits (media_item_id,person_id,provider,provider_credit_id,credit_kind,character_name,billing_order,source,verified_at) VALUES ($1,$2,'tmdb',NULLIF($3,''),'cast',NULLIF($4,''),$5,'tmdb',CURRENT_TIMESTAMP) ON CONFLICT (media_item_id,provider,provider_credit_id) WHERE provider_credit_id IS NOT NULL DO UPDATE SET person_id=EXCLUDED.person_id,character_name=EXCLUDED.character_name,billing_order=EXCLUDED.billing_order,verified_at=EXCLUDED.verified_at,updated_at=CURRENT_TIMESTAMP`, mediaID, personID, cast.CreditID, cast.Character, cast.Order)
+		if err != nil {
+			return err
+		}
+	}
+	for _, crew := range raw.Credits.Crew {
+		if !strings.EqualFold(crew.Job, "Director") {
+			continue
+		}
+		if strings.TrimSpace(crew.CreditID) == "" {
+			continue
+		}
+		profile := crew.LocalProfilePath
+		if profile == "" {
+			profile = crew.ProfilePath
+		}
+		personID, err := upsertPerson(crew.ID, crew.Name, crew.KnownForDepartment, profile, crew.Popularity)
+		if err != nil {
+			return err
+		}
+		if personID == 0 {
+			continue
+		}
+		_, err = r.db.ExecContext(ctx, `INSERT INTO media_credits (media_item_id,person_id,provider,provider_credit_id,credit_kind,job,department,source,verified_at) VALUES ($1,$2,'tmdb',NULLIF($3,''),'crew',NULLIF($4,''),NULLIF($5,''),'tmdb',CURRENT_TIMESTAMP) ON CONFLICT (media_item_id,provider,provider_credit_id) WHERE provider_credit_id IS NOT NULL DO UPDATE SET person_id=EXCLUDED.person_id,job=EXCLUDED.job,department=EXCLUDED.department,verified_at=EXCLUDED.verified_at,updated_at=CURRENT_TIMESTAMP`, mediaID, personID, crew.CreditID, crew.Job, crew.Department)
+		if err != nil {
+			return err
+		}
+	}
+	_, err := r.db.ExecContext(ctx, `UPDATE people p SET local_media_count=(SELECT COUNT(DISTINCT media_item_id) FROM media_credits WHERE person_id=p.id), updated_at=CURRENT_TIMESTAMP WHERE p.provider='tmdb'`)
+	return err
+}
+
+// ListProviderCollections powers the offline-first franchise rail. A series is
+// meaningful only when at least two locally available films are linked.
+func (r *Repository) ListProviderCollections(ctx context.Context, limit int) ([]ProviderCollection, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 24
+	}
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT id,slug,provider,external_id,kind,COALESCE(title_ar,''),title_en,
+			COALESCE(overview_ar,''),COALESCE(overview_en,''),COALESCE(poster_path,''),COALESCE(backdrop_path,''),
+			parts_count,local_item_count,is_featured,is_hidden
+		FROM provider_collections
+		WHERE is_hidden=false AND local_item_count >= 2
+		ORDER BY is_featured DESC,sort_priority DESC,local_item_count DESC,title_en ASC
+		LIMIT $1`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list provider collections: %w", err)
+	}
+	defer rows.Close()
+	items := make([]ProviderCollection, 0)
+	for rows.Next() {
+		var item ProviderCollection
+		if err := rows.Scan(&item.ID, &item.Slug, &item.Provider, &item.ExternalID, &item.Kind, &item.TitleAR, &item.TitleEN, &item.OverviewAR, &item.OverviewEN, &item.PosterPath, &item.BackdropPath, &item.PartsCount, &item.LocalItemCount, &item.IsFeatured, &item.IsHidden); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+func (r *Repository) GetProviderCollection(ctx context.Context, slug string) (*ProviderCollection, error) {
+	var item ProviderCollection
+	err := r.db.QueryRowContext(ctx, `SELECT id,slug,provider,external_id,kind,COALESCE(title_ar,''),title_en,COALESCE(overview_ar,''),COALESCE(overview_en,''),COALESCE(poster_path,''),COALESCE(backdrop_path,''),parts_count,local_item_count,is_featured,is_hidden FROM provider_collections WHERE slug=$1 AND is_hidden=false`, strings.TrimSpace(slug)).Scan(&item.ID, &item.Slug, &item.Provider, &item.ExternalID, &item.Kind, &item.TitleAR, &item.TitleEN, &item.OverviewAR, &item.OverviewEN, &item.PosterPath, &item.BackdropPath, &item.PartsCount, &item.LocalItemCount, &item.IsFeatured, &item.IsHidden)
+	if err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func (r *Repository) ListProviderCollectionMedia(ctx context.Context, slug string, opts ListMediaOptions) (*ProviderCollection, *MediaListResult, error) {
+	collection, err := r.GetProviderCollection(ctx, slug)
+	if err != nil {
+		return nil, nil, err
+	}
+	rows, err := r.db.QueryContext(ctx, `SELECT media_item_id FROM media_collection_links WHERE collection_id=$1 ORDER BY tmdb_order NULLS LAST, media_item_id`, collection.ID)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+	ids := make([]int64, 0, collection.LocalItemCount)
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, nil, err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, nil, err
+	}
+	if len(ids) == 0 {
+		return collection, &MediaListResult{Limit: opts.Limit, Offset: opts.Offset, Items: []search.MediaDocument{}}, nil
+	}
+	opts.IDs = ids
+	result, err := r.ListMediaItems(ctx, opts)
+	if err != nil {
+		return nil, nil, err
+	}
+	// SQL's generic catalogue ordering is useful for filters, but franchise
+	// membership should retain TMDB's part order when no explicit sort is chosen.
+	if strings.TrimSpace(opts.Sort) == "" {
+		order := make(map[int64]int, len(ids))
+		for index, id := range ids {
+			order[id] = index
+		}
+		sort.SliceStable(result.Items, func(i, j int) bool { return order[result.Items[i].ID] < order[result.Items[j].ID] })
+	}
+	return collection, result, nil
 }
 
 // localizedMetadataFields prevents a locale-specific TMDB response from

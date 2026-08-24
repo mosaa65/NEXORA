@@ -50,6 +50,9 @@ type repository interface {
 	CalculateChecksums(ctx context.Context, mediaItemID int64) (db.ChecksumResult, error)
 	GetMediaItem(ctx context.Context, id int64) (*db.MediaItemDetail, error)
 	ListMediaItems(ctx context.Context, opts db.ListMediaOptions) (*db.MediaListResult, error)
+	ListProviderCollections(ctx context.Context, limit int) ([]db.ProviderCollection, error)
+	GetProviderCollection(ctx context.Context, slug string) (*db.ProviderCollection, error)
+	ListProviderCollectionMedia(ctx context.Context, slug string, opts db.ListMediaOptions) (*db.ProviderCollection, *db.MediaListResult, error)
 	ListShowcases(ctx context.Context, opts db.ShowcaseOptions) (*db.ShowcaseResult, error)
 	ListSmartHubs(ctx context.Context, scope string) ([]db.SmartHub, error)
 	GetSmartHub(ctx context.Context, slug string) (*db.SmartHub, error)
@@ -158,6 +161,9 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("DELETE /api/admin/collections/{id}", s.handleCollectionDelete)
 	s.mux.HandleFunc("GET /api/search", s.handleSearch)
 	s.mux.HandleFunc("GET /api/media", s.handleMediaList)
+	s.mux.HandleFunc("GET /api/franchises", s.handleFranchises)
+	s.mux.HandleFunc("GET /api/franchises/{slug}", s.handleFranchise)
+	s.mux.HandleFunc("GET /api/franchises/{slug}/media", s.handleFranchiseMedia)
 	s.mux.HandleFunc("GET /api/showcases", s.handleShowcases)
 	s.mux.HandleFunc("GET /api/hubs", s.handleSmartHubs)
 	s.mux.HandleFunc("GET /api/hubs/{slug}", s.handleSmartHub)
@@ -1220,6 +1226,55 @@ func (s *Server) handleMediaList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, result)
+}
+
+// handleFranchises is intentionally database-only. TMDB is contacted only by
+// the enrich workflow; browsing a franchise rail is safe on an offline LAN.
+func (s *Server) handleFranchises(w http.ResponseWriter, r *http.Request) {
+	limit := 24
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		if value, err := strconv.Atoi(raw); err == nil && value > 0 {
+			limit = value
+		}
+	}
+	items, err := s.repository.ListProviderCollections(r.Context(), limit)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"franchises": items})
+}
+
+func (s *Server) handleFranchise(w http.ResponseWriter, r *http.Request) {
+	item, err := s.repository.GetProviderCollection(r.Context(), r.PathValue("slug"))
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, sql.ErrNoRows) {
+			status = http.StatusNotFound
+		}
+		writeJSON(w, status, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
+func (s *Server) handleFranchiseMedia(w http.ResponseWriter, r *http.Request) {
+	limit := 100
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		if value, err := strconv.Atoi(raw); err == nil && value > 0 {
+			limit = value
+		}
+	}
+	collection, result, err := s.repository.ListProviderCollectionMedia(r.Context(), r.PathValue("slug"), db.ListMediaOptions{Limit: limit, Sort: strings.TrimSpace(r.URL.Query().Get("sort"))})
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, sql.ErrNoRows) {
+			status = http.StatusNotFound
+		}
+		writeJSON(w, status, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"franchise": collection, "total": result.Total, "items": result.Items})
 }
 
 func (s *Server) handleShowcases(w http.ResponseWriter, r *http.Request) {

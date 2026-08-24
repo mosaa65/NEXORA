@@ -90,6 +90,15 @@ func (m *mockRepo) GetMediaItem(ctx context.Context, id int64) (*db.MediaItemDet
 func (m *mockRepo) ListMediaItems(ctx context.Context, opts db.ListMediaOptions) (*db.MediaListResult, error) {
 	return &db.MediaListResult{Total: 1, Limit: opts.Limit, Offset: opts.Offset, Items: []search.MediaDocument{{ID: 1, TitleEN: "Inception"}}}, nil
 }
+func (m *mockRepo) ListProviderCollections(ctx context.Context, limit int) ([]db.ProviderCollection, error) {
+	return []db.ProviderCollection{{ID: 1, Slug: "tmdb-collection-1", Provider: "tmdb", ExternalID: "1", TitleAR: "سلسلة اختبار", TitleEN: "Test Collection", LocalItemCount: 2}}, nil
+}
+func (m *mockRepo) GetProviderCollection(ctx context.Context, slug string) (*db.ProviderCollection, error) {
+	return &db.ProviderCollection{ID: 1, Slug: slug, Provider: "tmdb", ExternalID: "1", TitleEN: "Test Collection", LocalItemCount: 2}, nil
+}
+func (m *mockRepo) ListProviderCollectionMedia(ctx context.Context, slug string, opts db.ListMediaOptions) (*db.ProviderCollection, *db.MediaListResult, error) {
+	return &db.ProviderCollection{ID: 1, Slug: slug, TitleEN: "Test Collection", LocalItemCount: 2}, &db.MediaListResult{Total: 2, Limit: opts.Limit, Items: []search.MediaDocument{{ID: 1, TitleEN: "Part One"}, {ID: 2, TitleEN: "Part Two"}}}, nil
+}
 func (m *mockRepo) ListShowcases(ctx context.Context, opts db.ShowcaseOptions) (*db.ShowcaseResult, error) {
 	return &db.ShowcaseResult{Context: opts.Context, Slides: []db.ShowcaseSlide{{ID: "media-1", Kind: "featured", MediaID: 1, TitleEN: "Inception"}}}, nil
 }

@@ -3,6 +3,7 @@ import ShowcaseHero from "../components/ShowcaseHero.jsx";
 import UnifiedMediaCard from "../components/UnifiedMediaCard.jsx";
 import HubBannerCard from "../components/HubBannerCard.jsx";
 import SmartHubRail from "../components/SmartHubRail.jsx";
+import FranchiseRail from "../components/FranchiseRail.jsx";
 import Icon from "../components/Icon.jsx";
 import { getDashboardStats, getMediaList } from "../lib/api.js";
 import { mockLibrary } from "../data/library.js";
@@ -107,6 +108,8 @@ export default function DashboardPage({
         description="محاور ذكية تتكوّن تلقائيًا من بيانات مكتبتك المحلية."
         onOpen={(hub) => (window.location.hash = `#/hub/${hub.slug}`)}
       />
+
+      <FranchiseRail onOpen={(franchise) => { window.location.hash = `#/franchise/${franchise.slug}`; }} />
 
       {/* 2. Featured Hub Banners Grid */}
       <div className="space-y-4">

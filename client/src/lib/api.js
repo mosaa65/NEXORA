@@ -135,6 +135,22 @@ export async function getMediaList(options = {}) {
   return requestJSON(`/api/media?${params.toString()}`);
 }
 
+// Provider franchises are read from NEXORA's local database. This request
+// never asks TMDB for data while the user is browsing.
+export async function getFranchises(limit = 12) {
+  return requestJSON(`/api/franchises?limit=${encodeURIComponent(limit)}`);
+}
+
+export async function getFranchise(slug) {
+  return requestJSON(`/api/franchises/${encodeURIComponent(slug)}`);
+}
+export async function getFranchiseMedia(slug, options = {}) {
+  const params = new URLSearchParams();
+  if (options.limit) params.set("limit", String(options.limit));
+  if (options.sort) params.set("sort", options.sort);
+  return requestJSON(`/api/franchises/${encodeURIComponent(slug)}/media?${params.toString()}`);
+}
+
 // The showcase endpoint is database-first: editorial collections and media
 // summaries have already been persisted by NEXORA before the UI renders them.
 export async function getShowcases(options = {}) {
