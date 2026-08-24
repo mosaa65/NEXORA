@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import GlassCard from "../../components/GlassCard.jsx";
 import Icon from "../../components/Icon.jsx";
+import MediaCollection from "../../components/MediaCollection.jsx";
 import {
   classifyOriginsFromFolders,
   createMediaItem,
@@ -370,49 +371,15 @@ export default function AdminMediaPage() {
           </button>
         </GlassCard>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-          {filteredMediaItems.map((item) => {
-            const poster = item.poster_path || "/nexora-poster-placeholder.PNG";
-            return (
-              <div key={item.id} className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-white/10 bg-[#0E0C1A] hover:border-fuchsia-500/50 hover:shadow-xl hover:shadow-purple-950/50 transition duration-300">
-                <div className="relative aspect-[2/3] w-full overflow-hidden bg-black/60">
-                  <img src={poster} alt={item.title_en} className="h-full w-full object-cover group-hover:scale-105 transition duration-500"
-                    onError={(e) => { e.target.src = "/nexora-poster-placeholder.PNG"; }} />
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#0E0C1A] via-transparent to-black/40" />
-                  <div className="absolute top-2.5 right-2.5 left-2.5 flex items-center justify-between">
-                    <span className="flex items-center gap-1 rounded-lg bg-black/70 px-2 py-1 text-[11px] font-bold text-amber-300 backdrop-blur-md">
-                      ★ {item.rating ? item.rating.toFixed(1) : "8.0"}
-                    </span>
-                    <span className="rounded-lg bg-black/70 px-2 py-1 text-[11px] font-mono font-bold text-white/80 backdrop-blur-md">
-                      {item.release_year || "2023"}
-                    </span>
-                  </div>
-                  <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/75 opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm">
-                    <button type="button" onClick={() => handleOpenEdit(item)} className="flex h-10 w-10 items-center justify-center rounded-xl bg-fuchsia-600 text-white shadow-lg hover:scale-110 transition" title="تعديل العمل">✏️</button>
-                    <button type="button" onClick={() => setDeletingItem(item)} className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-600 text-white shadow-lg hover:scale-110 transition" title="حذف العمل">🗑️</button>
-                  </div>
-                </div>
-                <div className="p-3.5 space-y-2 flex-1 flex flex-col justify-between">
-                  <div>
-                    <h4 className="font-bold text-white text-sm line-clamp-1 group-hover:text-fuchsia-300 transition">{item.title_ar || item.title_en}</h4>
-                    {item.title_ar && item.title_en && item.title_ar !== item.title_en && (
-                      <p className="text-[11px] text-white/40 line-clamp-1 font-mono">{item.title_en}</p>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap gap-1">
-                    {item.genres?.slice(0, 2).map((genre, idx) => (
-                      <span key={idx} className="rounded-md bg-white/[0.06] border border-white/5 px-1.5 py-0.5 text-[10px] text-white/70">{genre}</span>
-                    ))}
-                  </div>
-                  <div className="flex items-center justify-between border-t border-white/5 pt-2 text-[11px] text-white/40">
-                    <span>{item.file_count || 1} ملف / حلقة</span>
-                    <button type="button" onClick={() => handleOpenEdit(item)} className="text-fuchsia-400 font-bold hover:underline">تعديل ↵</button>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        <MediaCollection
+          items={filteredMediaItems}
+          onOpen={handleOpenEdit}
+          className="admin-media-collection"
+          cardActions={(item) => <>
+            <button type="button" onClick={(event) => { event.stopPropagation(); handleOpenEdit(item); }} className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/15 bg-black/60 text-white shadow-sm backdrop-blur transition hover:bg-fuchsia-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-fuchsia-300" title="تعديل العمل" aria-label={`تعديل ${item.title_ar || item.title_en}`}><Icon name="settings" className="h-4 w-4" /></button>
+            <button type="button" onClick={(event) => { event.stopPropagation(); setDeletingItem(item); }} className="flex h-9 w-9 items-center justify-center rounded-lg border border-rose-200/20 bg-rose-950/75 text-rose-100 shadow-sm backdrop-blur transition hover:bg-rose-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-300" title="حذف العمل" aria-label={`حذف ${item.title_ar || item.title_en}`}><Icon name="close" className="h-4 w-4" /></button>
+          </>}
+        />
       )}
 
       {/* Edit/Add Modal */}

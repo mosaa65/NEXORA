@@ -6,7 +6,7 @@ import UnifiedMediaCard from "./UnifiedMediaCard";
  * Shared responsive catalogue surface. Use it anywhere a collection of media
  * is shown; it owns only the visual view mode, never the data or navigation.
  */
-export default function MediaCollection({ items = [], onOpen, defaultView = "grid", className = "" }) {
+export default function MediaCollection({ items = [], onOpen, defaultView = "grid", className = "", cardActions }) {
   const [view, setView] = useState(defaultView);
 
   return (
@@ -18,8 +18,13 @@ export default function MediaCollection({ items = [], onOpen, defaultView = "gri
           <button type="button" onClick={() => setView("list")} aria-pressed={view === "list"} title="عرض قائمة" className={`flex h-8 w-9 items-center justify-center rounded-lg transition ${view === "list" ? "bg-[var(--bg-card)] text-[var(--color-accent)] shadow-[var(--shadow-sm)]" : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"}`}><Icon name="list" className="h-4 w-4" /></button>
         </div>
       </div>
-      <div className={view === "grid" ? "grid grid-cols-[repeat(auto-fill,minmax(155px,1fr))] gap-3 sm:grid-cols-[repeat(auto-fill,minmax(180px,1fr))] sm:gap-4" : "space-y-2.5 sm:space-y-3"}>
-        {items.map((media) => <UnifiedMediaCard key={media.id} media={media} onOpen={onOpen} layout={view} />)}
+      <div className={view === "grid" ? "grid grid-cols-[repeat(auto-fill,minmax(172px,1fr))] gap-4 sm:grid-cols-[repeat(auto-fill,minmax(210px,1fr))] sm:gap-5 xl:grid-cols-[repeat(auto-fill,minmax(230px,1fr))]" : "space-y-2.5 sm:space-y-3"}>
+        {items.map((media) => (
+          <div key={media.id} className={cardActions && view === "grid" ? "group/card relative" : undefined}>
+            <UnifiedMediaCard media={media} onOpen={onOpen} layout={view} />
+            {cardActions && view === "grid" ? <div className="absolute left-2.5 top-12 z-10 flex gap-1.5">{cardActions(media)}</div> : null}
+          </div>
+        ))}
       </div>
     </section>
   );

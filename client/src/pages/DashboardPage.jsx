@@ -196,7 +196,7 @@ export default function DashboardPage({
           className="flex items-stretch gap-4 overflow-x-auto pb-4 scrollbar-none snap-x"
         >
           {topRatedList.map((media) => (
-            <div key={media.id} className="w-44 sm:w-52 shrink-0 snap-start">
+            <div key={media.id} className="w-48 shrink-0 snap-start sm:w-56 lg:w-60">
               <UnifiedMediaCard
                 media={media}
                 onOpen={onOpenMedia}
@@ -239,7 +239,7 @@ export default function DashboardPage({
           className="flex items-stretch gap-4 overflow-x-auto pb-4 scrollbar-none snap-x"
         >
           {seriesList.map((media) => (
-            <div key={media.id} className="w-44 sm:w-52 shrink-0 snap-start">
+            <div key={media.id} className="w-48 shrink-0 snap-start sm:w-56 lg:w-60">
               <UnifiedMediaCard
                 media={media}
                 onOpen={onOpenMedia}
@@ -282,7 +282,7 @@ export default function DashboardPage({
           className="flex items-stretch gap-4 overflow-x-auto pb-4 scrollbar-none snap-x"
         >
           {moviesList.map((media) => (
-            <div key={media.id} className="w-44 sm:w-52 shrink-0 snap-start">
+            <div key={media.id} className="w-48 shrink-0 snap-start sm:w-56 lg:w-60">
               <UnifiedMediaCard
                 media={media}
                 onOpen={onOpenMedia}
