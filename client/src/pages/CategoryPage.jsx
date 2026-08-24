@@ -4,6 +4,7 @@ import ShowcaseHero from "../components/ShowcaseHero.jsx";
 import HubBannerCard from "../components/HubBannerCard.jsx";
 import FilterToolbar from "../components/FilterToolbar.jsx";
 import MediaCollection from "../components/MediaCollection.jsx";
+import SmartHubRail from "../components/SmartHubRail.jsx";
 import Icon from "../components/Icon.jsx";
 import { getMediaList, resolveAPIURL } from "../lib/api.js";
 
@@ -233,7 +234,9 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
     return items.slice(0, 5);
   }, [items]);
 
-  const activeHubs = selectedCategory === "series" ? seriesHubs : selectedCategory === "kids" ? kidsHubs : [];
+  // Legacy hand-authored banners stay dormant while the database-driven hubs
+  // are rolled out. They are kept only as a reversible migration fallback.
+  const activeHubs = [];
 
   return (
     <div className="space-y-8 pb-16 text-right" dir="rtl">
@@ -274,6 +277,8 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
       )}
 
       {/* 3. Grand Origin Hubs / Collections Section */}
+      {!selectedHub && <SmartHubRail scope={selectedCategory === "movies" ? "movies" : selectedCategory} title={`مجموعات ومحاور ${meta.titleAr}`} description="تصنيفات ذكية مبنية تلقائيًا من بيانات مكتبتك." onOpen={(hub) => (window.location.hash = `#/hub/${hub.slug}`)} />}
+
       {!selectedHub && activeHubs.length > 0 && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">

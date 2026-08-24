@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import ShowcaseHero from "../components/ShowcaseHero.jsx";
 import UnifiedMediaCard from "../components/UnifiedMediaCard.jsx";
 import HubBannerCard from "../components/HubBannerCard.jsx";
+import SmartHubRail from "../components/SmartHubRail.jsx";
 import Icon from "../components/Icon.jsx";
 import { getDashboardStats, getMediaList } from "../lib/api.js";
 import { mockLibrary } from "../data/library.js";
@@ -100,6 +101,12 @@ export default function DashboardPage({
           onNavigate={(target) => target?.category && onNavigateCategory?.(target.category)}
         />
       )}
+
+      <SmartHubRail
+        title="استكشف حسب ذوقك"
+        description="محاور ذكية تتكوّن تلقائيًا من بيانات مكتبتك المحلية."
+        onOpen={(hub) => (window.location.hash = `#/hub/${hub.slug}`)}
+      />
 
       {/* 2. Featured Hub Banners Grid */}
       <div className="space-y-4">

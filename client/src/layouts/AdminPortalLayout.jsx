@@ -8,6 +8,8 @@ import { adminLogout } from "../lib/api.js";
 const adminNavItems = [
   { id: "overview", path: "/admin/overview", label: "نظرة عامة", icon: "dashboard" },
   { id: "categories", path: "/admin/categories", label: "الأقسام والتصنيفات", icon: "mask" },
+  { id: "collections", path: "/admin/collections", label: "المجموعات والعروض", icon: "spark" },
+  { id: "hubs", path: "/admin/hubs", label: "المحاور الذكية", icon: "grid" },
   { id: "media", path: "/admin/media", label: "إدارة الأعمال", icon: "film" },
   { id: "indexer", path: "/admin/indexer", label: "الفهرسة والمجلدات", icon: "search" },
   { id: "tmdb", path: "/admin/tmdb", label: "إعدادات TMDB", icon: "spark" },

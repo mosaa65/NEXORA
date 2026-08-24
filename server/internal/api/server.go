@@ -35,6 +35,9 @@ type repository interface {
 	CreateCategory(ctx context.Context, nameAR, nameEN, slug string) (*db.CategorySummary, error)
 	UpdateCategory(ctx context.Context, id int64, nameAR, nameEN, slug string) error
 	DeleteCategory(ctx context.Context, id int64) error
+	ListCollections(ctx context.Context) ([]db.Collection, error)
+	SaveCollection(ctx context.Context, id int64, req db.CollectionRequest) (*db.Collection, error)
+	DeleteCollection(ctx context.Context, id int64) error
 	ListSearchDocuments(ctx context.Context, limit int) ([]search.MediaDocument, error)
 	ListVideoFiles(ctx context.Context, mediaItemID int64) ([]db.VideoFile, error)
 	GetVideoFilePath(ctx context.Context, id int64) (string, error)
@@ -48,6 +51,11 @@ type repository interface {
 	GetMediaItem(ctx context.Context, id int64) (*db.MediaItemDetail, error)
 	ListMediaItems(ctx context.Context, opts db.ListMediaOptions) (*db.MediaListResult, error)
 	ListShowcases(ctx context.Context, opts db.ShowcaseOptions) (*db.ShowcaseResult, error)
+	ListSmartHubs(ctx context.Context, scope string) ([]db.SmartHub, error)
+	GetSmartHub(ctx context.Context, slug string) (*db.SmartHub, error)
+	ListSmartHubMedia(ctx context.Context, slug string, opts db.ListMediaOptions) (*db.MediaListResult, *db.SmartHub, error)
+	ListSmartHubsAdmin(ctx context.Context) ([]db.SmartHub, error)
+	SaveSmartHub(ctx context.Context, slug string, req db.SmartHubRequest) (*db.SmartHub, error)
 	UpdateMediaMetadata(ctx context.Context, id int64, meta metadata.Result) (*search.MediaDocument, error)
 	GetMetadataSnapshot(ctx context.Context, mediaItemID int64, locale string) (*db.MetadataSnapshot, error)
 	SaveSeasonMetadataSnapshots(ctx context.Context, mediaItemID int64, snapshots []metadata.SeasonResult) error
@@ -144,9 +152,18 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/categories", s.handleCategoryCreate)
 	s.mux.HandleFunc("PUT /api/categories/{id}", s.handleCategoryUpdate)
 	s.mux.HandleFunc("DELETE /api/categories/{id}", s.handleCategoryDelete)
+	s.mux.HandleFunc("GET /api/admin/collections", s.handleCollections)
+	s.mux.HandleFunc("POST /api/admin/collections", s.handleCollectionSave)
+	s.mux.HandleFunc("PUT /api/admin/collections/{id}", s.handleCollectionSave)
+	s.mux.HandleFunc("DELETE /api/admin/collections/{id}", s.handleCollectionDelete)
 	s.mux.HandleFunc("GET /api/search", s.handleSearch)
 	s.mux.HandleFunc("GET /api/media", s.handleMediaList)
 	s.mux.HandleFunc("GET /api/showcases", s.handleShowcases)
+	s.mux.HandleFunc("GET /api/hubs", s.handleSmartHubs)
+	s.mux.HandleFunc("GET /api/hubs/{slug}", s.handleSmartHub)
+	s.mux.HandleFunc("GET /api/hubs/{slug}/media", s.handleSmartHubMedia)
+	s.mux.HandleFunc("GET /api/admin/hubs", s.handleSmartHubsAdmin)
+	s.mux.HandleFunc("PUT /api/admin/hubs/{slug}", s.handleSmartHubSave)
 	s.mux.HandleFunc("POST /api/media", s.handleMediaCreate)
 	s.mux.HandleFunc("GET /api/media/{id}", s.handleMediaDetail)
 	s.mux.HandleFunc("PUT /api/media/{id}", s.handleMediaUpdateFull)
@@ -476,10 +493,10 @@ func (s *Server) handleIndexPreview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"roots":        request.Roots,
-		"totalFiles":   totalScanned,
-		"totalMedia":   len(resultItems),
-		"mediaItems":   resultItems,
+		"roots":      request.Roots,
+		"totalFiles": totalScanned,
+		"totalMedia": len(resultItems),
+		"mediaItems": resultItems,
 	})
 }
 
@@ -734,6 +751,49 @@ func (s *Server) handleCategoryDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "deleted_id": id})
+}
+
+func (s *Server) handleCollections(w http.ResponseWriter, r *http.Request) {
+	items, err := s.repository.ListCollections(r.Context())
+	if err != nil {
+		writeJSON(w, 500, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, 200, map[string]any{"collections": items})
+}
+func (s *Server) handleCollectionSave(w http.ResponseWriter, r *http.Request) {
+	var req db.CollectionRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeJSON(w, 400, map[string]any{"error": err.Error()})
+		return
+	}
+	var id int64
+	if raw := r.PathValue("id"); raw != "" {
+		var ok bool
+		id, ok = parsePositiveID(raw)
+		if !ok {
+			writeJSON(w, 400, map[string]any{"error": "invalid collection id"})
+			return
+		}
+	}
+	item, err := s.repository.SaveCollection(r.Context(), id, req)
+	if err != nil {
+		writeJSON(w, 500, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, 200, item)
+}
+func (s *Server) handleCollectionDelete(w http.ResponseWriter, r *http.Request) {
+	id, ok := parsePositiveID(r.PathValue("id"))
+	if !ok {
+		writeJSON(w, 400, map[string]any{"error": "invalid collection id"})
+		return
+	}
+	if err := s.repository.DeleteCollection(r.Context(), id); err != nil {
+		writeJSON(w, 500, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, 200, map[string]any{"ok": true})
 }
 
 func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
@@ -1179,6 +1239,76 @@ func (s *Server) handleShowcases(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) handleSmartHubs(w http.ResponseWriter, r *http.Request) {
+	hubs, err := s.repository.ListSmartHubs(r.Context(), strings.TrimSpace(r.URL.Query().Get("scope")))
+	if err != nil {
+		writeJSON(w, 500, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, 200, map[string]any{"hubs": hubs})
+}
+func (s *Server) handleSmartHub(w http.ResponseWriter, r *http.Request) {
+	hub, err := s.repository.GetSmartHub(r.Context(), r.PathValue("slug"))
+	if err != nil {
+		status := 500
+		if errors.Is(err, sql.ErrNoRows) {
+			status = 404
+		}
+		writeJSON(w, status, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, 200, hub)
+}
+func (s *Server) handleSmartHubMedia(w http.ResponseWriter, r *http.Request) {
+	limit := 24
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	offset := 0
+	if raw := r.URL.Query().Get("offset"); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n >= 0 {
+			offset = n
+		}
+	}
+	result, hub, err := s.repository.ListSmartHubMedia(r.Context(), r.PathValue("slug"), db.ListMediaOptions{Limit: limit, Offset: offset, Sort: strings.TrimSpace(r.URL.Query().Get("sort"))})
+	if err != nil {
+		status := 500
+		if errors.Is(err, sql.ErrNoRows) {
+			status = 404
+		}
+		writeJSON(w, status, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, 200, map[string]any{"hub": hub, "total": result.Total, "limit": result.Limit, "offset": result.Offset, "items": result.Items})
+}
+func (s *Server) handleSmartHubsAdmin(w http.ResponseWriter, r *http.Request) {
+	items, err := s.repository.ListSmartHubsAdmin(r.Context())
+	if err != nil {
+		writeJSON(w, 500, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, 200, map[string]any{"hubs": items})
+}
+func (s *Server) handleSmartHubSave(w http.ResponseWriter, r *http.Request) {
+	var req db.SmartHubRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeJSON(w, 400, map[string]any{"error": err.Error()})
+		return
+	}
+	item, err := s.repository.SaveSmartHub(r.Context(), r.PathValue("slug"), req)
+	if err != nil {
+		status := 500
+		if errors.Is(err, sql.ErrNoRows) {
+			status = 404
+		}
+		writeJSON(w, status, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, 200, item)
 }
 
 func (s *Server) handleMediaDetail(w http.ResponseWriter, r *http.Request) {
@@ -1811,14 +1941,14 @@ func (s *Server) handleTMDBPreviewGet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"media_id":           mediaID,
-		"title_en":           item.TitleEN,
-		"title_ar":           item.TitleAR,
-		"type":               item.Type,
-		"fetch_mode":         settings.FetchMode,
-		"image_mode":         settings.ImageMode,
-		"estimatedRequests": estimatedRequests,
-		"estimatedBytes":    estimatedBytes,
+		"media_id":               mediaID,
+		"title_en":               item.TitleEN,
+		"title_ar":               item.TitleAR,
+		"type":                   item.Type,
+		"fetch_mode":             settings.FetchMode,
+		"image_mode":             settings.ImageMode,
+		"estimatedRequests":      estimatedRequests,
+		"estimatedBytes":         estimatedBytes,
 		"estimatedSizeFormatted": fmt.Sprintf("%.2f MB", float64(estimatedBytes)/(1024.0*1024.0)),
 	})
 }
@@ -1917,8 +2047,8 @@ func (s *Server) handleAdminLogin(w http.ResponseWriter, r *http.Request) {
 	if req.Username == adminUser && req.Password == adminPass {
 		// Return token and user profile
 		writeJSON(w, http.StatusOK, map[string]any{
-			"ok":       true,
-			"token":    "nexora_admin_auth_token_active",
+			"ok":    true,
+			"token": "nexora_admin_auth_token_active",
 			"user": map[string]any{
 				"username": adminUser,
 				"name":     "مدير النظام الرئيسي",
@@ -1953,4 +2083,3 @@ func (s *Server) handleAdminSession(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleAdminLogout(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "message": "تم تسجيل الخروج بنجاح"})
 }
-

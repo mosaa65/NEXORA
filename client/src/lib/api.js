@@ -145,6 +145,30 @@ export async function getShowcases(options = {}) {
   return requestJSON(`/api/showcases?${params.toString()}`);
 }
 
+export async function getSmartHubs(scope) {
+  const params = new URLSearchParams();
+  if (scope) params.set("scope", scope);
+  return requestJSON(`/api/hubs?${params.toString()}`);
+}
+export async function getSmartHub(slug) { return requestJSON(`/api/hubs/${encodeURIComponent(slug)}`); }
+export async function getSmartHubMedia(slug, options = {}) {
+  const params = new URLSearchParams();
+  if (options.sort) params.set("sort", options.sort);
+  if (options.limit) params.set("limit", String(options.limit));
+  if (options.offset) params.set("offset", String(options.offset));
+  return requestJSON(`/api/hubs/${encodeURIComponent(slug)}/media?${params.toString()}`);
+}
+export async function getAdminSmartHubs() { return requestJSON("/api/admin/hubs"); }
+export async function saveSmartHub(slug, data) { return requestJSON(`/api/admin/hubs/${encodeURIComponent(slug)}`, { method: "PUT", body: JSON.stringify(data) }); }
+
+export async function getCollections() { return requestJSON("/api/admin/collections"); }
+export async function saveCollection(data) {
+  const method = data.id ? "PUT" : "POST";
+  const path = data.id ? `/api/admin/collections/${data.id}` : "/api/admin/collections";
+  return requestJSON(path, { method, body: JSON.stringify(data) });
+}
+export async function deleteCollection(id) { return requestJSON(`/api/admin/collections/${id}`, { method: "DELETE" }); }
+
 export async function getMediaDetail(mediaId) {
   return requestJSON(`/api/media/${encodeURIComponent(mediaId)}`);
 }

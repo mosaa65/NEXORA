@@ -93,6 +93,28 @@ func (m *mockRepo) ListMediaItems(ctx context.Context, opts db.ListMediaOptions)
 func (m *mockRepo) ListShowcases(ctx context.Context, opts db.ShowcaseOptions) (*db.ShowcaseResult, error) {
 	return &db.ShowcaseResult{Context: opts.Context, Slides: []db.ShowcaseSlide{{ID: "media-1", Kind: "featured", MediaID: 1, TitleEN: "Inception"}}}, nil
 }
+func (m *mockRepo) ListSmartHubs(ctx context.Context, scope string) ([]db.SmartHub, error) {
+	return []db.SmartHub{{Slug: "movies-animation", TitleAR: "أفلام كرتون", ItemCount: 4}}, nil
+}
+func (m *mockRepo) GetSmartHub(ctx context.Context, slug string) (*db.SmartHub, error) {
+	return &db.SmartHub{Slug: slug, TitleAR: "أفلام كرتون", ItemCount: 4}, nil
+}
+func (m *mockRepo) ListSmartHubMedia(ctx context.Context, slug string, opts db.ListMediaOptions) (*db.MediaListResult, *db.SmartHub, error) {
+	return &db.MediaListResult{Total: 1, Limit: opts.Limit, Offset: opts.Offset, Items: []search.MediaDocument{{ID: 1, TitleEN: "Inception"}}}, &db.SmartHub{Slug: slug, TitleAR: "أفلام كرتون", ItemCount: 1}, nil
+}
+func (m *mockRepo) ListSmartHubsAdmin(ctx context.Context) ([]db.SmartHub, error) {
+	return []db.SmartHub{}, nil
+}
+func (m *mockRepo) SaveSmartHub(ctx context.Context, slug string, req db.SmartHubRequest) (*db.SmartHub, error) {
+	return &db.SmartHub{Slug: slug, TitleAR: req.TitleAR}, nil
+}
+func (m *mockRepo) ListCollections(ctx context.Context) ([]db.Collection, error) {
+	return []db.Collection{}, nil
+}
+func (m *mockRepo) SaveCollection(ctx context.Context, id int64, req db.CollectionRequest) (*db.Collection, error) {
+	return &db.Collection{ID: id, Slug: req.Slug, TitleEN: req.TitleEN}, nil
+}
+func (m *mockRepo) DeleteCollection(ctx context.Context, id int64) error { return nil }
 func (m *mockRepo) UpdateMediaMetadata(ctx context.Context, id int64, meta metadata.Result) (*search.MediaDocument, error) {
 	return &search.MediaDocument{ID: id, TitleEN: meta.Title, ReleaseYear: meta.ReleaseYear}, nil
 }
@@ -127,6 +149,18 @@ func (m *mockRepo) UpdateMediaFull(ctx context.Context, id int64, req db.UpdateM
 func (m *mockRepo) DeleteMediaItem(ctx context.Context, id int64) error {
 	return nil
 }
+func (m *mockRepo) CacheLocalArtwork(sourcePath string) string { return sourcePath }
+func (m *mockRepo) GetTMDBSettings(ctx context.Context) (*metadata.TMDBSettings, error) {
+	settings := metadata.DefaultSettings()
+	return &settings, nil
+}
+func (m *mockRepo) SaveTMDBSettings(ctx context.Context, settings metadata.TMDBSettings) error {
+	return nil
+}
+func (m *mockRepo) GetTMDBUsageSummary(ctx context.Context) (*metadata.TMDBUsageSummary, error) {
+	return &metadata.TMDBUsageSummary{}, nil
+}
+func (m *mockRepo) LogTMDBUsage(ctx context.Context, entry db.TMDBLogEntry) error { return nil }
 
 type mockSearch struct{}
 
@@ -147,6 +181,11 @@ func (m *mockMetadata) LookupByExternalID(ctx context.Context, query metadata.Qu
 }
 func (m *mockMetadata) LookupSeasonByExternalID(ctx context.Context, externalID string, seasonNumber int, language string) (metadata.SeasonResult, error) {
 	return metadata.SeasonResult{Provider: "tmdb", ExternalID: externalID, Locale: language, SeasonNumber: seasonNumber, RawPayload: json.RawMessage(`{"episodes":[]}`)}, nil
+}
+func (m *mockMetadata) GetTMDBSettings() metadata.TMDBSettings         { return metadata.DefaultSettings() }
+func (m *mockMetadata) SetTMDBSettings(settings metadata.TMDBSettings) {}
+func (m *mockMetadata) FetchTMDBConfiguration(ctx context.Context) (*metadata.TMDBRemoteConfig, error) {
+	return &metadata.TMDBRemoteConfig{}, nil
 }
 
 type mockProcessor struct{}

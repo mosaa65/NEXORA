@@ -4,8 +4,11 @@ import CustomerCinemaLayout from "./layouts/CustomerCinemaLayout.jsx";
 import AdminPortalLayout from "./layouts/AdminPortalLayout.jsx";
 import DashboardPage from "./pages/DashboardPage.jsx";
 import CategoryPage from "./pages/CategoryPage.jsx";
+import SmartHubPage from "./pages/SmartHubPage.jsx";
 import MediaDetailsPage from "./pages/MediaDetailsPage.jsx";
 import AdminCategoriesPage from "./pages/admin/AdminCategoriesPage.jsx";
+import AdminCollectionsPage from "./pages/admin/AdminCollectionsPage.jsx";
+import AdminSmartHubsPage from "./pages/admin/AdminSmartHubsPage.jsx";
 import AdminMediaPage from "./pages/admin/AdminMediaPage.jsx";
 import AdminIndexerPage from "./pages/admin/AdminIndexerPage.jsx";
 import AdminQualityPage from "./pages/admin/AdminQualityPage.jsx";
@@ -27,6 +30,11 @@ function CategoryRouteWrapper({ onOpenMedia, onQuickPlay }) {
       onQuickPlay={onQuickPlay}
     />
   );
+}
+
+function SmartHubRouteWrapper({ onOpenMedia }) {
+  const { slug } = useParams();
+  return <SmartHubPage slug={slug} onOpenMedia={onOpenMedia} />;
 }
 
 // Helper Wrapper for Media Details View
@@ -169,6 +177,7 @@ export default function App() {
               />
             }
           />
+          <Route path="hub/:slug" element={<SmartHubRouteWrapper onOpenMedia={(item) => (window.location.hash = `#/media/${item.id}`)} />} />
 
           {/* Favorites Route */}
           <Route
@@ -214,6 +223,8 @@ export default function App() {
         >
           <Route index element={<Navigate to="/admin/categories" replace />} />
           <Route path="categories" element={<AdminCategoriesPage onNavigateToMedia={(slug) => (window.location.hash = `#/admin/media`)} />} />
+          <Route path="collections" element={<AdminCollectionsPage />} />
+          <Route path="hubs" element={<AdminSmartHubsPage />} />
           <Route path="media" element={<AdminMediaPage />} />
           <Route path="indexer" element={<AdminIndexerPage />} />
           <Route path="tmdb" element={<TMDBSettingsPage />} />

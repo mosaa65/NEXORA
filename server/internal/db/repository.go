@@ -206,20 +206,26 @@ type MediaItemDetail struct {
 // It is calculated from persisted database data only; browser card rendering
 // never needs to contact TMDB or inspect individual files.
 type mediaCardSummary struct {
-	Status              string
-	SeasonCount         int
-	TMDBSeasonCount     int
-	TMDBEpisodeCount    int
-	TotalSize           int64
-	BestResolution      string
-	RuntimeMinutes      int
-	HasArabicAudio      bool
-	HasArabicSubtitles  bool
+	Status             string
+	SeasonCount        int
+	TMDBSeasonCount    int
+	TMDBEpisodeCount   int
+	TotalSize          int64
+	BestResolution     string
+	RuntimeMinutes     int
+	HasArabicAudio     bool
+	HasArabicSubtitles bool
 }
 
 type ListMediaOptions struct {
 	CategorySlug string
 	Type         string
+	Types        []string
+	Categories   []string
+	TagsAny      []string
+	YearFrom     int
+	YearTo       int
+	RatingGTE    float64
 	Search       string
 	Sort         string
 	Limit        int
@@ -270,6 +276,84 @@ type ShowcaseSlide struct {
 type ShowcaseResult struct {
 	Context string          `json:"context"`
 	Slides  []ShowcaseSlide `json:"slides"`
+}
+
+type Collection struct {
+	ID                 int64           `json:"id"`
+	Slug               string          `json:"slug"`
+	TitleAR            string          `json:"title_ar"`
+	TitleEN            string          `json:"title_en"`
+	DescriptionAR      string          `json:"description_ar"`
+	DescriptionEN      string          `json:"description_en"`
+	ArtworkPath        string          `json:"artwork_path"`
+	ArtworkPosition    string          `json:"artwork_position"`
+	Accent             string          `json:"accent"`
+	TargetCategorySlug string          `json:"target_category_slug"`
+	TargetFilters      json.RawMessage `json:"target_filters"`
+	Priority           int             `json:"priority"`
+	IsActive           bool            `json:"is_active"`
+	ItemCount          int             `json:"item_count"`
+}
+
+type CollectionRequest struct {
+	Slug               string          `json:"slug"`
+	TitleAR            string          `json:"title_ar"`
+	TitleEN            string          `json:"title_en"`
+	DescriptionAR      string          `json:"description_ar"`
+	DescriptionEN      string          `json:"description_en"`
+	ArtworkPath        string          `json:"artwork_path"`
+	ArtworkPosition    string          `json:"artwork_position"`
+	Accent             string          `json:"accent"`
+	TargetCategorySlug string          `json:"target_category_slug"`
+	TargetFilters      json.RawMessage `json:"target_filters"`
+	Priority           int             `json:"priority"`
+	IsActive           bool            `json:"is_active"`
+}
+
+type HubRule struct {
+	Types      []string `json:"types,omitempty"`
+	Categories []string `json:"categories,omitempty"`
+	TagsAny    []string `json:"tags_any,omitempty"`
+	YearFrom   int      `json:"year_from,omitempty"`
+	YearTo     int      `json:"year_to,omitempty"`
+	RatingGTE  float64  `json:"rating_gte,omitempty"`
+}
+
+type SmartHub struct {
+	ID              string  `json:"id"`
+	Slug            string  `json:"slug"`
+	Source          string  `json:"source"`
+	Scope           string  `json:"scope"`
+	TitleAR         string  `json:"title_ar"`
+	TitleEN         string  `json:"title_en"`
+	DescriptionAR   string  `json:"description_ar"`
+	DescriptionEN   string  `json:"description_en"`
+	ArtworkPath     string  `json:"artwork_path"`
+	ArtworkPosition string  `json:"artwork_position"`
+	Accent          string  `json:"accent"`
+	Icon            string  `json:"icon"`
+	Rule            HubRule `json:"rule"`
+	Priority        int     `json:"priority"`
+	ItemCount       int     `json:"item_count"`
+	IsActive        bool    `json:"is_active"`
+	MinItemCount    int     `json:"min_item_count"`
+}
+
+type SmartHubRequest struct {
+	Slug            string  `json:"slug"`
+	Scope           string  `json:"scope"`
+	TitleAR         string  `json:"title_ar"`
+	TitleEN         string  `json:"title_en"`
+	DescriptionAR   string  `json:"description_ar"`
+	DescriptionEN   string  `json:"description_en"`
+	ArtworkPath     string  `json:"artwork_path"`
+	ArtworkPosition string  `json:"artwork_position"`
+	Accent          string  `json:"accent"`
+	Icon            string  `json:"icon"`
+	Rule            HubRule `json:"rule"`
+	Priority        int     `json:"priority"`
+	IsActive        bool    `json:"is_active"`
+	MinItemCount    int     `json:"min_item_count"`
 }
 
 type StorageDisk struct {
@@ -796,6 +880,227 @@ func (r *Repository) DeleteCategory(ctx context.Context, id int64) error {
 	return err
 }
 
+func (r *Repository) ListCollections(ctx context.Context) ([]Collection, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT c.id,c.slug,COALESCE(c.title_ar,''),c.title_en,COALESCE(c.description_ar,''),COALESCE(c.description_en,''),COALESCE(c.artwork_path,''),c.artwork_position,c.accent,COALESCE(c.target_category_slug,''),c.target_filters::text,c.priority,c.is_active,COUNT(ci.media_item_id)::int FROM collections c LEFT JOIN collection_items ci ON ci.collection_id=c.id GROUP BY c.id ORDER BY c.priority DESC,c.id DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("list collections: %w", err)
+	}
+	defer rows.Close()
+	items := []Collection{}
+	for rows.Next() {
+		var item Collection
+		var filters string
+		if err := rows.Scan(&item.ID, &item.Slug, &item.TitleAR, &item.TitleEN, &item.DescriptionAR, &item.DescriptionEN, &item.ArtworkPath, &item.ArtworkPosition, &item.Accent, &item.TargetCategorySlug, &filters, &item.Priority, &item.IsActive, &item.ItemCount); err != nil {
+			return nil, err
+		}
+		item.TargetFilters = json.RawMessage(filters)
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+func (r *Repository) SaveCollection(ctx context.Context, id int64, req CollectionRequest) (*Collection, error) {
+	if strings.TrimSpace(req.TitleEN) == "" {
+		req.TitleEN = req.TitleAR
+	}
+	req.Slug = strings.ToLower(strings.TrimSpace(req.Slug))
+	if req.Slug == "" {
+		req.Slug = strings.ReplaceAll(strings.ToLower(req.TitleEN), " ", "-")
+	}
+	if len(req.TargetFilters) == 0 {
+		req.TargetFilters = json.RawMessage(`{}`)
+	}
+	var saved Collection
+	query := `INSERT INTO collections (slug,title_ar,title_en,description_ar,description_en,artwork_path,artwork_position,accent,target_category_slug,target_filters,priority,is_active) VALUES ($1,$2,$3,$4,$5,$6,COALESCE(NULLIF($7,''),'center center'),COALESCE(NULLIF($8,''),'violet'),NULLIF($9,''),$10::jsonb,$11,$12) ON CONFLICT (slug) DO UPDATE SET title_ar=EXCLUDED.title_ar,title_en=EXCLUDED.title_en,description_ar=EXCLUDED.description_ar,description_en=EXCLUDED.description_en,artwork_path=EXCLUDED.artwork_path,artwork_position=EXCLUDED.artwork_position,accent=EXCLUDED.accent,target_category_slug=EXCLUDED.target_category_slug,target_filters=EXCLUDED.target_filters,priority=EXCLUDED.priority,is_active=EXCLUDED.is_active,updated_at=CURRENT_TIMESTAMP RETURNING id,slug,title_ar,title_en,description_ar,description_en,artwork_path,artwork_position,accent,COALESCE(target_category_slug,''),target_filters::text,priority,is_active`
+	if id > 0 {
+		query = `UPDATE collections SET slug=$1,title_ar=$2,title_en=$3,description_ar=$4,description_en=$5,artwork_path=$6,artwork_position=COALESCE(NULLIF($7,''),'center center'),accent=COALESCE(NULLIF($8,''),'violet'),target_category_slug=NULLIF($9,''),target_filters=$10::jsonb,priority=$11,is_active=$12,updated_at=CURRENT_TIMESTAMP WHERE id=` + fmt.Sprint(id) + ` RETURNING id,slug,title_ar,title_en,description_ar,description_en,artwork_path,artwork_position,accent,COALESCE(target_category_slug,''),target_filters::text,priority,is_active`
+	}
+	var filters string
+	err := r.db.QueryRowContext(ctx, query, req.Slug, req.TitleAR, req.TitleEN, req.DescriptionAR, req.DescriptionEN, req.ArtworkPath, req.ArtworkPosition, req.Accent, req.TargetCategorySlug, string(req.TargetFilters), req.Priority, req.IsActive).Scan(&saved.ID, &saved.Slug, &saved.TitleAR, &saved.TitleEN, &saved.DescriptionAR, &saved.DescriptionEN, &saved.ArtworkPath, &saved.ArtworkPosition, &saved.Accent, &saved.TargetCategorySlug, &filters, &saved.Priority, &saved.IsActive)
+	if err != nil {
+		return nil, err
+	}
+	saved.TargetFilters = json.RawMessage(filters)
+	return &saved, nil
+}
+
+func (r *Repository) DeleteCollection(ctx context.Context, id int64) error {
+	_, err := r.db.ExecContext(ctx, `DELETE FROM collections WHERE id=$1`, id)
+	return err
+}
+
+func (r *Repository) ListSmartHubsAdmin(ctx context.Context) ([]SmartHub, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT slug,source,scope,title_ar,COALESCE(title_en,''),COALESCE(description_ar,''),COALESCE(description_en,''),COALESCE(artwork_path,''),artwork_position,accent,icon,rule::text,priority,is_active,min_item_count FROM hub_definitions ORDER BY priority DESC,id DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SmartHub{}
+	for rows.Next() {
+		var h SmartHub
+		var rule string
+		if err := rows.Scan(&h.Slug, &h.Source, &h.Scope, &h.TitleAR, &h.TitleEN, &h.DescriptionAR, &h.DescriptionEN, &h.ArtworkPath, &h.ArtworkPosition, &h.Accent, &h.Icon, &rule, &h.Priority, &h.IsActive, &h.MinItemCount); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal([]byte(rule), &h.Rule); err != nil {
+			return nil, err
+		}
+		h.ID = h.Slug
+		items = append(items, h)
+	}
+	return items, rows.Err()
+}
+func (r *Repository) SaveSmartHub(ctx context.Context, slug string, req SmartHubRequest) (*SmartHub, error) {
+	if req.Slug == "" {
+		req.Slug = slug
+	}
+	req.Slug = strings.ToLower(strings.TrimSpace(req.Slug))
+	if req.MinItemCount < 1 {
+		req.MinItemCount = 1
+	}
+	rule, err := json.Marshal(req.Rule)
+	if err != nil {
+		return nil, err
+	}
+	var h SmartHub
+	var raw string
+	err = r.db.QueryRowContext(ctx, `UPDATE hub_definitions SET scope=COALESCE(NULLIF($1,''),scope),title_ar=COALESCE(NULLIF($2,''),title_ar),title_en=$3,description_ar=$4,description_en=$5,artwork_path=$6,artwork_position=COALESCE(NULLIF($7,''),'center center'),accent=COALESCE(NULLIF($8,''),'violet'),icon=COALESCE(NULLIF($9,''),'spark'),rule=$10::jsonb,priority=$11,is_active=$12,min_item_count=$13,updated_at=CURRENT_TIMESTAMP WHERE slug=$14 RETURNING slug,source,scope,title_ar,COALESCE(title_en,''),COALESCE(description_ar,''),COALESCE(description_en,''),COALESCE(artwork_path,''),artwork_position,accent,icon,rule::text,priority,is_active,min_item_count`, req.Scope, req.TitleAR, req.TitleEN, req.DescriptionAR, req.DescriptionEN, req.ArtworkPath, req.ArtworkPosition, req.Accent, req.Icon, string(rule), req.Priority, req.IsActive, req.MinItemCount, slug).Scan(&h.Slug, &h.Source, &h.Scope, &h.TitleAR, &h.TitleEN, &h.DescriptionAR, &h.DescriptionEN, &h.ArtworkPath, &h.ArtworkPosition, &h.Accent, &h.Icon, &raw, &h.Priority, &h.IsActive, &h.MinItemCount)
+	if err != nil {
+		return nil, err
+	}
+	_ = json.Unmarshal([]byte(raw), &h.Rule)
+	h.ID = h.Slug
+	return &h, nil
+}
+
+func (r *Repository) ListSmartHubs(ctx context.Context, scope string) ([]SmartHub, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT slug,source,scope,title_ar,COALESCE(title_en,''),COALESCE(description_ar,''),COALESCE(description_en,''),COALESCE(artwork_path,''),artwork_position,accent,icon,rule::text,priority,min_item_count FROM hub_definitions WHERE is_active=true AND ($1='' OR scope='all' OR scope=$1) ORDER BY priority DESC,id DESC`, strings.TrimSpace(scope))
+	if err != nil {
+		return nil, fmt.Errorf("list smart hubs: %w", err)
+	}
+	defer rows.Close()
+	hubs := []SmartHub{}
+	for rows.Next() {
+		var h SmartHub
+		var ruleText string
+		var minItemCount int
+		if err := rows.Scan(&h.Slug, &h.Source, &h.Scope, &h.TitleAR, &h.TitleEN, &h.DescriptionAR, &h.DescriptionEN, &h.ArtworkPath, &h.ArtworkPosition, &h.Accent, &h.Icon, &ruleText, &h.Priority, &minItemCount); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal([]byte(ruleText), &h.Rule); err != nil {
+			return nil, fmt.Errorf("decode hub rule %s: %w", h.Slug, err)
+		}
+		h.ID = h.Slug
+		count, err := r.ListMediaItems(ctx, listOptionsFromHubRule(h.Rule, ListMediaOptions{Limit: 1}))
+		if err != nil {
+			return nil, err
+		}
+		h.ItemCount = count.Total
+		if h.ItemCount >= minItemCount {
+			hubs = append(hubs, h)
+		}
+	}
+	return hubs, rows.Err()
+}
+
+func (r *Repository) GetSmartHub(ctx context.Context, slug string) (*SmartHub, error) {
+	var h SmartHub
+	var ruleText string
+	var minItemCount int
+	err := r.db.QueryRowContext(ctx, `SELECT slug,source,scope,title_ar,COALESCE(title_en,''),COALESCE(description_ar,''),COALESCE(description_en,''),COALESCE(artwork_path,''),artwork_position,accent,icon,rule::text,priority,min_item_count FROM hub_definitions WHERE slug=$1 AND is_active=true`, strings.TrimSpace(slug)).Scan(&h.Slug, &h.Source, &h.Scope, &h.TitleAR, &h.TitleEN, &h.DescriptionAR, &h.DescriptionEN, &h.ArtworkPath, &h.ArtworkPosition, &h.Accent, &h.Icon, &ruleText, &h.Priority, &minItemCount)
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal([]byte(ruleText), &h.Rule); err != nil {
+		return nil, err
+	}
+	h.ID = h.Slug
+	count, err := r.ListMediaItems(ctx, listOptionsFromHubRule(h.Rule, ListMediaOptions{Limit: 1}))
+	if err != nil {
+		return nil, err
+	}
+	h.ItemCount = count.Total
+	if h.ItemCount < minItemCount {
+		return nil, sql.ErrNoRows
+	}
+	return &h, nil
+}
+
+func (r *Repository) ListSmartHubMedia(ctx context.Context, slug string, opts ListMediaOptions) (*MediaListResult, *SmartHub, error) {
+	hub, err := r.GetSmartHub(ctx, slug)
+	if err != nil {
+		return nil, nil, err
+	}
+	result, err := r.ListMediaItems(ctx, listOptionsFromHubRule(hub.Rule, opts))
+	if err != nil {
+		return nil, nil, err
+	}
+	return result, hub, nil
+}
+
+func listOptionsFromHubRule(rule HubRule, opts ListMediaOptions) ListMediaOptions {
+	opts.Types = rule.Types
+	opts.Categories = rule.Categories
+	opts.TagsAny = rule.TagsAny
+	opts.YearFrom = rule.YearFrom
+	opts.YearTo = rule.YearTo
+	opts.RatingGTE = rule.RatingGTE
+	return opts
+}
+
+func countHubMatches(items []search.MediaDocument, rule HubRule) int {
+	count := 0
+	for _, item := range items {
+		if matchesHubRule(item, rule) {
+			count++
+		}
+	}
+	return count
+}
+func matchesHubRule(item search.MediaDocument, rule HubRule) bool {
+	in := func(values []string, value string) bool {
+		for _, v := range values {
+			if strings.EqualFold(strings.TrimSpace(v), strings.TrimSpace(value)) {
+				return true
+			}
+		}
+		return false
+	}
+	if len(rule.Types) > 0 && !in(rule.Types, item.Type) {
+		return false
+	}
+	if len(rule.Categories) > 0 && !in(rule.Categories, item.CategorySlug) {
+		return false
+	}
+	if rule.YearFrom > 0 && item.ReleaseYear < rule.YearFrom {
+		return false
+	}
+	if rule.YearTo > 0 && item.ReleaseYear > rule.YearTo {
+		return false
+	}
+	if rule.RatingGTE > 0 && item.Rating < rule.RatingGTE {
+		return false
+	}
+	if len(rule.TagsAny) > 0 {
+		found := false
+		for _, tag := range item.Genres {
+			for _, wanted := range rule.TagsAny {
+				if strings.EqualFold(strings.TrimSpace(tag), strings.TrimSpace(wanted)) {
+					found = true
+					break
+				}
+			}
+			if found {
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
 func nullableString(value sql.NullString) string {
 	if value.Valid {
 		return value.String
@@ -1184,6 +1489,36 @@ func (r *Repository) ListMediaItems(ctx context.Context, opts ListMediaOptions) 
 		args = append(args, strings.TrimSpace(opts.Type))
 		argIdx++
 	}
+	if len(opts.Types) > 0 {
+		whereClauses = append(whereClauses, fmt.Sprintf("mi.type = ANY($%d::text[])", argIdx))
+		args = append(args, pq.Array(opts.Types))
+		argIdx++
+	}
+	if len(opts.Categories) > 0 {
+		whereClauses = append(whereClauses, fmt.Sprintf("c.slug = ANY($%d::text[])", argIdx))
+		args = append(args, pq.Array(opts.Categories))
+		argIdx++
+	}
+	if len(opts.TagsAny) > 0 {
+		whereClauses = append(whereClauses, fmt.Sprintf("COALESCE(mi.genres, ARRAY[]::text[]) && $%d::text[]", argIdx))
+		args = append(args, pq.Array(opts.TagsAny))
+		argIdx++
+	}
+	if opts.YearFrom > 0 {
+		whereClauses = append(whereClauses, fmt.Sprintf("mi.release_year >= $%d", argIdx))
+		args = append(args, opts.YearFrom)
+		argIdx++
+	}
+	if opts.YearTo > 0 {
+		whereClauses = append(whereClauses, fmt.Sprintf("mi.release_year <= $%d", argIdx))
+		args = append(args, opts.YearTo)
+		argIdx++
+	}
+	if opts.RatingGTE > 0 {
+		whereClauses = append(whereClauses, fmt.Sprintf("mi.rating >= $%d", argIdx))
+		args = append(args, opts.RatingGTE)
+		argIdx++
+	}
 
 	if strings.TrimSpace(opts.Search) != "" {
 		searchTerm := "%" + strings.TrimSpace(opts.Search) + "%"
@@ -1536,7 +1871,9 @@ func metadataStatus(meta metadata.Result) string {
 	if len(meta.RawPayload) == 0 {
 		return ""
 	}
-	var raw struct { Status string `json:"status"` }
+	var raw struct {
+		Status string `json:"status"`
+	}
 	if json.Unmarshal(meta.RawPayload, &raw) != nil {
 		return ""
 	}
