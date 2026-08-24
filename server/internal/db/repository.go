@@ -320,23 +320,24 @@ type HubRule struct {
 }
 
 type SmartHub struct {
-	ID              string  `json:"id"`
-	Slug            string  `json:"slug"`
-	Source          string  `json:"source"`
-	Scope           string  `json:"scope"`
-	TitleAR         string  `json:"title_ar"`
-	TitleEN         string  `json:"title_en"`
-	DescriptionAR   string  `json:"description_ar"`
-	DescriptionEN   string  `json:"description_en"`
-	ArtworkPath     string  `json:"artwork_path"`
-	ArtworkPosition string  `json:"artwork_position"`
-	Accent          string  `json:"accent"`
-	Icon            string  `json:"icon"`
-	Rule            HubRule `json:"rule"`
-	Priority        int     `json:"priority"`
-	ItemCount       int     `json:"item_count"`
-	IsActive        bool    `json:"is_active"`
-	MinItemCount    int     `json:"min_item_count"`
+	ID              string   `json:"id"`
+	Slug            string   `json:"slug"`
+	Source          string   `json:"source"`
+	Scope           string   `json:"scope"`
+	TitleAR         string   `json:"title_ar"`
+	TitleEN         string   `json:"title_en"`
+	DescriptionAR   string   `json:"description_ar"`
+	DescriptionEN   string   `json:"description_en"`
+	ArtworkPath     string   `json:"artwork_path"`
+	ArtworkPosition string   `json:"artwork_position"`
+	Accent          string   `json:"accent"`
+	Icon            string   `json:"icon"`
+	Rule            HubRule  `json:"rule"`
+	Priority        int      `json:"priority"`
+	ItemCount       int      `json:"item_count"`
+	PreviewArtwork  []string `json:"preview_artwork,omitempty"`
+	IsActive        bool     `json:"is_active"`
+	MinItemCount    int      `json:"min_item_count"`
 }
 
 type SmartHubRequest struct {
@@ -995,11 +996,12 @@ func (r *Repository) ListSmartHubs(ctx context.Context, scope string) ([]SmartHu
 		}
 		h.ID = h.Slug
 		h.MinItemCount = minItemCount
-		count, err := r.ListMediaItems(ctx, listOptionsFromHubRule(h.Rule, ListMediaOptions{Limit: 1}))
+		preview, err := r.ListMediaItems(ctx, listOptionsFromHubRule(h.Rule, ListMediaOptions{Limit: 3, Sort: "rating"}))
 		if err != nil {
 			return nil, err
 		}
-		h.ItemCount = count.Total
+		h.ItemCount = preview.Total
+		h.PreviewArtwork = hubPreviewArtwork(preview.Items)
 		if h.ItemCount >= minItemCount {
 			hubs = append(hubs, h)
 		}
@@ -1019,11 +1021,12 @@ func (r *Repository) GetSmartHub(ctx context.Context, slug string) (*SmartHub, e
 		return nil, err
 	}
 	h.ID = h.Slug
-	count, err := r.ListMediaItems(ctx, listOptionsFromHubRule(h.Rule, ListMediaOptions{Limit: 1}))
+	count, err := r.ListMediaItems(ctx, listOptionsFromHubRule(h.Rule, ListMediaOptions{Limit: 3, Sort: "rating"}))
 	if err != nil {
 		return nil, err
 	}
 	h.ItemCount = count.Total
+	h.PreviewArtwork = hubPreviewArtwork(count.Items)
 	if h.ItemCount < minItemCount {
 		return nil, sql.ErrNoRows
 	}
@@ -1050,6 +1053,20 @@ func listOptionsFromHubRule(rule HubRule, opts ListMediaOptions) ListMediaOption
 	opts.YearTo = rule.YearTo
 	opts.RatingGTE = rule.RatingGTE
 	return opts
+}
+
+func hubPreviewArtwork(items []search.MediaDocument) []string {
+	paths := make([]string, 0, len(items))
+	for _, item := range items {
+		path := item.BannerPath
+		if path == "" {
+			path = item.PosterPath
+		}
+		if path != "" {
+			paths = append(paths, path)
+		}
+	}
+	return paths
 }
 
 func countHubMatches(items []search.MediaDocument, rule HubRule) int {
