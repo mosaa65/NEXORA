@@ -19,7 +19,7 @@ import AdminOverviewPage from "./pages/admin/AdminOverviewPage.jsx";
 import TMDBSettingsPage from "./pages/TMDBSettingsPage.jsx";
 import AdminLoginPage from "./pages/AdminLoginPage.jsx";
 import VideoPlayer from "./components/VideoPlayer.jsx";
-import { categorySeed, findMockMedia, getCategoryMeta, mockLibrary } from "./data/library.js";
+import { categorySeed, getCategoryMeta } from "./data/library.js";
 import { getCategories, getHealth, getMediaDetail, getFileSubtitles, getMediaList, syncIndex, resolveAPIURL } from "./lib/api.js";
 
 // Helper Wrapper for Category View
@@ -50,33 +50,12 @@ function PersonRouteWrapper({ onOpenMedia }) {
 // Helper Wrapper for Media Details View
 function MediaDetailsRouteWrapper({ onOpenCategory, onQuickPlay }) {
   const { id } = useParams();
-  const [mediaItem, setMediaItem] = useState(null);
 
-  useEffect(() => {
-    if (id) {
-      const found = mockLibrary.find((m) => String(m.id) === String(id)) || {
-        id: parseInt(id),
-        titleAr: "هجوم العمالقة: الموسم الأخير",
-        titleEn: "Attack on Titan: The Final Season",
-        type: "anime",
-        plot: "ملحمة إيرين ييغر وفيلق الاستكشاف في صراع البقاء الأخير.",
-        year: 2023,
-        rating: 9.1,
-        posterPath: "/nexora-poster-placeholder.PNG",
-        bannerPath: "/nexora-library-backdrop.PNG",
-        categorySlug: "anime",
-        fileCount: 28,
-        genres: ["أكشن", "دراما", "أنمي", "فانتازيا"],
-      };
-      setMediaItem(found);
-    }
-  }, [id]);
-
-  if (!mediaItem) return null;
+  if (!id) return null;
 
   return (
     <MediaDetailsPage
-      media={mediaItem}
+      media={{ id: parseInt(id, 10) }}
       onOpenCategory={onOpenCategory}
       onQuickPlay={onQuickPlay}
     />

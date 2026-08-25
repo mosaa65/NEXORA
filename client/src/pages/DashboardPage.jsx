@@ -7,7 +7,6 @@ import FranchiseRail from "../components/FranchiseRail.jsx";
 import PeopleRail from "../components/PeopleRail.jsx";
 import Icon from "../components/Icon.jsx";
 import { getDashboardStats, getMediaList } from "../lib/api.js";
-import { mockLibrary } from "../data/library.js";
 
 export default function DashboardPage({
   searchQuery,
@@ -58,11 +57,11 @@ export default function DashboardPage({
           }));
           setItems(transformed);
         } else {
-          setItems(mockLibrary);
+          setItems([]);
         }
       })
       .catch(() => {
-        if (alive) setItems(mockLibrary);
+        if (alive) setItems([]);
       })
       .finally(() => {
         if (alive) setLoading(false);
@@ -79,7 +78,7 @@ export default function DashboardPage({
     };
   }, []);
 
-  const displayItems = searchResults?.length > 0 && searchQuery ? searchResults : items.length > 0 ? items : mockLibrary;
+  const displayItems = searchResults?.length > 0 && searchQuery ? searchResults : items;
   const heroItems = displayItems.slice(0, 6);
   const seriesList = displayItems.filter((i) => i.type === "series" || i.type === "anime").slice(0, 15);
   const moviesList = displayItems.filter((i) => i.type === "movie").slice(0, 15);

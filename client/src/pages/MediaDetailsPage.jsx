@@ -13,6 +13,7 @@ export default function MediaDetailsPage({
   onQuickPlay
 }) {
   const [detail, setDetail] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [selectedSeasonIdx, setSelectedSeasonIdx] = useState(0);
   const [isEnriching, setIsEnriching] = useState(false);
   const [enrichMsg, setEnrichMsg] = useState("");
@@ -22,25 +23,10 @@ export default function MediaDetailsPage({
   const [englishSeasonSnapshots, setEnglishSeasonSnapshots] = useState([]);
   const [selectedMetadataSeason, setSelectedMetadataSeason] = useState(0);
 
-  const current = detail || media || {
-    id: 1,
-    titleAr: "هجوم العمالقة",
-    titleEn: "Attack on Titan",
-    year: 2013,
-    resolution: "1080p",
-    duration: "24 دقيقة",
-    rating: 9.0,
-    views: "2.3M",
-    plot: "منذ مائة عام، ظهرت العمالقة فجأة ودمرت معظم البشرية. يعيش الباقون في عالم محاط بأسوار ضخمة لحمايتهم من العمالقة... عندما يُخترق السور الأول، يبدأ إيرين غيغار رحلة الانتقام والبحث عن الحقيقة.",
-    posterPath: "/nexora-poster-placeholder.PNG",
-    bannerPath: "/nexora-library-backdrop.PNG",
-    highlights: ["خيال مظلم", "دراما", "أكشن"],
-    seasons: []
-  };
-
   useEffect(() => {
     let alive = true;
     if (media?.id) {
+      setLoading(true);
       getMediaDetail(media.id)
         .then((data) => {
           if (!alive) return;
@@ -48,21 +34,29 @@ export default function MediaDetailsPage({
             setDetail({
               id: data.id,
               titleAr: hasArabicText(data.title_ar) ? data.title_ar : (hasArabicText(media.titleAr) ? media.titleAr : ""),
-              titleEn: data.title_en || media.titleEn,
-              type: data.type || media.type,
-              year: data.release_year || media.year || 2023,
-              rating: data.rating || media.rating || 8.5,
-              plot: hasArabicText(data.plot_ar) ? data.plot_ar : (data.plot_en || media.plot || "عمل سينمائي مميز متاح في مكتبة NEXORA المحلية."),
+              titleEn: data.title_en || media.titleEn || "",
+              type: data.type || media.type || "movie",
+              year: data.release_year || media.year || 2024,
+              rating: data.rating || media.rating || 0,
+              plot: hasArabicText(data.plot_ar) ? data.plot_ar : (data.plot_en || media.plot || "عمل سينمائي متاح في مكتبة NEXORA المحلية."),
               posterPath: data.poster_path || media.posterPath,
               bannerPath: data.banner_path || media.bannerPath,
-              categorySlug: data.category_slug || media.categorySlug,
-              highlights: data.genres?.length > 0 ? data.genres : ["دراما", "أكشن", "إثارة"],
+              categorySlug: data.category_slug || media.categorySlug || "movies",
+              highlights: data.genres?.length > 0 ? data.genres : [],
               seasons: data.seasons || [],
               files: data.files || []
             });
+          } else {
+            setDetail(null);
           }
         })
-        .catch(() => {});
+        .catch(() => {
+          if (alive) setDetail(null);
+        })
+        .finally(() => {
+          if (alive) setLoading(false);
+        });
+
       Promise.allSettled([
         getMediaMetadataSnapshot(media.id, "ar-SA"),
         getMediaMetadataSnapshot(media.id, "en-US")
@@ -81,12 +75,14 @@ export default function MediaDetailsPage({
         setSeasonSnapshots(arabicSeasons.status === "fulfilled" ? arabicSeasons.value?.items || [] : []);
         setEnglishSeasonSnapshots(englishSeasons.status === "fulfilled" ? englishSeasons.value?.items || [] : []);
       });
+    } else {
+      setLoading(false);
     }
 
     return () => {
       alive = false;
     };
-  }, [media]);
+  }, [media?.id]);
 
   async function handleEnrichMetadata() {
     if (!current?.id) return;
@@ -142,6 +138,54 @@ export default function MediaDetailsPage({
     }
   }
 
+  if (loading) {
+    return (
+      <div className="space-y-6 text-right animate-pulse pb-16" dir="rtl">
+        <div className="flex items-center justify-between gap-4 pb-2">
+          <button
+            type="button"
+            onClick={() => onOpenCategory ? onOpenCategory("movies") : window.history.back()}
+            className="group inline-flex items-center gap-2.5 rounded-full border border-white/15 bg-white/10 px-5 py-2.5 text-xs font-bold text-white shadow-lg backdrop-blur-xl"
+          >
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/15 text-white">‹</span>
+            <span>العودة للمكتبة</span>
+          </button>
+        </div>
+        <div className="h-96 rounded-3xl border border-white/10 bg-white/5 flex items-center justify-center">
+          <div className="text-center space-y-3">
+            <div className="w-10 h-10 border-4 border-fuchsia-500/30 border-t-fuchsia-500 rounded-full animate-spin mx-auto" />
+            <p className="text-xs text-white/60">جارٍ جلب تفاصيل العمل من المكتبة...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!detail) {
+    return (
+      <div className="space-y-6 text-right pb-16" dir="rtl">
+        <div className="flex items-center justify-between gap-4 pb-2">
+          <button
+            type="button"
+            onClick={() => onOpenCategory ? onOpenCategory("movies") : window.history.back()}
+            className="group inline-flex items-center gap-2.5 rounded-full border border-white/15 bg-white/10 hover:bg-white/20 px-5 py-2.5 text-xs font-bold text-white shadow-lg backdrop-blur-xl transition"
+          >
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/15 text-white">‹</span>
+            <span>العودة للمكتبة</span>
+          </button>
+        </div>
+        <div className="p-16 rounded-3xl border border-dashed border-white/10 bg-black/40 text-center space-y-3">
+          <span className="text-4xl">🎬</span>
+          <h2 className="text-lg font-bold text-white">لم يتم العثور على العمل المطلوب</h2>
+          <p className="text-xs text-white/50 max-w-sm mx-auto">
+            قد يكون هذا العمل قد تم حذفه أو نقله من مجلدات المكتبة.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const current = detail;
   const seasonsList = current.seasons && current.seasons.length > 0 ? current.seasons : [];
   const currentSeason = seasonsList[selectedSeasonIdx] || seasonsList[0];
   const activeEpisodes = currentSeason?.episodes || current.files || [];
