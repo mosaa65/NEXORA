@@ -124,8 +124,8 @@ export default function DashboardPage({
           <span className="text-xs font-bold text-gray-400">تصفح سريع</span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <HubBannerCard
+        <div className="flex gap-4 overflow-x-auto pb-3 scrollbar-none snap-x touch-pan-x">
+          <div className="w-[min(84vw,340px)] shrink-0 snap-start sm:w-80"><HubBannerCard
             title="👑 روائع الدراما التركية"
             subtitle="الحكايات العثمانية والدراما العائلية الرومانسية الكاملة"
             count={seriesList.length}
@@ -134,8 +134,8 @@ export default function DashboardPage({
             borderColor="border-amber-500/40"
             tag="الأكثر طلباً"
             onClick={() => onNavigateCategory && onNavigateCategory("series")}
-          />
-          <HubBannerCard
+          /></div>
+          <div className="w-[min(84vw,340px)] shrink-0 snap-start sm:w-80"><HubBannerCard
             title="🎬 أفلام هوليوود والعالم"
             subtitle="أحدث أفلام الأكشن والخيال العلمي والإثارة بدقة 4K"
             count={moviesList.length}
@@ -144,8 +144,8 @@ export default function DashboardPage({
             borderColor="border-cyan-500/40"
             tag="سينما 4K"
             onClick={() => onNavigateCategory && onNavigateCategory("movies")}
-          />
-          <HubBannerCard
+          /></div>
+          <div className="w-[min(84vw,340px)] shrink-0 snap-start sm:w-80"><HubBannerCard
             title="⚔️ عوالم الأنمي الأسطورية"
             subtitle="ون بيس، هجوم العمالقة، وجوجوتسو كايسن بمواسمها الكاملة"
             count={seriesList.length}
@@ -154,8 +154,8 @@ export default function DashboardPage({
             borderColor="border-purple-500/40"
             tag="Anime Top"
             onClick={() => onNavigateCategory && onNavigateCategory("anime")}
-          />
-          <HubBannerCard
+          /></div>
+          <div className="w-[min(84vw,340px)] shrink-0 snap-start sm:w-80"><HubBannerCard
             title="🏰 ديزني والأطفال العائلي"
             subtitle="أفلام الرسوم المتحركة وسلاسل الأبطال الخارقين والكرتون"
             count={moviesList.length}
@@ -164,7 +164,7 @@ export default function DashboardPage({
             borderColor="border-sky-500/40"
             tag="عائلي وأطفال"
             onClick={() => onNavigateCategory && onNavigateCategory("kids")}
-          />
+          /></div>
         </div>
       </div>
 
@@ -202,7 +202,7 @@ export default function DashboardPage({
           className="flex items-stretch gap-4 overflow-x-auto pb-4 scrollbar-none snap-x"
         >
           {topRatedList.map((media) => (
-            <div key={media.id} className="w-48 shrink-0 snap-start sm:w-56 lg:w-60">
+            <div key={media.id} className="w-[calc((100vw-3.75rem)/2)] shrink-0 snap-start sm:w-56 lg:w-60">
               <UnifiedMediaCard
                 media={media}
                 onOpen={onOpenMedia}
@@ -245,7 +245,7 @@ export default function DashboardPage({
           className="flex items-stretch gap-4 overflow-x-auto pb-4 scrollbar-none snap-x"
         >
           {seriesList.map((media) => (
-            <div key={media.id} className="w-48 shrink-0 snap-start sm:w-56 lg:w-60">
+            <div key={media.id} className="w-[calc((100vw-3.75rem)/2)] shrink-0 snap-start sm:w-56 lg:w-60">
               <UnifiedMediaCard
                 media={media}
                 onOpen={onOpenMedia}
@@ -288,7 +288,7 @@ export default function DashboardPage({
           className="flex items-stretch gap-4 overflow-x-auto pb-4 scrollbar-none snap-x"
         >
           {moviesList.map((media) => (
-            <div key={media.id} className="w-48 shrink-0 snap-start sm:w-56 lg:w-60">
+            <div key={media.id} className="w-[calc((100vw-3.75rem)/2)] shrink-0 snap-start sm:w-56 lg:w-60">
               <UnifiedMediaCard
                 media={media}
                 onOpen={onOpenMedia}

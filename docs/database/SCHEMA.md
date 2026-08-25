@@ -151,6 +151,33 @@ erDiagram
 
 ## 3. تفاصيل الجداول والأعمدة والفهارس (Detailed Schema Specifications)
 
+### 3.0 امتداد شبكة الكتالوج المحلي: السلاسل والأشخاص
+
+أضافت migration `0011_add_provider_collections_people.sql` شبكة مستقلة عن `collections` التحريرية. `collections` يبقى للتجميعات التي يصممها مدير NEXORA، أما `provider_collections` فيحتفظ بسلاسل TMDB الثابتة عبر `provider + external_id`؛ لذلك لا يعتمد النظام إطلاقاً على الاسم العربي أو الإنجليزي في الربط.
+
+```mermaid
+erDiagram
+    MEDIA_ITEMS }o--o{ MEDIA_COLLECTION_LINKS : "عضو سلسلة"
+    PROVIDER_COLLECTIONS ||--o{ MEDIA_COLLECTION_LINKS : "تضم أعمالاً محلية"
+    PROVIDER_COLLECTIONS ||--o{ COLLECTION_METADATA_SNAPSHOTS : "لقطات مزود"
+    MEDIA_ITEMS }o--o{ MEDIA_CREDITS : "اعتمادات"
+    PEOPLE ||--o{ MEDIA_CREDITS : "مشارك"
+    PEOPLE ||--o{ PERSON_METADATA_SNAPSHOTS : "لقطات مزود"
+```
+
+| الجدول | الهوية/القيود الأساسية | غرضه |
+|---|---|---|
+| `provider_collections` | `UNIQUE(provider, external_id)` و`slug` فريد | سلسلة أفلام مزودة محلياً مع النصين، الصور، وعدد الأجزاء المحلية |
+| `media_collection_links` | `PRIMARY KEY(media_item_id, collection_id)` | عضوية العمل في سلسلة؛ لا تلمس الملف الفيزيائي |
+| `collection_metadata_snapshots` | لقطة خام لكل لغة | حفظ تفاصيل السلسلة الكاملة عند تفعيل تحديثها |
+| `people` | `UNIQUE(provider, external_id)` و`slug` فريد | ممثل أو مخرج أو مشارك حقيقي، لا شخصية خيالية نصية |
+| `media_credits` | فهارس فريدة جزئية لـ`provider_credit_id` | الدور واسم الشخصية والـbilling مرتبطة بالعمل، لا بالشخص وحده |
+| `person_metadata_snapshots` | لقطة خام لكل لغة | تفاصيل الشخص الاختيارية، بعيداً عن جدول العرض السريع |
+
+**سياسة الحذف:** حذف `media_items` يحذف روابطه فقط بـ`ON DELETE CASCADE`. لا يحذف سلسلة أو شخصاً لأنهما قد يرتبطان بأعمال أخرى، ويمكن تنظيف الكيانات اليتيمة بمهمة صيانة مستقلة لاحقاً.
+
+**سياسة الشبكة:** `GET /api/franchises` و`GET /api/people` وصفحاتهما لا تستخدم الإنترنت. الشبكة مسموحة فقط أثناء إثراء/تحديث إداري، وبعدها تحفظ البيانات في PostgreSQL ومسار صور محلي عند تفعيل التخزين المحلي.
+
 ### 3.1 جدول الأقسام الرئيسية (`categories`)
 يحدد الأقسام الستة الأساسية للنظام (أفلام، مسلسلات، أنمي، كرتون، مسرحيات، وثائقيات).
 

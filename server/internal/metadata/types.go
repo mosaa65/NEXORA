@@ -46,3 +46,21 @@ type SeasonResult struct {
 	SeasonNumber int             `json:"seasonNumber"`
 	RawPayload   json.RawMessage `json:"-"`
 }
+
+// CollectionResult is the locally cacheable representation of a TMDB movie
+// collection. It is fetched only by an explicit enrich/refresh action, never
+// while a user browses a franchise page.
+type CollectionResult struct {
+	Provider           string          `json:"provider"`
+	ExternalID         string          `json:"externalId"`
+	Locale             string          `json:"locale"`
+	Title              string          `json:"title"`
+	Overview           string          `json:"overview,omitempty"`
+	PosterPath         string          `json:"posterPath,omitempty"`
+	BackdropPath       string          `json:"backdropPath,omitempty"`
+	CachedPosterPath   string          `json:"cachedPosterPath,omitempty"`
+	CachedBackdropPath string          `json:"cachedBackdropPath,omitempty"`
+	PartsCount         int             `json:"partsCount"`
+	PartExternalIDs    []string        `json:"partExternalIds,omitempty"`
+	RawPayload         json.RawMessage `json:"-"`
+}

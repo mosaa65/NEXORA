@@ -111,6 +111,15 @@ func (m *mockRepo) ListPersonMedia(ctx context.Context, slug string, opts db.Lis
 func (m *mockRepo) SyncCatalogRelationsFromSnapshots(ctx context.Context) (*db.CatalogRelationSyncResult, error) {
 	return &db.CatalogRelationSyncResult{SnapshotsProcessed: 2, CollectionsLinked: 1, CreditsLinked: 4}, nil
 }
+func (m *mockRepo) SaveProviderCollectionMetadata(ctx context.Context, meta metadata.CollectionResult) error {
+	return nil
+}
+func (m *mockRepo) UpdateProviderCollectionAdmin(ctx context.Context, id int64, update db.CatalogEntityAdminUpdate) error {
+	return nil
+}
+func (m *mockRepo) UpdatePersonAdmin(ctx context.Context, id int64, update db.CatalogEntityAdminUpdate) error {
+	return nil
+}
 func (m *mockRepo) ListShowcases(ctx context.Context, opts db.ShowcaseOptions) (*db.ShowcaseResult, error) {
 	return &db.ShowcaseResult{Context: opts.Context, Slides: []db.ShowcaseSlide{{ID: "media-1", Kind: "featured", MediaID: 1, TitleEN: "Inception"}}}, nil
 }
@@ -202,6 +211,9 @@ func (m *mockMetadata) LookupByExternalID(ctx context.Context, query metadata.Qu
 }
 func (m *mockMetadata) LookupSeasonByExternalID(ctx context.Context, externalID string, seasonNumber int, language string) (metadata.SeasonResult, error) {
 	return metadata.SeasonResult{Provider: "tmdb", ExternalID: externalID, Locale: language, SeasonNumber: seasonNumber, RawPayload: json.RawMessage(`{"episodes":[]}`)}, nil
+}
+func (m *mockMetadata) LookupCollectionByExternalID(ctx context.Context, externalID, language string) (metadata.CollectionResult, error) {
+	return metadata.CollectionResult{Provider: "tmdb", ExternalID: externalID, Locale: language, Title: "Test Collection", PartsCount: 2, RawPayload: json.RawMessage(`{"id":1,"parts":[]}`)}, nil
 }
 func (m *mockMetadata) GetTMDBSettings() metadata.TMDBSettings         { return metadata.DefaultSettings() }
 func (m *mockMetadata) SetTMDBSettings(settings metadata.TMDBSettings) {}
@@ -368,8 +380,14 @@ func TestOfflineCatalogGraphEndpoints(t *testing.T) {
 		{http.MethodGet, "/api/people"},
 		{http.MethodGet, "/api/people/tmdb-person-1/media"},
 		{http.MethodPost, "/api/admin/catalog/sync-relations"},
+		{http.MethodPut, "/api/admin/franchises/1"},
+		{http.MethodPut, "/api/admin/people/1"},
 	} {
-		req := httptest.NewRequest(testCase.method, testCase.path, nil)
+		body := bytes.NewBufferString("")
+		if testCase.method == http.MethodPut {
+			body = bytes.NewBufferString(`{"is_featured":true}`)
+		}
+		req := httptest.NewRequest(testCase.method, testCase.path, body)
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, req)
 		if rec.Code != http.StatusOK {

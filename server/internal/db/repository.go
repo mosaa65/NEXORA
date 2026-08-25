@@ -286,6 +286,14 @@ type CatalogRelationSyncResult struct {
 	CreditsLinked      int `json:"credits_linked"`
 }
 
+// CatalogEntityAdminUpdate is shared by provider collections and people. The
+// pointer fields make partial administrative updates explicit and safe.
+type CatalogEntityAdminUpdate struct {
+	IsFeatured   *bool `json:"is_featured"`
+	IsHidden     *bool `json:"is_hidden"`
+	SortPriority *int  `json:"sort_priority"`
+}
+
 // ShowcaseOptions selects locally persisted editorial collections and media
 // summaries for the reusable hero. It never consults a remote metadata source.
 type ShowcaseOptions struct {
@@ -1917,7 +1925,7 @@ func (r *Repository) syncCollectionFromMetadata(ctx context.Context, mediaID int
 			NULL,NULL)
 		ON CONFLICT (provider,external_id) DO UPDATE SET
 			title_ar=COALESCE(EXCLUDED.title_ar,provider_collections.title_ar),
-			title_en=COALESCE(NULLIF(EXCLUDED.title_en,''),provider_collections.title_en),
+			title_en=CASE WHEN $3 LIKE 'ar%%' THEN provider_collections.title_en ELSE COALESCE(NULLIF(EXCLUDED.title_en,''),provider_collections.title_en) END,
 			poster_path=COALESCE(EXCLUDED.poster_path,provider_collections.poster_path),
 			backdrop_path=COALESCE(EXCLUDED.backdrop_path,provider_collections.backdrop_path),
 			updated_at=CURRENT_TIMESTAMP
@@ -1940,31 +1948,42 @@ func (r *Repository) syncCreditsFromMetadata(ctx context.Context, mediaID int64,
 	if meta.Provider != "tmdb" || len(meta.RawPayload) == 0 {
 		return nil
 	}
+	type castCredit struct {
+		ID                 int64   `json:"id"`
+		CreditID           string  `json:"credit_id"`
+		Name               string  `json:"name"`
+		KnownForDepartment string  `json:"known_for_department"`
+		LocalProfilePath   string  `json:"local_profile_path"`
+		Popularity         float64 `json:"popularity"`
+		Character          string  `json:"character"`
+		Order              int     `json:"order"`
+		Roles              []struct {
+			Character string `json:"character"`
+		} `json:"roles"`
+	}
+	type crewCredit struct {
+		ID                 int64   `json:"id"`
+		CreditID           string  `json:"credit_id"`
+		Name               string  `json:"name"`
+		KnownForDepartment string  `json:"known_for_department"`
+		LocalProfilePath   string  `json:"local_profile_path"`
+		Popularity         float64 `json:"popularity"`
+		Job                string  `json:"job"`
+		Department         string  `json:"department"`
+		Jobs               []struct {
+			Job        string `json:"job"`
+			Department string `json:"department"`
+		} `json:"jobs"`
+	}
 	var raw struct {
 		Credits struct {
-			Cast []struct {
-				ID                 int64   `json:"id"`
-				CreditID           string  `json:"credit_id"`
-				Name               string  `json:"name"`
-				KnownForDepartment string  `json:"known_for_department"`
-				ProfilePath        string  `json:"profile_path"`
-				LocalProfilePath   string  `json:"local_profile_path"`
-				Popularity         float64 `json:"popularity"`
-				Character          string  `json:"character"`
-				Order              int     `json:"order"`
-			} `json:"cast"`
-			Crew []struct {
-				ID                 int64   `json:"id"`
-				CreditID           string  `json:"credit_id"`
-				Name               string  `json:"name"`
-				KnownForDepartment string  `json:"known_for_department"`
-				ProfilePath        string  `json:"profile_path"`
-				LocalProfilePath   string  `json:"local_profile_path"`
-				Popularity         float64 `json:"popularity"`
-				Job                string  `json:"job"`
-				Department         string  `json:"department"`
-			} `json:"crew"`
+			Cast []castCredit `json:"cast"`
+			Crew []crewCredit `json:"crew"`
 		} `json:"credits"`
+		AggregateCredits struct {
+			Cast []castCredit `json:"cast"`
+			Crew []crewCredit `json:"crew"`
+		} `json:"aggregate_credits"`
 	}
 	if err := json.Unmarshal(meta.RawPayload, &raw); err != nil {
 		return nil
@@ -1975,15 +1994,26 @@ func (r *Repository) syncCreditsFromMetadata(ctx context.Context, mediaID int64,
 		}
 		slug := fmt.Sprintf("tmdb-person-%d", id)
 		var personID int64
-		err := r.db.QueryRowContext(ctx, `INSERT INTO people (provider,external_id,slug,name_ar,name_en,known_for_department,profile_path,popularity,metadata_fetched_at,metadata_expires_at) VALUES ('tmdb',$1,$2,CASE WHEN $3 LIKE 'ar%%' THEN $4 ELSE NULL END,CASE WHEN $3 LIKE 'ar%%' THEN $5 ELSE $4 END,NULLIF($6,''),NULLIF($7,''),NULLIF($8,0),CURRENT_TIMESTAMP,CURRENT_TIMESTAMP + INTERVAL '30 days') ON CONFLICT (provider,external_id) DO UPDATE SET name_ar=COALESCE(EXCLUDED.name_ar,people.name_ar),name_en=COALESCE(NULLIF(EXCLUDED.name_en,''),people.name_en),known_for_department=COALESCE(NULLIF(EXCLUDED.known_for_department,''),people.known_for_department),profile_path=COALESCE(EXCLUDED.profile_path,people.profile_path),popularity=COALESCE(EXCLUDED.popularity,people.popularity),updated_at=CURRENT_TIMESTAMP RETURNING id`, fmt.Sprint(id), slug, strings.ToLower(meta.Locale), name, name, department, profile, popularity).Scan(&personID)
+		err := r.db.QueryRowContext(ctx, `INSERT INTO people (provider,external_id,slug,name_ar,name_en,known_for_department,profile_path,popularity,metadata_fetched_at,metadata_expires_at) VALUES ('tmdb',$1,$2,CASE WHEN $3 LIKE 'ar%%' THEN $4 ELSE NULL END,CASE WHEN $3 LIKE 'ar%%' THEN $5 ELSE $4 END,NULLIF($6,''),NULLIF($7,''),NULLIF($8,0),CURRENT_TIMESTAMP,CURRENT_TIMESTAMP + INTERVAL '30 days') ON CONFLICT (provider,external_id) DO UPDATE SET name_ar=COALESCE(EXCLUDED.name_ar,people.name_ar),name_en=CASE WHEN $3 LIKE 'ar%%' THEN people.name_en ELSE COALESCE(NULLIF(EXCLUDED.name_en,''),people.name_en) END,known_for_department=COALESCE(NULLIF(EXCLUDED.known_for_department,''),people.known_for_department),profile_path=COALESCE(EXCLUDED.profile_path,people.profile_path),popularity=COALESCE(EXCLUDED.popularity,people.popularity),updated_at=CURRENT_TIMESTAMP RETURNING id`, fmt.Sprint(id), slug, strings.ToLower(meta.Locale), name, name, department, profile, popularity).Scan(&personID)
 		return personID, err
 	}
-	for index, cast := range raw.Credits.Cast {
+	casts := raw.Credits.Cast
+	crews := raw.Credits.Crew
+	if len(casts) == 0 {
+		casts = raw.AggregateCredits.Cast
+		crews = raw.AggregateCredits.Crew
+	}
+	for index, cast := range casts {
 		if index >= 12 {
 			break
 		}
-		if strings.TrimSpace(cast.CreditID) == "" {
-			continue
+		creditID := cast.CreditID
+		if creditID == "" {
+			creditID = fmt.Sprintf("aggregate-cast-%d", cast.ID)
+		}
+		character := cast.Character
+		if character == "" && len(cast.Roles) > 0 {
+			character = cast.Roles[0].Character
 		}
 		// Only a locally cached profile is retained here. The source image path
 		// is still present in the raw snapshot for a future explicit refresh.
@@ -1995,17 +2025,22 @@ func (r *Repository) syncCreditsFromMetadata(ctx context.Context, mediaID int64,
 		if personID == 0 {
 			continue
 		}
-		_, err = r.db.ExecContext(ctx, `INSERT INTO media_credits (media_item_id,person_id,provider,provider_credit_id,credit_kind,character_name,billing_order,source,verified_at) VALUES ($1,$2,'tmdb',NULLIF($3,''),'cast',NULLIF($4,''),$5,'tmdb',CURRENT_TIMESTAMP) ON CONFLICT (media_item_id,provider,provider_credit_id) WHERE provider_credit_id IS NOT NULL DO UPDATE SET person_id=EXCLUDED.person_id,character_name=EXCLUDED.character_name,billing_order=EXCLUDED.billing_order,verified_at=EXCLUDED.verified_at,updated_at=CURRENT_TIMESTAMP`, mediaID, personID, cast.CreditID, cast.Character, cast.Order)
+		_, err = r.db.ExecContext(ctx, `INSERT INTO media_credits (media_item_id,person_id,provider,provider_credit_id,credit_kind,character_name,billing_order,source,verified_at) VALUES ($1,$2,'tmdb',NULLIF($3,''),'cast',NULLIF($4,''),$5,'tmdb',CURRENT_TIMESTAMP) ON CONFLICT (media_item_id,provider,provider_credit_id) WHERE provider_credit_id IS NOT NULL DO UPDATE SET person_id=EXCLUDED.person_id,character_name=EXCLUDED.character_name,billing_order=EXCLUDED.billing_order,verified_at=EXCLUDED.verified_at,updated_at=CURRENT_TIMESTAMP`, mediaID, personID, creditID, character, cast.Order)
 		if err != nil {
 			return err
 		}
 	}
-	for _, crew := range raw.Credits.Crew {
-		if !strings.EqualFold(crew.Job, "Director") {
+	for _, crew := range crews {
+		job, department := crew.Job, crew.Department
+		if job == "" && len(crew.Jobs) > 0 {
+			job, department = crew.Jobs[0].Job, crew.Jobs[0].Department
+		}
+		if !strings.EqualFold(job, "Director") {
 			continue
 		}
-		if strings.TrimSpace(crew.CreditID) == "" {
-			continue
+		creditID := crew.CreditID
+		if creditID == "" {
+			creditID = fmt.Sprintf("aggregate-crew-%d-%s", crew.ID, strings.ToLower(job))
 		}
 		profile := crew.LocalProfilePath
 		personID, err := upsertPerson(crew.ID, crew.Name, crew.KnownForDepartment, profile, crew.Popularity)
@@ -2015,7 +2050,7 @@ func (r *Repository) syncCreditsFromMetadata(ctx context.Context, mediaID int64,
 		if personID == 0 {
 			continue
 		}
-		_, err = r.db.ExecContext(ctx, `INSERT INTO media_credits (media_item_id,person_id,provider,provider_credit_id,credit_kind,job,department,source,verified_at) VALUES ($1,$2,'tmdb',NULLIF($3,''),'crew',NULLIF($4,''),NULLIF($5,''),'tmdb',CURRENT_TIMESTAMP) ON CONFLICT (media_item_id,provider,provider_credit_id) WHERE provider_credit_id IS NOT NULL DO UPDATE SET person_id=EXCLUDED.person_id,job=EXCLUDED.job,department=EXCLUDED.department,verified_at=EXCLUDED.verified_at,updated_at=CURRENT_TIMESTAMP`, mediaID, personID, crew.CreditID, crew.Job, crew.Department)
+		_, err = r.db.ExecContext(ctx, `INSERT INTO media_credits (media_item_id,person_id,provider,provider_credit_id,credit_kind,job,department,source,verified_at) VALUES ($1,$2,'tmdb',NULLIF($3,''),'crew',NULLIF($4,''),NULLIF($5,''),'tmdb',CURRENT_TIMESTAMP) ON CONFLICT (media_item_id,provider,provider_credit_id) WHERE provider_credit_id IS NOT NULL DO UPDATE SET person_id=EXCLUDED.person_id,job=EXCLUDED.job,department=EXCLUDED.department,verified_at=EXCLUDED.verified_at,updated_at=CURRENT_TIMESTAMP`, mediaID, personID, creditID, job, department)
 		if err != nil {
 			return err
 		}
@@ -2078,6 +2113,43 @@ func (r *Repository) SyncCatalogRelationsFromSnapshots(ctx context.Context) (*Ca
 	return result, nil
 }
 
+// SaveProviderCollectionMetadata stores the expensive collection response and
+// its locally cached artwork. It is called only by enrichment, never by GET.
+func (r *Repository) SaveProviderCollectionMetadata(ctx context.Context, meta metadata.CollectionResult) error {
+	if meta.Provider != "tmdb" || strings.TrimSpace(meta.ExternalID) == "" || strings.TrimSpace(meta.Title) == "" {
+		return nil
+	}
+	var collectionID int64
+	err := r.db.QueryRowContext(ctx, `
+		INSERT INTO provider_collections (provider,external_id,kind,slug,title_ar,title_en,overview_ar,overview_en,poster_path,backdrop_path,parts_count,metadata_fetched_at,metadata_expires_at)
+		VALUES ('tmdb',$1,'movie_collection',$2,CASE WHEN $3 LIKE 'ar%%' THEN $4 ELSE NULL END,CASE WHEN $3 LIKE 'ar%%' THEN $4 ELSE $4 END,CASE WHEN $3 LIKE 'ar%%' THEN NULLIF($5,'') ELSE NULL END,CASE WHEN $3 LIKE 'ar%%' THEN NULL ELSE NULLIF($5,'') END,NULLIF($6,''),NULLIF($7,''),$8,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP + INTERVAL '30 days')
+		ON CONFLICT (provider,external_id) DO UPDATE SET
+			title_ar=COALESCE(EXCLUDED.title_ar,provider_collections.title_ar),
+			title_en=CASE WHEN $3 LIKE 'ar%%' THEN provider_collections.title_en ELSE EXCLUDED.title_en END,
+			overview_ar=COALESCE(EXCLUDED.overview_ar,provider_collections.overview_ar),
+			overview_en=CASE WHEN $3 LIKE 'ar%%' THEN provider_collections.overview_en ELSE COALESCE(EXCLUDED.overview_en,provider_collections.overview_en) END,
+			poster_path=COALESCE(NULLIF(EXCLUDED.poster_path,''),provider_collections.poster_path),
+			backdrop_path=COALESCE(NULLIF(EXCLUDED.backdrop_path,''),provider_collections.backdrop_path),
+			parts_count=GREATEST(EXCLUDED.parts_count,provider_collections.parts_count),metadata_fetched_at=CURRENT_TIMESTAMP,metadata_expires_at=EXCLUDED.metadata_expires_at,updated_at=CURRENT_TIMESTAMP
+		RETURNING id`, meta.ExternalID, "tmdb-collection-"+meta.ExternalID, strings.ToLower(meta.Locale), meta.Title, meta.Overview, firstNonEmpty(meta.CachedPosterPath, meta.PosterPath), firstNonEmpty(meta.CachedBackdropPath, meta.BackdropPath), meta.PartsCount).Scan(&collectionID)
+	if err != nil {
+		return fmt.Errorf("upsert collection metadata: %w", err)
+	}
+	if len(meta.RawPayload) > 0 {
+		_, err = r.db.ExecContext(ctx, `INSERT INTO collection_metadata_snapshots (collection_id,provider,external_id,locale,raw_payload,expires_at) VALUES ($1,'tmdb',$2,$3,$4::jsonb,CURRENT_TIMESTAMP + INTERVAL '30 days') ON CONFLICT (collection_id,provider,locale) DO UPDATE SET raw_payload=EXCLUDED.raw_payload,fetched_at=CURRENT_TIMESTAMP,expires_at=EXCLUDED.expires_at`, collectionID, meta.ExternalID, firstNonEmptyLocale(meta.Locale), string(meta.RawPayload))
+		if err != nil {
+			return err
+		}
+	}
+	for order, externalID := range meta.PartExternalIDs {
+		_, err = r.db.ExecContext(ctx, `UPDATE media_collection_links mcl SET tmdb_order=$1,verified_at=CURRENT_TIMESTAMP FROM media_items mi WHERE mcl.collection_id=$2 AND mi.id=mcl.media_item_id AND mi.metadata_provider='tmdb' AND mi.metadata_external_id=$3`, order+1, collectionID, externalID)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // ListProviderCollections powers the offline-first franchise rail. A series is
 // meaningful only when at least two locally available films are linked.
 func (r *Repository) ListProviderCollections(ctx context.Context, limit int) ([]ProviderCollection, error) {
@@ -2114,6 +2186,17 @@ func (r *Repository) GetProviderCollection(ctx context.Context, slug string) (*P
 		return nil, err
 	}
 	return &item, nil
+}
+
+func (r *Repository) UpdateProviderCollectionAdmin(ctx context.Context, id int64, update CatalogEntityAdminUpdate) error {
+	result, err := r.db.ExecContext(ctx, `UPDATE provider_collections SET is_featured=COALESCE($1,is_featured),is_hidden=COALESCE($2,is_hidden),sort_priority=COALESCE($3,sort_priority),updated_at=CURRENT_TIMESTAMP WHERE id=$4`, nullableBool(update.IsFeatured), nullableBool(update.IsHidden), nullableInt(update.SortPriority), id)
+	if err != nil {
+		return err
+	}
+	if affected, _ := result.RowsAffected(); affected == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }
 
 func (r *Repository) ListProviderCollectionMedia(ctx context.Context, slug string, opts ListMediaOptions) (*ProviderCollection, *MediaListResult, error) {
@@ -2201,6 +2284,17 @@ func (r *Repository) GetPerson(ctx context.Context, slug string) (*Person, error
 	return &person, nil
 }
 
+func (r *Repository) UpdatePersonAdmin(ctx context.Context, id int64, update CatalogEntityAdminUpdate) error {
+	result, err := r.db.ExecContext(ctx, `UPDATE people SET is_featured=COALESCE($1,is_featured),is_hidden=COALESCE($2,is_hidden),sort_priority=COALESCE($3,sort_priority),updated_at=CURRENT_TIMESTAMP WHERE id=$4`, nullableBool(update.IsFeatured), nullableBool(update.IsHidden), nullableInt(update.SortPriority), id)
+	if err != nil {
+		return err
+	}
+	if affected, _ := result.RowsAffected(); affected == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
 func (r *Repository) ListPersonMedia(ctx context.Context, slug string, opts ListMediaOptions) (*Person, *MediaListResult, error) {
 	person, err := r.GetPerson(ctx, slug)
 	if err != nil {
@@ -2244,6 +2338,28 @@ func localizedMetadataFields(meta metadata.Result) (titleAR, titleEN, plotAR, pl
 		return meta.Title, "", meta.Overview, ""
 	}
 	return "", meta.Title, "", meta.Overview
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func nullableBool(value *bool) any {
+	if value == nil {
+		return nil
+	}
+	return *value
+}
+func nullableInt(value *int) any {
+	if value == nil {
+		return nil
+	}
+	return *value
 }
 
 // metadataFacetsJSON extracts stable, filterable English attributes from the

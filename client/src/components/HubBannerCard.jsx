@@ -13,11 +13,12 @@ export default function HubBannerCard({
   tag = "مجموعة مميزة",
 }) {
   return (
-    <motion.div
+    <motion.button
+      type="button"
       whileHover={{ scale: 1.02, y: -4 }}
       transition={{ duration: 0.25 }}
       onClick={onClick}
-      className={`relative h-44 sm:h-52 rounded-3xl overflow-hidden border ${borderColor} cursor-pointer group shadow-xl bg-[#0F0E1A]`}
+      className={`relative h-44 w-full overflow-hidden rounded-2xl border ${borderColor} bg-[#0F0E1A] text-right shadow-xl group sm:h-52`}
       dir="rtl"
     >
       {/* Background Image / Collage */}
@@ -57,6 +58,6 @@ export default function HubBannerCard({
           </div>
         </div>
       </div>
-    </motion.div>
+    </motion.button>
   );
 }

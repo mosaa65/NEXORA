@@ -50,6 +50,24 @@
 
 ---
 
+## 🎞️ السلاسل والأشخاص المحليون (Offline Catalogue Graph)
+
+> هذه المسارات لا تستدعي TMDB أثناء العرض. تقرأ من PostgreSQL والعلاقات المستخرجة سابقاً فقط.
+
+| المسار | الطريقة | الوصف |
+|--------|---------|-------|
+| `/api/franchises?limit=24` | `GET` | السلاسل التي تضم جزأين محليين على الأقل، مرتبة محلياً |
+| `/api/franchises/:slug` | `GET` | بيانات سلسلة واحدة بالعربية والإنجليزية عند توفرهما |
+| `/api/franchises/:slug/media` | `GET` | الأعمال المتوفرة في هذه السلسلة فقط |
+| `/api/people?limit=24` | `GET` | الأشخاص الذين لديهم عملان محليان على الأقل |
+| `/api/people/:slug` | `GET` | بيانات شخص محفوظة محلياً |
+| `/api/people/:slug/media` | `GET` | أعمال الشخص الموجودة في مكتبة NEXORA فقط |
+| `/api/admin/catalog/sync-relations` | `POST` | إعادة استخراج السلاسل والاعتمادات من `metadata_snapshots` بدون شبكة؛ آمن للتكرار |
+| `/api/admin/franchises/:id` | `PUT` | إبراز/إخفاء/ترتيب سلسلة محلية (`is_featured`, `is_hidden`, `sort_priority`) |
+| `/api/admin/people/:id` | `PUT` | إبراز/إخفاء/ترتيب شخص محلي بالحقول نفسها |
+
+---
+
 ## 🛡️ الجودة والترتيب والنقل (Quality & Migration)
 
 | المسار | الطريقة | الوصف |

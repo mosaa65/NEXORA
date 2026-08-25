@@ -122,3 +122,10 @@ func (s *Service) LookupSeasonByExternalID(ctx context.Context, externalID strin
 	}
 	return s.tmdb.fetchSeasonDetailsWithSettings(ctx, id, seasonNumber, language, s.tmdb.GetSettings())
 }
+
+func (s *Service) LookupCollectionByExternalID(ctx context.Context, externalID, language string) (CollectionResult, error) {
+	if s.tmdb == nil || !s.tmdb.Configured() {
+		return CollectionResult{}, ErrNotConfigured
+	}
+	return s.tmdb.LookupCollectionByExternalID(ctx, externalID, language)
+}

@@ -53,10 +53,13 @@ type repository interface {
 	ListProviderCollections(ctx context.Context, limit int) ([]db.ProviderCollection, error)
 	GetProviderCollection(ctx context.Context, slug string) (*db.ProviderCollection, error)
 	ListProviderCollectionMedia(ctx context.Context, slug string, opts db.ListMediaOptions) (*db.ProviderCollection, *db.MediaListResult, error)
+	UpdateProviderCollectionAdmin(ctx context.Context, id int64, update db.CatalogEntityAdminUpdate) error
 	ListPeople(ctx context.Context, limit int) ([]db.Person, error)
 	GetPerson(ctx context.Context, slug string) (*db.Person, error)
 	ListPersonMedia(ctx context.Context, slug string, opts db.ListMediaOptions) (*db.Person, *db.MediaListResult, error)
+	UpdatePersonAdmin(ctx context.Context, id int64, update db.CatalogEntityAdminUpdate) error
 	SyncCatalogRelationsFromSnapshots(ctx context.Context) (*db.CatalogRelationSyncResult, error)
+	SaveProviderCollectionMetadata(ctx context.Context, meta metadata.CollectionResult) error
 	ListShowcases(ctx context.Context, opts db.ShowcaseOptions) (*db.ShowcaseResult, error)
 	ListSmartHubs(ctx context.Context, scope string) ([]db.SmartHub, error)
 	GetSmartHub(ctx context.Context, slug string) (*db.SmartHub, error)
@@ -89,6 +92,7 @@ type metadataService interface {
 	Lookup(ctx context.Context, query metadata.Query) (metadata.Result, error)
 	LookupByExternalID(ctx context.Context, query metadata.Query, externalID string) (metadata.Result, error)
 	LookupSeasonByExternalID(ctx context.Context, externalID string, seasonNumber int, language string) (metadata.SeasonResult, error)
+	LookupCollectionByExternalID(ctx context.Context, externalID, language string) (metadata.CollectionResult, error)
 	GetTMDBSettings() metadata.TMDBSettings
 	SetTMDBSettings(settings metadata.TMDBSettings)
 	FetchTMDBConfiguration(ctx context.Context) (*metadata.TMDBRemoteConfig, error)
@@ -168,9 +172,11 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/franchises", s.handleFranchises)
 	s.mux.HandleFunc("GET /api/franchises/{slug}", s.handleFranchise)
 	s.mux.HandleFunc("GET /api/franchises/{slug}/media", s.handleFranchiseMedia)
+	s.mux.HandleFunc("PUT /api/admin/franchises/{id}", s.handleFranchiseAdminUpdate)
 	s.mux.HandleFunc("GET /api/people", s.handlePeople)
 	s.mux.HandleFunc("GET /api/people/{slug}", s.handlePerson)
 	s.mux.HandleFunc("GET /api/people/{slug}/media", s.handlePersonMedia)
+	s.mux.HandleFunc("PUT /api/admin/people/{id}", s.handlePersonAdminUpdate)
 	s.mux.HandleFunc("POST /api/admin/catalog/sync-relations", s.handleCatalogRelationSync)
 	s.mux.HandleFunc("GET /api/showcases", s.handleShowcases)
 	s.mux.HandleFunc("GET /api/hubs", s.handleSmartHubs)
@@ -1285,6 +1291,28 @@ func (s *Server) handleFranchiseMedia(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"franchise": collection, "total": result.Total, "items": result.Items})
 }
 
+func (s *Server) handleFranchiseAdminUpdate(w http.ResponseWriter, r *http.Request) {
+	id, ok := parsePositiveID(r.PathValue("id"))
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "franchise id must be positive"})
+		return
+	}
+	var update db.CatalogEntityAdminUpdate
+	if err := json.NewDecoder(r.Body).Decode(&update); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "invalid update payload"})
+		return
+	}
+	if err := s.repository.UpdateProviderCollectionAdmin(r.Context(), id, update); err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, sql.ErrNoRows) {
+			status = http.StatusNotFound
+		}
+		writeJSON(w, status, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "id": id})
+}
+
 // handlePeople and its detail endpoints are backed exclusively by media_credits
 // and people tables populated during enrichment or the local rebuild action.
 func (s *Server) handlePeople(w http.ResponseWriter, r *http.Request) {
@@ -1332,6 +1360,28 @@ func (s *Server) handlePersonMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"person": person, "total": result.Total, "items": result.Items})
+}
+
+func (s *Server) handlePersonAdminUpdate(w http.ResponseWriter, r *http.Request) {
+	id, ok := parsePositiveID(r.PathValue("id"))
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "person id must be positive"})
+		return
+	}
+	var update db.CatalogEntityAdminUpdate
+	if err := json.NewDecoder(r.Body).Decode(&update); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "invalid update payload"})
+		return
+	}
+	if err := s.repository.UpdatePersonAdmin(r.Context(), id, update); err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, sql.ErrNoRows) {
+			status = http.StatusNotFound
+		}
+		writeJSON(w, status, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "id": id})
 }
 
 // handleCatalogRelationSync deliberately uses only cached TMDB snapshots. It
@@ -1606,6 +1656,23 @@ func (s *Server) handleMediaEnrich(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Fetch complete franchise details only during this explicit enrich action.
+	// Normal franchise GET requests remain strictly database-only.
+	if canonical.Provider == "tmdb" && item.Type == "movie" {
+		if collectionID := tmdbCollectionID(canonical.RawPayload); collectionID != "" {
+			for _, language := range []string{"en-US", "ar-SA"} {
+				collection, collectionErr := s.metadata.LookupCollectionByExternalID(r.Context(), collectionID, language)
+				if collectionErr != nil {
+					lookupWarnings = append(lookupWarnings, "collection "+language+": "+collectionErr.Error())
+					continue
+				}
+				if saveErr := s.repository.SaveProviderCollectionMetadata(r.Context(), collection); saveErr != nil {
+					lookupWarnings = append(lookupWarnings, "collection cache "+language+": "+saveErr.Error())
+				}
+			}
+		}
+	}
+
 	if doc != nil {
 		_, _ = s.search.IndexDocuments(r.Context(), []search.MediaDocument{*doc})
 	}
@@ -1655,6 +1722,18 @@ func (s *Server) handleMediaEnrich(w http.ResponseWriter, r *http.Request) {
 
 func isSeriesType(mediaType string) bool {
 	return mediaType == "series" || mediaType == "anime" || mediaType == "tv"
+}
+
+func tmdbCollectionID(raw json.RawMessage) string {
+	var payload struct {
+		Collection *struct {
+			ID json.Number `json:"id"`
+		} `json:"belongs_to_collection"`
+	}
+	if len(raw) == 0 || json.Unmarshal(raw, &payload) != nil || payload.Collection == nil {
+		return ""
+	}
+	return payload.Collection.ID.String()
 }
 
 func tmdbSeasonNumbers(raw json.RawMessage) []int {

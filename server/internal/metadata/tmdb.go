@@ -73,6 +73,17 @@ type tmdbDetails struct {
 	} `json:"genres"`
 }
 
+type tmdbCollectionDetails struct {
+	ID           int    `json:"id"`
+	Name         string `json:"name"`
+	Overview     string `json:"overview"`
+	PosterPath   string `json:"poster_path"`
+	BackdropPath string `json:"backdrop_path"`
+	Parts        []struct {
+		ID int `json:"id"`
+	} `json:"parts"`
+}
+
 // FetchExecutionStats tracks network cost per lookup
 type FetchExecutionStats struct {
 	BytesDownloaded  int64
@@ -132,6 +143,53 @@ func (c *TMDBClient) FetchRemoteConfiguration(ctx context.Context) (*TMDBRemoteC
 	c.settingsLock.Unlock()
 
 	return &remoteCfg, nil
+}
+
+// LookupCollectionByExternalID fetches and caches collection metadata during
+// enrichment only. The returned fields are stored in PostgreSQL for offline UI.
+func (c *TMDBClient) LookupCollectionByExternalID(ctx context.Context, externalID, language string) (CollectionResult, error) {
+	if !c.Configured() {
+		return CollectionResult{}, ErrNotConfigured
+	}
+	id, err := strconv.Atoi(externalID)
+	if err != nil || id <= 0 {
+		return CollectionResult{}, errors.New("invalid tmdb collection id")
+	}
+	settings := c.GetSettings()
+	if language == "" {
+		language = "en-US"
+	}
+	values := url.Values{}
+	values.Set("language", language)
+	if c.config.APIKey != "" && c.config.BearerToken == "" {
+		values.Set("api_key", c.config.APIKey)
+	}
+	raw, status, err := c.doGet(ctx, fmt.Sprintf("%s/3/collection/%d?%s", strings.TrimRight(c.config.BaseURL, "/"), id, values.Encode()))
+	if err != nil {
+		return CollectionResult{}, err
+	}
+	if status >= 300 {
+		return CollectionResult{}, fmt.Errorf("tmdb collection details failed with status %d", status)
+	}
+	var details tmdbCollectionDetails
+	if err := json.Unmarshal(raw, &details); err != nil {
+		return CollectionResult{}, fmt.Errorf("decode tmdb collection details: %w", err)
+	}
+	result := CollectionResult{Provider: "tmdb", ExternalID: strconv.Itoa(details.ID), Locale: language, Title: details.Name, Overview: details.Overview, PosterPath: c.imageURL(settings.PosterSize, details.PosterPath), BackdropPath: c.imageURL(settings.BackdropSize, details.BackdropPath), PartsCount: len(details.Parts), RawPayload: raw}
+	for _, part := range details.Parts {
+		result.PartExternalIDs = append(result.PartExternalIDs, strconv.Itoa(part.ID))
+	}
+	if settings.Modules.FetchPoster && result.PosterPath != "" {
+		if cached, cacheErr := cacheRemoteImage(ctx, c.client, result.PosterPath, c.config.ImageDir, "tmdb", "collection_poster_"+result.ExternalID, settings.ImageMode); cacheErr == nil && !cached.IsRemote {
+			result.CachedPosterPath = cached.URL
+		}
+	}
+	if settings.Modules.FetchBackdrop && result.BackdropPath != "" {
+		if cached, cacheErr := cacheRemoteImage(ctx, c.client, result.BackdropPath, c.config.ImageDir, "tmdb", "collection_backdrop_"+result.ExternalID, settings.ImageMode); cacheErr == nil && !cached.IsRemote {
+			result.CachedBackdropPath = cached.URL
+		}
+	}
+	return result, nil
 }
 
 // SmartLookup tries the best match, with intelligent fallback across movie/tv/anime
