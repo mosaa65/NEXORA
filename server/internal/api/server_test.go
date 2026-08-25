@@ -99,6 +99,9 @@ func (m *mockRepo) GetProviderCollection(ctx context.Context, slug string) (*db.
 func (m *mockRepo) ListProviderCollectionMedia(ctx context.Context, slug string, opts db.ListMediaOptions) (*db.ProviderCollection, *db.MediaListResult, error) {
 	return &db.ProviderCollection{ID: 1, Slug: slug, TitleEN: "Test Collection", LocalItemCount: 2}, &db.MediaListResult{Total: 2, Limit: opts.Limit, Items: []search.MediaDocument{{ID: 1, TitleEN: "Part One"}, {ID: 2, TitleEN: "Part Two"}}}, nil
 }
+func (m *mockRepo) ListProviderCollectionParts(ctx context.Context, slug string) (*db.ProviderCollection, []db.ProviderCollectionPart, error) {
+	return &db.ProviderCollection{ID: 1, Slug: slug, TitleEN: "Test Collection"}, []db.ProviderCollectionPart{{ExternalID: "1", Title: "Part One", Local: true, MediaID: 1}, {ExternalID: "2", Title: "Part Two", Local: false}}, nil
+}
 func (m *mockRepo) ListPeople(ctx context.Context, limit int) ([]db.Person, error) {
 	return []db.Person{{ID: 1, Slug: "tmdb-person-1", Provider: "tmdb", ExternalID: "1", NameAR: "شخص اختبار", NameEN: "Test Person", LocalMediaCount: 2}}, nil
 }

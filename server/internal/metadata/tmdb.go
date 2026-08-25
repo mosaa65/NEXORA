@@ -189,6 +189,41 @@ func (c *TMDBClient) LookupCollectionByExternalID(ctx context.Context, externalI
 			result.CachedBackdropPath = cached.URL
 		}
 	}
+	// Collection members are shown as "pending" cards when not in the local
+	// library. Cache their posters now (during enrich only) so browsing that
+	// screen remains completely local and never contacts the TMDB CDN.
+	if settings.Modules.FetchPoster && settings.ImageMode != ImageModeRemote {
+		var document map[string]any
+		if json.Unmarshal(raw, &document) == nil {
+			if parts, ok := document["parts"].([]any); ok {
+				posterSize := settings.PosterSize
+				if posterSize == "" {
+					posterSize = "w500"
+				}
+				for _, value := range parts {
+					part, ok := value.(map[string]any)
+					if !ok {
+						continue
+					}
+					path, _ := part["poster_path"].(string)
+					if path == "" {
+						continue
+					}
+					partID := fmt.Sprint(part["id"])
+					if partID == "" || partID == "<nil>" {
+						continue
+					}
+					cached, cacheErr := cacheRemoteImage(ctx, c.client, c.imageURL(posterSize, path), c.config.ImageDir, "tmdb", "collection_part_"+result.ExternalID+"_"+partID, settings.ImageMode)
+					if cacheErr == nil && !cached.IsRemote && cached.URL != "" {
+						part["local_poster_path"] = cached.URL
+					}
+				}
+				if expanded, marshalErr := json.Marshal(document); marshalErr == nil {
+					result.RawPayload = expanded
+				}
+			}
+		}
+	}
 	return result, nil
 }
 

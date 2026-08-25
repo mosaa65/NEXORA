@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -2256,27 +2257,65 @@ func (r *Repository) ListProviderCollectionMedia(ctx context.Context, slug strin
 // marking each one as local or pending. It never contacts TMDB while browsing.
 func (r *Repository) ListProviderCollectionParts(ctx context.Context, slug string) (*ProviderCollection, []ProviderCollectionPart, error) {
 	collection, err := r.GetProviderCollection(ctx, slug)
-	if err != nil { return nil, nil, err }
+	if err != nil {
+		return nil, nil, err
+	}
 	var raw []byte
 	err = r.db.QueryRowContext(ctx, `SELECT raw_payload FROM collection_metadata_snapshots WHERE collection_id=$1 AND locale LIKE 'en%' ORDER BY fetched_at DESC LIMIT 1`, collection.ID).Scan(&raw)
-	if errors.Is(err, sql.ErrNoRows) { return collection, []ProviderCollectionPart{}, nil }
-	if err != nil { return nil, nil, err }
-	var snapshot struct { Parts []struct { ID int64 `json:"id"`; Title string `json:"title"`; ReleaseDate string `json:"release_date"`; PosterPath string `json:"poster_path"` } `json:"parts"` }
-	if err := json.Unmarshal(raw, &snapshot); err != nil { return nil, nil, err }
+	if errors.Is(err, sql.ErrNoRows) {
+		return collection, []ProviderCollectionPart{}, nil
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	var snapshot struct {
+		Parts []struct {
+			ID              int64  `json:"id"`
+			Title           string `json:"title"`
+			ReleaseDate     string `json:"release_date"`
+			PosterPath      string `json:"poster_path"`
+			LocalPosterPath string `json:"local_poster_path"`
+		} `json:"parts"`
+	}
+	if err := json.Unmarshal(raw, &snapshot); err != nil {
+		return nil, nil, err
+	}
 	parts := make([]ProviderCollectionPart, 0, len(snapshot.Parts))
 	for _, part := range snapshot.Parts {
-		item := ProviderCollectionPart{ExternalID: fmt.Sprint(part.ID), Title: part.Title, PosterPath: part.PosterPath}
-		if len(part.ReleaseDate) >= 4 { item.Year, _ = strconv.Atoi(part.ReleaseDate[:4]) }
+		item := ProviderCollectionPart{ExternalID: fmt.Sprint(part.ID), Title: part.Title, PosterPath: firstNonEmpty(part.LocalPosterPath, part.PosterPath)}
+		if len(part.ReleaseDate) >= 4 {
+			item.Year, _ = strconv.Atoi(part.ReleaseDate[:4])
+		}
 		parts = append(parts, item)
 	}
-	if len(parts) == 0 { return collection, parts, nil }
-	ids := make([]string, 0, len(parts)); byExternal := make(map[string]int, len(parts))
-	for index := range parts { ids = append(ids, parts[index].ExternalID); byExternal[parts[index].ExternalID] = index }
+	if len(parts) == 0 {
+		return collection, parts, nil
+	}
+	ids := make([]string, 0, len(parts))
+	byExternal := make(map[string]int, len(parts))
+	for index := range parts {
+		ids = append(ids, parts[index].ExternalID)
+		byExternal[parts[index].ExternalID] = index
+	}
 	rows, err := r.db.QueryContext(ctx, `SELECT id,metadata_external_id FROM media_items WHERE metadata_provider='tmdb' AND metadata_external_id = ANY($1::text[])`, pq.Array(ids))
-	if err != nil { return nil, nil, err }
+	if err != nil {
+		return nil, nil, err
+	}
 	defer rows.Close()
-	for rows.Next() { var mediaID int64; var externalID string; if err := rows.Scan(&mediaID, &externalID); err != nil { return nil, nil, err }; if index, ok := byExternal[externalID]; ok { parts[index].Local=true; parts[index].MediaID=mediaID } }
-	if err := rows.Err(); err != nil { return nil, nil, err }
+	for rows.Next() {
+		var mediaID int64
+		var externalID string
+		if err := rows.Scan(&mediaID, &externalID); err != nil {
+			return nil, nil, err
+		}
+		if index, ok := byExternal[externalID]; ok {
+			parts[index].Local = true
+			parts[index].MediaID = mediaID
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, nil, err
+	}
 	return collection, parts, nil
 }
 

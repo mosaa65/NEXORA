@@ -53,6 +53,7 @@ type repository interface {
 	ListProviderCollections(ctx context.Context, limit int) ([]db.ProviderCollection, error)
 	GetProviderCollection(ctx context.Context, slug string) (*db.ProviderCollection, error)
 	ListProviderCollectionMedia(ctx context.Context, slug string, opts db.ListMediaOptions) (*db.ProviderCollection, *db.MediaListResult, error)
+	ListProviderCollectionParts(ctx context.Context, slug string) (*db.ProviderCollection, []db.ProviderCollectionPart, error)
 	UpdateProviderCollectionAdmin(ctx context.Context, id int64, update db.CatalogEntityAdminUpdate) error
 	ListPeople(ctx context.Context, limit int) ([]db.Person, error)
 	GetPerson(ctx context.Context, slug string) (*db.Person, error)
@@ -1288,7 +1289,12 @@ func (s *Server) handleFranchiseMedia(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, status, map[string]any{"error": err.Error()})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"franchise": collection, "total": result.Total, "items": result.Items})
+	_, parts, partsErr := s.repository.ListProviderCollectionParts(r.Context(), r.PathValue("slug"))
+	if partsErr != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": partsErr.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"franchise": collection, "total": result.Total, "items": result.Items, "parts": parts})
 }
 
 func (s *Server) handleFranchiseAdminUpdate(w http.ResponseWriter, r *http.Request) {
