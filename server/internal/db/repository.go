@@ -262,6 +262,17 @@ type ProviderCollection struct {
 	IsHidden       bool   `json:"is_hidden"`
 }
 
+// ProviderCollectionPart is an official TMDB collection member. Local media
+// fields are populated only when this part exists in the NEXORA library.
+type ProviderCollectionPart struct {
+	ExternalID string `json:"external_id"`
+	Title      string `json:"title"`
+	Year       int    `json:"year,omitempty"`
+	PosterPath string `json:"poster_path,omitempty"`
+	Local      bool   `json:"local"`
+	MediaID    int64  `json:"media_id,omitempty"`
+}
+
 type Person struct {
 	ID                 int64   `json:"id"`
 	Slug               string  `json:"slug"`
@@ -2150,8 +2161,9 @@ func (r *Repository) SaveProviderCollectionMetadata(ctx context.Context, meta me
 	return nil
 }
 
-// ListProviderCollections powers the offline-first franchise rail. A series is
-// meaningful only when at least two locally available films are linked.
+// ListProviderCollections powers the offline-first franchise rail. A single
+// local film is enough to expose its official TMDB franchise; unavailable
+// parts are labelled as pending on the franchise page.
 func (r *Repository) ListProviderCollections(ctx context.Context, limit int) ([]ProviderCollection, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 24
@@ -2159,10 +2171,10 @@ func (r *Repository) ListProviderCollections(ctx context.Context, limit int) ([]
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id,slug,provider,external_id,kind,COALESCE(title_ar,''),title_en,
 			COALESCE(overview_ar,''),COALESCE(overview_en,''),COALESCE(poster_path,''),COALESCE(backdrop_path,''),
-			parts_count,local_item_count,is_featured,is_hidden
+			parts_count,(SELECT COUNT(*) FROM media_collection_links mcl WHERE mcl.collection_id=provider_collections.id),is_featured,is_hidden
 		FROM provider_collections
-		WHERE is_hidden=false AND local_item_count >= 2
-		ORDER BY is_featured DESC,sort_priority DESC,local_item_count DESC,title_en ASC
+		WHERE is_hidden=false AND (SELECT COUNT(*) FROM media_collection_links mcl WHERE mcl.collection_id=provider_collections.id) >= 1
+		ORDER BY is_featured DESC,sort_priority DESC,(SELECT COUNT(*) FROM media_collection_links mcl WHERE mcl.collection_id=provider_collections.id) DESC,title_en ASC
 		LIMIT $1`, limit)
 	if err != nil {
 		return nil, fmt.Errorf("list provider collections: %w", err)
@@ -2181,7 +2193,7 @@ func (r *Repository) ListProviderCollections(ctx context.Context, limit int) ([]
 
 func (r *Repository) GetProviderCollection(ctx context.Context, slug string) (*ProviderCollection, error) {
 	var item ProviderCollection
-	err := r.db.QueryRowContext(ctx, `SELECT id,slug,provider,external_id,kind,COALESCE(title_ar,''),title_en,COALESCE(overview_ar,''),COALESCE(overview_en,''),COALESCE(poster_path,''),COALESCE(backdrop_path,''),parts_count,local_item_count,is_featured,is_hidden FROM provider_collections WHERE slug=$1 AND is_hidden=false`, strings.TrimSpace(slug)).Scan(&item.ID, &item.Slug, &item.Provider, &item.ExternalID, &item.Kind, &item.TitleAR, &item.TitleEN, &item.OverviewAR, &item.OverviewEN, &item.PosterPath, &item.BackdropPath, &item.PartsCount, &item.LocalItemCount, &item.IsFeatured, &item.IsHidden)
+	err := r.db.QueryRowContext(ctx, `SELECT id,slug,provider,external_id,kind,COALESCE(title_ar,''),title_en,COALESCE(overview_ar,''),COALESCE(overview_en,''),COALESCE(poster_path,''),COALESCE(backdrop_path,''),parts_count,(SELECT COUNT(*) FROM media_collection_links mcl WHERE mcl.collection_id=provider_collections.id),is_featured,is_hidden FROM provider_collections WHERE slug=$1 AND is_hidden=false`, strings.TrimSpace(slug)).Scan(&item.ID, &item.Slug, &item.Provider, &item.ExternalID, &item.Kind, &item.TitleAR, &item.TitleEN, &item.OverviewAR, &item.OverviewEN, &item.PosterPath, &item.BackdropPath, &item.PartsCount, &item.LocalItemCount, &item.IsFeatured, &item.IsHidden)
 	if err != nil {
 		return nil, err
 	}
@@ -2238,6 +2250,34 @@ func (r *Repository) ListProviderCollectionMedia(ctx context.Context, slug strin
 		sort.SliceStable(result.Items, func(i, j int) bool { return order[result.Items[i].ID] < order[result.Items[j].ID] })
 	}
 	return collection, result, nil
+}
+
+// ListProviderCollectionParts returns locally stored TMDB collection members,
+// marking each one as local or pending. It never contacts TMDB while browsing.
+func (r *Repository) ListProviderCollectionParts(ctx context.Context, slug string) (*ProviderCollection, []ProviderCollectionPart, error) {
+	collection, err := r.GetProviderCollection(ctx, slug)
+	if err != nil { return nil, nil, err }
+	var raw []byte
+	err = r.db.QueryRowContext(ctx, `SELECT raw_payload FROM collection_metadata_snapshots WHERE collection_id=$1 AND locale LIKE 'en%' ORDER BY fetched_at DESC LIMIT 1`, collection.ID).Scan(&raw)
+	if errors.Is(err, sql.ErrNoRows) { return collection, []ProviderCollectionPart{}, nil }
+	if err != nil { return nil, nil, err }
+	var snapshot struct { Parts []struct { ID int64 `json:"id"`; Title string `json:"title"`; ReleaseDate string `json:"release_date"`; PosterPath string `json:"poster_path"` } `json:"parts"` }
+	if err := json.Unmarshal(raw, &snapshot); err != nil { return nil, nil, err }
+	parts := make([]ProviderCollectionPart, 0, len(snapshot.Parts))
+	for _, part := range snapshot.Parts {
+		item := ProviderCollectionPart{ExternalID: fmt.Sprint(part.ID), Title: part.Title, PosterPath: part.PosterPath}
+		if len(part.ReleaseDate) >= 4 { item.Year, _ = strconv.Atoi(part.ReleaseDate[:4]) }
+		parts = append(parts, item)
+	}
+	if len(parts) == 0 { return collection, parts, nil }
+	ids := make([]string, 0, len(parts)); byExternal := make(map[string]int, len(parts))
+	for index := range parts { ids = append(ids, parts[index].ExternalID); byExternal[parts[index].ExternalID] = index }
+	rows, err := r.db.QueryContext(ctx, `SELECT id,metadata_external_id FROM media_items WHERE metadata_provider='tmdb' AND metadata_external_id = ANY($1::text[])`, pq.Array(ids))
+	if err != nil { return nil, nil, err }
+	defer rows.Close()
+	for rows.Next() { var mediaID int64; var externalID string; if err := rows.Scan(&mediaID, &externalID); err != nil { return nil, nil, err }; if index, ok := byExternal[externalID]; ok { parts[index].Local=true; parts[index].MediaID=mediaID } }
+	if err := rows.Err(); err != nil { return nil, nil, err }
+	return collection, parts, nil
 }
 
 // ListPeople exposes only people that have a useful local relationship. The
