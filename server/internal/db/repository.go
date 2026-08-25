@@ -277,6 +277,15 @@ type Person struct {
 	IsHidden           bool    `json:"is_hidden"`
 }
 
+// CatalogRelationSyncResult describes an offline rebuild of the derived
+// franchise and people graph. It reads metadata_snapshots only; it never calls
+// TMDB and is therefore safe for a disconnected library server.
+type CatalogRelationSyncResult struct {
+	SnapshotsProcessed int `json:"snapshots_processed"`
+	CollectionsLinked  int `json:"collections_linked"`
+	CreditsLinked      int `json:"credits_linked"`
+}
+
 // ShowcaseOptions selects locally persisted editorial collections and media
 // summaries for the reusable hero. It never consults a remote metadata source.
 type ShowcaseOptions struct {
@@ -1901,18 +1910,18 @@ func (r *Repository) syncCollectionFromMetadata(ctx context.Context, mediaID int
 	slug := fmt.Sprintf("tmdb-collection-%d", c.ID)
 	var id int64
 	err := r.db.QueryRowContext(ctx, `
-		INSERT INTO provider_collections (provider,external_id,kind,slug,title_ar,title_en,poster_path,backdrop_path,metadata_fetched_at,metadata_expires_at)
+		INSERT INTO provider_collections (provider,external_id,kind,slug,title_ar,title_en,poster_path,backdrop_path)
 		VALUES ('tmdb',$1,'movie_collection',$2,
 			CASE WHEN $3 LIKE 'ar%%' THEN $4 ELSE NULL END,
 			CASE WHEN $3 LIKE 'ar%%' THEN $5 ELSE $4 END,
-			NULLIF($6,''),NULLIF($7,''),CURRENT_TIMESTAMP,CURRENT_TIMESTAMP + INTERVAL '30 days')
+			NULL,NULL)
 		ON CONFLICT (provider,external_id) DO UPDATE SET
 			title_ar=COALESCE(EXCLUDED.title_ar,provider_collections.title_ar),
 			title_en=COALESCE(NULLIF(EXCLUDED.title_en,''),provider_collections.title_en),
 			poster_path=COALESCE(EXCLUDED.poster_path,provider_collections.poster_path),
 			backdrop_path=COALESCE(EXCLUDED.backdrop_path,provider_collections.backdrop_path),
 			updated_at=CURRENT_TIMESTAMP
-		RETURNING id`, fmt.Sprint(c.ID), slug, strings.ToLower(meta.Locale), c.Name, c.Name, c.PosterPath, c.BackdropPath).Scan(&id)
+		RETURNING id`, fmt.Sprint(c.ID), slug, strings.ToLower(meta.Locale), c.Name, c.Name).Scan(&id)
 	if err != nil {
 		return err
 	}
@@ -1976,10 +1985,9 @@ func (r *Repository) syncCreditsFromMetadata(ctx context.Context, mediaID int64,
 		if strings.TrimSpace(cast.CreditID) == "" {
 			continue
 		}
+		// Only a locally cached profile is retained here. The source image path
+		// is still present in the raw snapshot for a future explicit refresh.
 		profile := cast.LocalProfilePath
-		if profile == "" {
-			profile = cast.ProfilePath
-		}
 		personID, err := upsertPerson(cast.ID, cast.Name, cast.KnownForDepartment, profile, cast.Popularity)
 		if err != nil {
 			return err
@@ -2000,9 +2008,6 @@ func (r *Repository) syncCreditsFromMetadata(ctx context.Context, mediaID int64,
 			continue
 		}
 		profile := crew.LocalProfilePath
-		if profile == "" {
-			profile = crew.ProfilePath
-		}
 		personID, err := upsertPerson(crew.ID, crew.Name, crew.KnownForDepartment, profile, crew.Popularity)
 		if err != nil {
 			return err
@@ -2017,6 +2022,60 @@ func (r *Repository) syncCreditsFromMetadata(ctx context.Context, mediaID int64,
 	}
 	_, err := r.db.ExecContext(ctx, `UPDATE people p SET local_media_count=(SELECT COUNT(DISTINCT media_item_id) FROM media_credits WHERE person_id=p.id), updated_at=CURRENT_TIMESTAMP WHERE p.provider='tmdb'`)
 	return err
+}
+
+// SyncCatalogRelationsFromSnapshots rebuilds all derived local relations from
+// previously cached TMDB documents. This is used after introducing the graph
+// tables and can be re-run safely after an import or an upgrade.
+func (r *Repository) SyncCatalogRelationsFromSnapshots(ctx context.Context) (*CatalogRelationSyncResult, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT media_item_id, provider, external_id, locale, raw_payload
+		FROM metadata_snapshots
+		WHERE provider='tmdb'
+		ORDER BY media_item_id, CASE WHEN locale LIKE 'en%' THEN 0 ELSE 1 END, locale`)
+	if err != nil {
+		return nil, fmt.Errorf("list metadata snapshots for relation sync: %w", err)
+	}
+	defer rows.Close()
+
+	result := &CatalogRelationSyncResult{}
+	for rows.Next() {
+		var mediaID int64
+		var provider, externalID, locale string
+		var raw []byte
+		if err := rows.Scan(&mediaID, &provider, &externalID, &locale, &raw); err != nil {
+			return nil, err
+		}
+		meta := metadata.Result{Provider: provider, ExternalID: externalID, Locale: locale, RawPayload: raw}
+		if err := r.syncCollectionFromMetadata(ctx, mediaID, meta); err != nil {
+			return nil, fmt.Errorf("sync collection for media %d: %w", mediaID, err)
+		}
+		if err := r.syncCreditsFromMetadata(ctx, mediaID, meta); err != nil {
+			return nil, fmt.Errorf("sync credits for media %d: %w", mediaID, err)
+		}
+		result.SnapshotsProcessed++
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if _, err := r.db.ExecContext(ctx, `
+		UPDATE provider_collections pc
+		SET local_item_count=(SELECT COUNT(*) FROM media_collection_links mcl WHERE mcl.collection_id=pc.id), updated_at=CURRENT_TIMESTAMP`); err != nil {
+		return nil, fmt.Errorf("refresh collection counts: %w", err)
+	}
+	if _, err := r.db.ExecContext(ctx, `
+		UPDATE people p
+		SET local_media_count=(SELECT COUNT(DISTINCT media_item_id) FROM media_credits mc WHERE mc.person_id=p.id), updated_at=CURRENT_TIMESTAMP
+		WHERE p.provider='tmdb'`); err != nil {
+		return nil, fmt.Errorf("refresh people counts: %w", err)
+	}
+	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM media_collection_links`).Scan(&result.CollectionsLinked); err != nil {
+		return nil, err
+	}
+	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM media_credits`).Scan(&result.CreditsLinked); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 // ListProviderCollections powers the offline-first franchise rail. A series is
@@ -2096,6 +2155,84 @@ func (r *Repository) ListProviderCollectionMedia(ctx context.Context, slug strin
 		sort.SliceStable(result.Items, func(i, j int) bool { return order[result.Items[i].ID] < order[result.Items[j].ID] })
 	}
 	return collection, result, nil
+}
+
+// ListPeople exposes only people that have a useful local relationship. The
+// library never needs TMDB at browsing time to render this rail.
+func (r *Repository) ListPeople(ctx context.Context, limit int) ([]Person, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 24
+	}
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT id,slug,provider,external_id,COALESCE(name_ar,''),name_en,
+			COALESCE(known_for_department,''),COALESCE(profile_path,''),COALESCE(popularity,0),
+			local_media_count,is_featured,is_hidden
+		FROM people
+		WHERE is_hidden=false AND local_media_count >= 2
+		ORDER BY is_featured DESC, local_media_count DESC, popularity DESC, name_en ASC
+		LIMIT $1`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list people: %w", err)
+	}
+	defer rows.Close()
+	people := make([]Person, 0)
+	for rows.Next() {
+		var person Person
+		if err := rows.Scan(&person.ID, &person.Slug, &person.Provider, &person.ExternalID, &person.NameAR, &person.NameEN, &person.KnownForDepartment, &person.ProfilePath, &person.Popularity, &person.LocalMediaCount, &person.IsFeatured, &person.IsHidden); err != nil {
+			return nil, err
+		}
+		people = append(people, person)
+	}
+	return people, rows.Err()
+}
+
+func (r *Repository) GetPerson(ctx context.Context, slug string) (*Person, error) {
+	var person Person
+	err := r.db.QueryRowContext(ctx, `
+		SELECT id,slug,provider,external_id,COALESCE(name_ar,''),name_en,
+			COALESCE(known_for_department,''),COALESCE(profile_path,''),COALESCE(popularity,0),
+			local_media_count,is_featured,is_hidden
+		FROM people WHERE slug=$1 AND is_hidden=false`, strings.TrimSpace(slug)).Scan(
+		&person.ID, &person.Slug, &person.Provider, &person.ExternalID, &person.NameAR, &person.NameEN,
+		&person.KnownForDepartment, &person.ProfilePath, &person.Popularity, &person.LocalMediaCount, &person.IsFeatured, &person.IsHidden)
+	if err != nil {
+		return nil, err
+	}
+	return &person, nil
+}
+
+func (r *Repository) ListPersonMedia(ctx context.Context, slug string, opts ListMediaOptions) (*Person, *MediaListResult, error) {
+	person, err := r.GetPerson(ctx, slug)
+	if err != nil {
+		return nil, nil, err
+	}
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT DISTINCT media_item_id FROM media_credits
+		WHERE person_id=$1 ORDER BY media_item_id`, person.ID)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+	ids := make([]int64, 0, person.LocalMediaCount)
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, nil, err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, nil, err
+	}
+	if len(ids) == 0 {
+		return person, &MediaListResult{Limit: opts.Limit, Offset: opts.Offset, Items: []search.MediaDocument{}}, nil
+	}
+	opts.IDs = ids
+	result, err := r.ListMediaItems(ctx, opts)
+	if err != nil {
+		return nil, nil, err
+	}
+	return person, result, nil
 }
 
 // localizedMetadataFields prevents a locale-specific TMDB response from

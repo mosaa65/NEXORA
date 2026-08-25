@@ -99,6 +99,18 @@ func (m *mockRepo) GetProviderCollection(ctx context.Context, slug string) (*db.
 func (m *mockRepo) ListProviderCollectionMedia(ctx context.Context, slug string, opts db.ListMediaOptions) (*db.ProviderCollection, *db.MediaListResult, error) {
 	return &db.ProviderCollection{ID: 1, Slug: slug, TitleEN: "Test Collection", LocalItemCount: 2}, &db.MediaListResult{Total: 2, Limit: opts.Limit, Items: []search.MediaDocument{{ID: 1, TitleEN: "Part One"}, {ID: 2, TitleEN: "Part Two"}}}, nil
 }
+func (m *mockRepo) ListPeople(ctx context.Context, limit int) ([]db.Person, error) {
+	return []db.Person{{ID: 1, Slug: "tmdb-person-1", Provider: "tmdb", ExternalID: "1", NameAR: "شخص اختبار", NameEN: "Test Person", LocalMediaCount: 2}}, nil
+}
+func (m *mockRepo) GetPerson(ctx context.Context, slug string) (*db.Person, error) {
+	return &db.Person{ID: 1, Slug: slug, Provider: "tmdb", ExternalID: "1", NameEN: "Test Person", LocalMediaCount: 2}, nil
+}
+func (m *mockRepo) ListPersonMedia(ctx context.Context, slug string, opts db.ListMediaOptions) (*db.Person, *db.MediaListResult, error) {
+	return &db.Person{ID: 1, Slug: slug, NameEN: "Test Person", LocalMediaCount: 2}, &db.MediaListResult{Total: 2, Limit: opts.Limit, Items: []search.MediaDocument{{ID: 1, TitleEN: "Part One"}, {ID: 2, TitleEN: "Part Two"}}}, nil
+}
+func (m *mockRepo) SyncCatalogRelationsFromSnapshots(ctx context.Context) (*db.CatalogRelationSyncResult, error) {
+	return &db.CatalogRelationSyncResult{SnapshotsProcessed: 2, CollectionsLinked: 1, CreditsLinked: 4}, nil
+}
 func (m *mockRepo) ListShowcases(ctx context.Context, opts db.ShowcaseOptions) (*db.ShowcaseResult, error) {
 	return &db.ShowcaseResult{Context: opts.Context, Slides: []db.ShowcaseSlide{{ID: "media-1", Kind: "featured", MediaID: 1, TitleEN: "Inception"}}}, nil
 }
@@ -342,6 +354,27 @@ func TestDashboardStatsEndpoint(t *testing.T) {
 
 	if stats.TotalMedia != 10 {
 		t.Errorf("expected TotalMedia=10, got: %d", stats.TotalMedia)
+	}
+}
+
+func TestOfflineCatalogGraphEndpoints(t *testing.T) {
+	handler := setupTestServer()
+	for _, testCase := range []struct {
+		method string
+		path   string
+	}{
+		{http.MethodGet, "/api/franchises"},
+		{http.MethodGet, "/api/franchises/tmdb-collection-1/media"},
+		{http.MethodGet, "/api/people"},
+		{http.MethodGet, "/api/people/tmdb-person-1/media"},
+		{http.MethodPost, "/api/admin/catalog/sync-relations"},
+	} {
+		req := httptest.NewRequest(testCase.method, testCase.path, nil)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s %s: expected 200, got %d: %s", testCase.method, testCase.path, rec.Code, rec.Body.String())
+		}
 	}
 }
 

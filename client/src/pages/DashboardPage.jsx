@@ -4,6 +4,7 @@ import UnifiedMediaCard from "../components/UnifiedMediaCard.jsx";
 import HubBannerCard from "../components/HubBannerCard.jsx";
 import SmartHubRail from "../components/SmartHubRail.jsx";
 import FranchiseRail from "../components/FranchiseRail.jsx";
+import PeopleRail from "../components/PeopleRail.jsx";
 import Icon from "../components/Icon.jsx";
 import { getDashboardStats, getMediaList } from "../lib/api.js";
 import { mockLibrary } from "../data/library.js";
@@ -110,6 +111,8 @@ export default function DashboardPage({
       />
 
       <FranchiseRail onOpen={(franchise) => { window.location.hash = `#/franchise/${franchise.slug}`; }} />
+
+      <PeopleRail onOpen={(person) => { window.location.hash = `#/person/${person.slug}`; }} />
 
       {/* 2. Featured Hub Banners Grid */}
       <div className="space-y-4">

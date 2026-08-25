@@ -321,6 +321,24 @@ export async function getFileSubtitles(fileId) {
   return requestJSON(`/api/stream/file/${encodeURIComponent(fileId)}/subtitles`);
 }
 
+// All catalogue graph reads are local API reads. TMDB is used only by the
+// explicit enrichment workflow on the server.
+export async function getPeople(limit = 18) {
+  return requestJSON(`/api/people?limit=${encodeURIComponent(limit)}`);
+}
+
+export async function getPerson(slug) {
+  return requestJSON(`/api/people/${encodeURIComponent(slug)}`);
+}
+
+export async function getPersonMedia(slug, options = {}) {
+  const params = new URLSearchParams();
+  if (options.limit) params.set("limit", String(options.limit));
+  if (options.sort) params.set("sort", options.sort);
+  const query = params.toString();
+  return requestJSON(`/api/people/${encodeURIComponent(slug)}/media${query ? `?${query}` : ""}`);
+}
+
 export function resolveAPIURL(path) {
   if (!path) {
     return "";

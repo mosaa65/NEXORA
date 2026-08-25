@@ -53,6 +53,10 @@ type repository interface {
 	ListProviderCollections(ctx context.Context, limit int) ([]db.ProviderCollection, error)
 	GetProviderCollection(ctx context.Context, slug string) (*db.ProviderCollection, error)
 	ListProviderCollectionMedia(ctx context.Context, slug string, opts db.ListMediaOptions) (*db.ProviderCollection, *db.MediaListResult, error)
+	ListPeople(ctx context.Context, limit int) ([]db.Person, error)
+	GetPerson(ctx context.Context, slug string) (*db.Person, error)
+	ListPersonMedia(ctx context.Context, slug string, opts db.ListMediaOptions) (*db.Person, *db.MediaListResult, error)
+	SyncCatalogRelationsFromSnapshots(ctx context.Context) (*db.CatalogRelationSyncResult, error)
 	ListShowcases(ctx context.Context, opts db.ShowcaseOptions) (*db.ShowcaseResult, error)
 	ListSmartHubs(ctx context.Context, scope string) ([]db.SmartHub, error)
 	GetSmartHub(ctx context.Context, slug string) (*db.SmartHub, error)
@@ -164,6 +168,10 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/franchises", s.handleFranchises)
 	s.mux.HandleFunc("GET /api/franchises/{slug}", s.handleFranchise)
 	s.mux.HandleFunc("GET /api/franchises/{slug}/media", s.handleFranchiseMedia)
+	s.mux.HandleFunc("GET /api/people", s.handlePeople)
+	s.mux.HandleFunc("GET /api/people/{slug}", s.handlePerson)
+	s.mux.HandleFunc("GET /api/people/{slug}/media", s.handlePersonMedia)
+	s.mux.HandleFunc("POST /api/admin/catalog/sync-relations", s.handleCatalogRelationSync)
 	s.mux.HandleFunc("GET /api/showcases", s.handleShowcases)
 	s.mux.HandleFunc("GET /api/hubs", s.handleSmartHubs)
 	s.mux.HandleFunc("GET /api/hubs/{slug}", s.handleSmartHub)
@@ -1275,6 +1283,66 @@ func (s *Server) handleFranchiseMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"franchise": collection, "total": result.Total, "items": result.Items})
+}
+
+// handlePeople and its detail endpoints are backed exclusively by media_credits
+// and people tables populated during enrichment or the local rebuild action.
+func (s *Server) handlePeople(w http.ResponseWriter, r *http.Request) {
+	limit := 24
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		if value, err := strconv.Atoi(raw); err == nil && value > 0 {
+			limit = value
+		}
+	}
+	people, err := s.repository.ListPeople(r.Context(), limit)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"people": people})
+}
+
+func (s *Server) handlePerson(w http.ResponseWriter, r *http.Request) {
+	person, err := s.repository.GetPerson(r.Context(), r.PathValue("slug"))
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, sql.ErrNoRows) {
+			status = http.StatusNotFound
+		}
+		writeJSON(w, status, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, person)
+}
+
+func (s *Server) handlePersonMedia(w http.ResponseWriter, r *http.Request) {
+	limit := 100
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		if value, err := strconv.Atoi(raw); err == nil && value > 0 {
+			limit = value
+		}
+	}
+	person, result, err := s.repository.ListPersonMedia(r.Context(), r.PathValue("slug"), db.ListMediaOptions{Limit: limit, Sort: strings.TrimSpace(r.URL.Query().Get("sort"))})
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, sql.ErrNoRows) {
+			status = http.StatusNotFound
+		}
+		writeJSON(w, status, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"person": person, "total": result.Total, "items": result.Items})
+}
+
+// handleCatalogRelationSync deliberately uses only cached TMDB snapshots. It
+// backfills imported libraries without another network request or an API key.
+func (s *Server) handleCatalogRelationSync(w http.ResponseWriter, r *http.Request) {
+	result, err := s.repository.SyncCatalogRelationsFromSnapshots(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "result": result})
 }
 
 func (s *Server) handleShowcases(w http.ResponseWriter, r *http.Request) {

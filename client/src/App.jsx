@@ -6,6 +6,7 @@ import DashboardPage from "./pages/DashboardPage.jsx";
 import CategoryPage from "./pages/CategoryPage.jsx";
 import SmartHubPage from "./pages/SmartHubPage.jsx";
 import FranchisePage from "./pages/FranchisePage.jsx";
+import PersonPage from "./pages/PersonPage.jsx";
 import MediaDetailsPage from "./pages/MediaDetailsPage.jsx";
 import AdminCategoriesPage from "./pages/admin/AdminCategoriesPage.jsx";
 import AdminCollectionsPage from "./pages/admin/AdminCollectionsPage.jsx";
@@ -40,6 +41,10 @@ function SmartHubRouteWrapper({ onOpenMedia }) {
 function FranchiseRouteWrapper({ onOpenMedia }) {
   const { slug } = useParams();
   return <FranchisePage slug={slug} onOpenMedia={onOpenMedia} />;
+}
+function PersonRouteWrapper({ onOpenMedia }) {
+  const { slug } = useParams();
+  return <PersonPage slug={slug} onOpenMedia={onOpenMedia} />;
 }
 
 // Helper Wrapper for Media Details View
@@ -184,6 +189,7 @@ export default function App() {
           />
           <Route path="hub/:slug" element={<SmartHubRouteWrapper onOpenMedia={(item) => (window.location.hash = `#/media/${item.id}`)} />} />
           <Route path="franchise/:slug" element={<FranchiseRouteWrapper onOpenMedia={(item) => (window.location.hash = `#/media/${item.id}`)} />} />
+          <Route path="person/:slug" element={<PersonRouteWrapper onOpenMedia={(item) => (window.location.hash = `#/media/${item.id}`)} />} />
 
           {/* Favorites Route */}
           <Route
