@@ -65,6 +65,76 @@ Add-Content -Path "$env:SystemRoot\System32\drivers\etc\hosts" -Value "192.168.1
 
 ---
 
+## التشغيل من الجوال عبر Wi-Fi
+
+اللابتوب هو خادم NEXORA المحلي: يشغّل Docker وقاعدة البيانات وخادم Go وواجهة React. يستطيع أي جوال على **نفس الراوتر وشبكة Wi-Fi** فتح الموقع منه.
+
+### الخطوات كل مرة
+
+1. افتح PowerShell داخل المشروع وشغّل خدمات قاعدة البيانات والبحث:
+
+```powershell
+cd C:\Users\mousa\Desktop\project\NEXORA
+docker compose up -d
+```
+
+2. افتح نافذة PowerShell ثانية لتشغيل الخادم الخلفي. اتركها مفتوحة:
+
+```powershell
+cd C:\Users\mousa\Desktop\project\NEXORA\server
+$env:Path += ";C:\Users\mousa\Desktop\project\NEXORA\.tools\go\bin"
+go run .\cmd\api
+```
+
+3. افتح نافذة PowerShell ثالثة لتشغيل واجهة الموقع. اتركها مفتوحة:
+
+```powershell
+cd C:\Users\mousa\Desktop\project\NEXORA\client
+npm run dev
+```
+
+### أي رابط أفتح؟
+
+سيظهر Vite سطران مشابهـان لهذا:
+
+```text
+Local:   http://localhost:5173/
+Network: http://192.168.1.35:5173/
+```
+
+- `localhost` طبيعي تماماً، لكنه يعمل **على اللابتوب نفسه فقط**.
+- الرابط بعد `Network` هو الذي تفتحه في الجوال. في الشبكة الحالية استخدم:
+
+```text
+http://192.168.1.35:5173
+```
+
+إذا تغيّر الراوتر أو أعيد اتصال Wi-Fi فقد يتغير الرقم. لمعرفة الرقم الصحيح شغّل على اللابتوب:
+
+```powershell
+ipconfig
+```
+
+ثم ابحث تحت `Wireless LAN adapter Wi-Fi` عن `IPv4 Address`، واستخدمه في الجوال بهذه الصيغة:
+
+```text
+http://عنوان-IP-الجديد:5173
+```
+
+### الإيقاف
+
+- أوقف API والواجهة بالضغط على `Ctrl + C` في نافذتيهما.
+- لإيقاف Docker عند الانتهاء:
+
+```powershell
+cd C:\Users\mousa\Desktop\project\NEXORA
+docker compose down
+```
+
+> إذا لم يفتح الجوال الموقع، تأكد أن الجهازين على نفس Wi-Fi، ثم اسمح لـNode.js عبر Windows Firewall على شبكة **Private** عندما تظهر رسالة الحماية.
+
+---
+
 ## إيقاف الخدمات
 
 1. أوقف الواجهة والخادم بـ `Ctrl + C` في نوافذهما

@@ -1,7 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import Sidebar from "../components/Sidebar.jsx";
 import TopBar from "../components/TopBar.jsx";
+
+const SIDEBAR_COLLAPSED_KEY = "nexora_sidebar_collapsed";
 
 export default function CustomerCinemaLayout({
   health,
@@ -15,6 +17,19 @@ export default function CustomerCinemaLayout({
   const navigate = useNavigate();
   const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, isCollapsed ? "true" : "false");
+    } catch {}
+  }, [isCollapsed]);
 
   // Derive active view from pathname
   const path = location.pathname;
@@ -36,6 +51,14 @@ export default function CustomerCinemaLayout({
     }
   }
 
+  function handleToggleSidebar() {
+    if (window.innerWidth >= 1024) {
+      setIsCollapsed((prev) => !prev);
+    } else {
+      setIsSidebarOpen((prev) => !prev);
+    }
+  }
+
   return (
     <div className="relative min-h-screen bg-[var(--bg-base)] text-[var(--text-primary)] selection:bg-[var(--color-accent-light)] font-sans text-right" dir="rtl">
       {/* Background Ambient Glow */}
@@ -46,16 +69,24 @@ export default function CustomerCinemaLayout({
       </div>
 
       <div className="relative z-10 mx-auto flex min-h-screen max-w-[1920px] gap-4 p-3 sm:p-5 lg:gap-6 lg:p-6">
-        {/* Cinema Navigation Sidebar */}
+        {/* Cinema Navigation Sidebar (Full or Icon Rail) */}
         <Sidebar
           isOpen={isSidebarOpen}
           onClose={() => setIsSidebarOpen(false)}
+          isCollapsed={isCollapsed}
+          onToggleCollapse={() => setIsCollapsed((prev) => !prev)}
           activeView={activeView}
           onNavigate={handleNavigate}
         />
 
-        {/* Main Content Area */}
-        <div className="flex min-w-0 flex-1 flex-col gap-6 lg:pr-[18.5rem] xl:pr-[19rem]">
+        {/* Main Content Area with dynamic responsive padding */}
+        <div
+          className={`flex min-w-0 flex-1 flex-col gap-6 transition-all duration-300 ${
+            isCollapsed
+              ? "lg:pr-[5.5rem] xl:pr-[5.75rem]"
+              : "lg:pr-[18.5rem] xl:pr-[19rem]"
+          }`}
+        >
           {/* Top Bar Header */}
           <TopBar
             health={health}
@@ -65,7 +96,8 @@ export default function CustomerCinemaLayout({
             searchResults={searchResults}
             onOpenMedia={onOpenMedia}
             onQuickPlay={onQuickPlay}
-            onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+            isCollapsed={isCollapsed}
+            onToggleSidebar={handleToggleSidebar}
           />
 
           {/* Page Outlet */}

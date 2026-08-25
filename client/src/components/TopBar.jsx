@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import Icon from "./Icon.jsx";
+import useTheme from "../hooks/useTheme.js";
 import { resolveAPIURL } from "../lib/api.js";
 
 export default function TopBar({
@@ -9,7 +10,9 @@ export default function TopBar({
   onOpenMedia = (item) => { window.location.hash = `#/media/${item.id}`; },
   onQuickPlay = () => {},
   onToggleSidebar,
+  isCollapsed = false,
 }) {
+  const { theme, toggleTheme } = useTheme();
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
   const searchContainerRef = useRef(null);
 
@@ -35,19 +38,38 @@ export default function TopBar({
 
   return (
     <header className="sticky top-0 z-40 mb-6 flex items-center justify-between gap-3 sm:gap-4 rounded-2xl sm:rounded-full border border-white/15 bg-[#090812]/90 px-3 sm:px-6 py-2.5 shadow-2xl backdrop-blur-2xl transition-all">
-      {/* Mobile Drawer Menu Button */}
-      <button
-        type="button"
-        onClick={onToggleSidebar}
-        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/5 text-white/90 transition hover:bg-white/15 hover:text-white active:scale-95 lg:hidden"
-        title="القائمة الجانبية"
-        aria-label="فتح القائمة"
-      >
-        <Icon name="menu" className="h-5 w-5" />
-      </button>
+      {/* Actions (Left Side in RTL): Sidebar Toggle & Theme Toggle */}
+      <div className="flex items-center gap-2 shrink-0">
+        {/* Sidebar Toggle (Mobile Drawer & Desktop Icon/Full Collapsed Mode) */}
+        <button
+          type="button"
+          onClick={onToggleSidebar}
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/5 text-white/90 transition-all duration-200 hover:bg-white/15 hover:text-white hover:scale-105 active:scale-95 shadow-sm"
+          title={isCollapsed ? "توسيع القائمة الجانبية" : "تصغير القائمة لأيقونات"}
+          aria-label="تبديل القائمة الجانبية"
+        >
+          <Icon name="menu" className="h-5 w-5" />
+        </button>
+
+        {/* Theme Toggle Icon Button */}
+        <button
+          type="button"
+          onClick={toggleTheme}
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/5 text-white/90 transition-all duration-200 hover:bg-white/15 hover:text-white hover:scale-105 active:scale-95 shadow-sm"
+          title={theme === "dark" ? "تفعيل المظهر الفاتح" : "تفعيل المظهر الداكن"}
+          aria-label="تبديل مظهر التطبيق"
+        >
+          <Icon
+            name={theme === "dark" ? "sun" : "moon"}
+            className={`h-4 w-4 transition-colors ${
+              theme === "dark" ? "text-amber-300" : "text-purple-300"
+            }`}
+          />
+        </button>
+      </div>
 
       {/* Main Search Input & Live Results */}
-      <div ref={searchContainerRef} className="relative flex-1 max-w-xl mx-auto">
+      <div ref={searchContainerRef} className="relative flex-1 max-w-xl mx-2 sm:mx-4">
         <div className="flex w-full items-center gap-3 rounded-full border border-white/15 bg-black/60 px-4 py-2 text-white shadow-inner transition focus-within:border-fuchsia-500/80 focus-within:bg-black/90 focus-within:ring-2 focus-within:ring-fuchsia-500/25">
           <Icon name="search" className="h-4 w-4 text-fuchsia-400 shrink-0" />
           <input
@@ -166,7 +188,7 @@ export default function TopBar({
         )}
       </div>
 
-      {/* Official Brand Logo Only (No extra text, no old triangle SVG) */}
+      {/* Official Brand Logo Only */}
       <div className="flex items-center gap-2 shrink-0">
         <img
           src="/nexora-brand-logo.PNG"
