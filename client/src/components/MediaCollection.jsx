@@ -18,7 +18,7 @@ export default function MediaCollection({ items = [], onOpen, defaultView = "gri
           <button type="button" onClick={() => setView("list")} aria-pressed={view === "list"} title="عرض قائمة" className={`flex h-8 w-9 items-center justify-center rounded-lg transition ${view === "list" ? "bg-[var(--bg-card)] text-[var(--color-accent)] shadow-[var(--shadow-sm)]" : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"}`}><Icon name="list" className="h-4 w-4" /></button>
         </div>
       </div>
-      <div className={view === "grid" ? "grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(220px,260px))] sm:justify-center sm:gap-4" : "space-y-2.5 sm:space-y-3"}>
+      <div className={view === "grid" ? "grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(190px,1fr))] sm:gap-4" : "space-y-2.5 sm:space-y-3"}>
         {items.map((media) => (
           <div key={media.id} className={`${view === "grid" ? "min-w-0" : ""} ${cardActions && view === "grid" ? "group/card relative" : ""}`}>
             <UnifiedMediaCard media={media} onOpen={onOpen} layout={view} />
