@@ -1,5 +1,5 @@
 import React from "react";
-import Icon from "./Icon";
+import Icon from "./Icon.jsx";
 
 export const originsList = [
   { id: "all", label: "جميع البلدان" },
@@ -42,100 +42,160 @@ export default function FilterToolbar({
   searchQuery = "",
   onSearchChange,
   showOriginFilter = true,
+  showGenreFilter = true,
+  showSort = true,
+  showSearch = true,
   resultCount = 0,
+  origins = originsList,
+  genres = genresList,
+  sorts = sortOptions,
+  onResetFilters,
 }) {
+  const hasActiveFilters =
+    (activeOrigin && activeOrigin !== "all") ||
+    (activeGenre && activeGenre !== "all") ||
+    Boolean(searchQuery && searchQuery.trim());
+
+  const handleReset = () => {
+    if (onResetFilters) {
+      onResetFilters();
+    } else {
+      if (onSelectOrigin) onSelectOrigin("all");
+      if (onSelectGenre) onSelectGenre("all");
+      if (onSearchChange) onSearchChange("");
+    }
+  };
+
   return (
-    <div className="space-y-3 p-4 rounded-3xl bg-[#0D0C1A]/80 border border-white/10 backdrop-blur-xl" dir="rtl">
-      {/* Top Row: Search Input & Sort Dropdown */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+    <div
+      className="space-y-4 rounded-3xl border border-white/12 bg-[#0C0B18]/85 p-4 sm:p-5 shadow-2xl backdrop-blur-2xl transition-all"
+      dir="rtl"
+    >
+      {/* Top Controls Row: Search, Results Counter, Sort & Reset */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1 border-b border-white/5">
         {/* Search Field */}
-        <div className="relative w-full sm:w-80">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => onSearchChange && onSearchChange(e.target.value)}
-            placeholder="بحث فوري في هذا القسم..."
-            className="w-full bg-slate-900/90 border border-slate-700/80 rounded-2xl pr-10 pl-4 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-fuchsia-500 transition-all shadow-inner"
-          />
-          <div className="absolute right-3.5 top-2.5 text-gray-400">
-            <Icon name="search" className="w-4 h-4" />
+        {showSearch && (
+          <div className="relative flex-1 sm:max-w-xs md:max-w-sm">
+            <div className="flex w-full items-center gap-2.5 rounded-full border border-white/15 bg-black/60 px-3.5 py-2 text-white shadow-inner transition focus-within:border-fuchsia-500/80 focus-within:bg-black/90 focus-within:ring-2 focus-within:ring-fuchsia-500/25">
+              <Icon name="search" className="h-4 w-4 text-fuchsia-400 shrink-0" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => onSearchChange && onSearchChange(e.target.value)}
+                placeholder="بحث فوري في هذا القسم..."
+                className="w-full bg-transparent text-xs sm:text-sm font-semibold text-white outline-none placeholder:text-white/50 text-right selection:bg-fuchsia-600"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => onSearchChange && onSearchChange("")}
+                  className="flex h-5 w-5 items-center justify-center rounded-full bg-white/10 text-xs text-white/70 hover:bg-white/20 hover:text-white transition"
+                  title="مسح البحث"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
           </div>
-          {searchQuery && (
+        )}
+
+        {/* Right Area: Results Counter, Sort Dropdown, and Clear Filters Button */}
+        <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2.5">
+          {/* Results Badge */}
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/70">
+            <span>النتائج:</span>
+            <span className="font-mono font-black text-fuchsia-300">{resultCount}</span>
+          </div>
+
+          {/* Reset Filters Action */}
+          {hasActiveFilters && (
             <button
-              onClick={() => onSearchChange && onSearchChange("")}
-              className="absolute left-3 top-2.5 text-gray-400 hover:text-white text-xs"
+              type="button"
+              onClick={handleReset}
+              className="inline-flex items-center gap-1 rounded-full border border-fuchsia-500/30 bg-fuchsia-950/40 px-3 py-1.5 text-xs font-bold text-fuchsia-300 hover:bg-fuchsia-900/60 hover:text-white transition active:scale-95"
+              title="إعادة تعيين جميع الفلاتر"
             >
-              ✕
+              <span>إلغاء التصفية</span>
+              <span className="text-[10px]">✕</span>
             </button>
           )}
-        </div>
 
-        {/* Results Counter & Sort Selector */}
-        <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
-          <span className="text-xs font-semibold text-gray-400">
-            النتائج: <strong className="text-fuchsia-300 font-mono">{resultCount}</strong>
-          </span>
-
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-400 hidden sm:inline">الترتيب:</span>
-            <select
-              value={activeSort}
-              onChange={(e) => onSelectSort && onSelectSort(e.target.value)}
-              className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white font-medium focus:outline-none focus:border-fuchsia-500"
-            >
-              {sortOptions.map((opt) => (
-                <option key={opt.id} value={opt.id}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* Sort Selector */}
+          {showSort && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-white/50 hidden md:inline">الترتيب:</span>
+              <div className="relative">
+                <select
+                  value={activeSort}
+                  onChange={(e) => onSelectSort && onSelectSort(e.target.value)}
+                  className="appearance-none rounded-full border border-white/15 bg-black/60 py-1.5 pl-8 pr-4 text-xs font-bold text-white shadow-sm outline-none transition hover:border-white/30 focus:border-fuchsia-500 cursor-pointer text-right"
+                >
+                  {sorts.map((opt) => (
+                    <option key={opt.id} value={opt.id} className="bg-[#0C0B18] text-white">
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+                <div className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/50 text-[10px]">
+                  ▼
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Origin/Country Badges Bar */}
+      {/* Origin/Country Filters Row */}
       {showOriginFilter && (
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-          <span className="text-xs font-bold text-gray-400 ml-2 shrink-0">المنشأ:</span>
-          {originsList.map((origin) => {
-            const isSelected = activeOrigin === origin.id;
-            return (
-              <button
-                key={origin.id}
-                onClick={() => onSelectOrigin && onSelectOrigin(origin.id)}
-                className={`px-3 py-1 rounded-xl text-xs font-bold transition shrink-0 border ${
-                  isSelected
-                    ? "bg-gradient-to-r from-fuchsia-600 to-purple-600 text-white border-fuchsia-400 shadow-md shadow-fuchsia-900/40"
-                    : "bg-white/[0.04] text-white/70 border-white/5 hover:bg-white/10 hover:text-white"
-                }`}
-              >
-                {origin.label}
-              </button>
-            );
-          })}
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2 overflow-x-auto pb-1.5 pt-0.5 scrollbar-thin scrollbar-thumb-white/10">
+            <span className="shrink-0 text-xs font-bold text-white/50 ml-1">المنشأ:</span>
+            {origins.map((origin) => {
+              const isSelected = activeOrigin === origin.id;
+              return (
+                <button
+                  key={origin.id}
+                  type="button"
+                  onClick={() => onSelectOrigin && onSelectOrigin(origin.id)}
+                  className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-bold transition-all duration-200 active:scale-95 ${
+                    isSelected
+                      ? "bg-gradient-to-r from-fuchsia-600 via-purple-600 to-fuchsia-700 text-white shadow-md shadow-fuchsia-950/60 border border-fuchsia-400 ring-2 ring-fuchsia-500/20"
+                      : "bg-white/[0.04] text-white/70 border border-white/8 hover:bg-white/10 hover:text-white hover:border-white/20"
+                  }`}
+                >
+                  {origin.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 
-      {/* Genre Categories Bar */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none pt-1 border-t border-white/5">
-        <span className="text-xs font-bold text-gray-400 ml-2 shrink-0">التصنيف:</span>
-        {genresList.map((genre) => {
-          const isSelected = activeGenre === genre.id;
-          return (
-            <button
-              key={genre.id}
-              onClick={() => onSelectGenre && onSelectGenre(genre.id)}
-              className={`px-3 py-1 rounded-xl text-xs font-medium transition shrink-0 border ${
-                isSelected
-                  ? "bg-purple-600 text-white border-purple-400 shadow-sm"
-                  : "bg-white/[0.03] text-white/60 border-transparent hover:bg-white/10 hover:text-white"
-              }`}
-            >
-              {genre.label}
-            </button>
-          );
-        })}
-      </div>
+      {/* Genre/Category Filters Row */}
+      {showGenreFilter && (
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-0.5 scrollbar-thin scrollbar-thumb-white/10">
+            <span className="shrink-0 text-xs font-bold text-white/50 ml-1">التصنيف:</span>
+            {genres.map((genre) => {
+              const isSelected = activeGenre === genre.id;
+              return (
+                <button
+                  key={genre.id}
+                  type="button"
+                  onClick={() => onSelectGenre && onSelectGenre(genre.id)}
+                  className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-bold transition-all duration-200 active:scale-95 ${
+                    isSelected
+                      ? "bg-purple-600 text-white shadow-sm border border-purple-400 ring-2 ring-purple-500/20"
+                      : "bg-white/[0.03] text-white/60 border border-white/5 hover:bg-white/10 hover:text-white hover:border-white/15"
+                  }`}
+                >
+                  {genre.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

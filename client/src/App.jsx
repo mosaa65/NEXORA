@@ -159,6 +159,9 @@ export default function App() {
               categories={categories}
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
+              searchResults={searchResults}
+              onOpenMedia={(item) => (window.location.hash = `#/media/${item.id}`)}
+              onQuickPlay={handleQuickPlay}
             />
           }
         >

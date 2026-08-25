@@ -335,6 +335,11 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
         onSearchChange={setSearchQuery}
         showOriginFilter={selectedCategory === "series" || selectedCategory === "movies"}
         resultCount={filteredItems.length}
+        onResetFilters={() => {
+          setActiveOrigin("all");
+          setActiveGenre("all");
+          setSearchQuery("");
+        }}
       />
 
       {/* 5. Items Grid Section */}

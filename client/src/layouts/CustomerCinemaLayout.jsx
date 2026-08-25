@@ -8,6 +8,9 @@ export default function CustomerCinemaLayout({
   categories = [],
   searchQuery = "",
   onSearchChange,
+  searchResults = [],
+  onOpenMedia = (item) => { window.location.hash = `#/media/${item.id}`; },
+  onQuickPlay = () => {},
 }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -59,6 +62,9 @@ export default function CustomerCinemaLayout({
             categories={categories}
             searchQuery={searchQuery}
             onSearchChange={onSearchChange}
+            searchResults={searchResults}
+            onOpenMedia={onOpenMedia}
+            onQuickPlay={onQuickPlay}
             onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
           />
 

@@ -190,43 +190,37 @@ export default function MediaDetailsPage({
 
   return (
     <div className="relative space-y-6 text-right">
-      {/* Top Header Bar */}
-      <div className="flex items-center justify-between gap-4 border-b border-white/10 pb-4">
-        {/* Left: Back Button */}
+      {/* Top Action Bar: Sleek Back Navigation */}
+      <div className="flex items-center justify-between gap-4 pb-2">
         <button
           type="button"
-          onClick={() => onOpenCategory(current.categorySlug || "anime")}
-          className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-xs font-bold text-white backdrop-blur-md transition hover:bg-white/20"
+          onClick={() => {
+            if (onOpenCategory) {
+              onOpenCategory(current.categorySlug || "movies");
+            } else {
+              window.history.back();
+            }
+          }}
+          className="group inline-flex items-center gap-2.5 rounded-full border border-white/15 bg-white/10 hover:bg-white/20 hover:border-fuchsia-500/50 px-5 py-2.5 text-xs sm:text-sm font-bold text-white shadow-lg backdrop-blur-xl transition-all duration-200 hover:scale-[1.02] active:scale-95"
         >
-          العودة ‹
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/15 text-white transition-colors group-hover:bg-fuchsia-600">
+            ‹
+          </span>
+          <span>العودة للمكتبة</span>
         </button>
 
-        {/* Center: Search Input Bar */}
-        <div className="relative flex-1 max-w-sm">
-          <div className="flex w-full items-center gap-2.5 rounded-full border border-white/20 bg-black/40 px-4 py-2 backdrop-blur-sm focus-within:border-fuchsia-500/60">
-            <Icon name="search" className="h-4 w-4 text-white/60 shrink-0" />
-            <input
-              value={searchQuery}
-              onChange={(event) => onSearchChange(event.target.value)}
-              placeholder="ابحث عن أنمي، فيلم، مسلسل..."
-              className="w-full bg-transparent text-xs font-bold text-white outline-none placeholder:text-white/40 text-right"
-            />
-          </div>
-        </div>
-
-        {/* Right: Brand Emblem */}
-        <div className="flex items-center gap-3">
-          <div className="text-right">
-            <h2 className="text-lg font-black text-white">مكتبتي</h2>
-            <p className="text-[10px] font-bold text-white/50">نظام إدارة الوسائط</p>
-          </div>
-          <div className="flex items-center justify-center text-fuchsia-400">
-            <svg className="h-7 w-7 stroke-current" fill="none" viewBox="0 0 24 24" strokeWidth="2.2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 3L2 21h20L12 3z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9l-4 7h8l-4-7z" />
-            </svg>
-          </div>
-        </div>
+        {current.categorySlug && (
+          <button
+            type="button"
+            onClick={() => onOpenCategory && onOpenCategory(current.categorySlug)}
+            className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-1.5 text-xs font-semibold text-white/70 hover:text-white hover:bg-white/10 transition"
+          >
+            <span>القسم:</span>
+            <span className="font-bold text-fuchsia-400">
+              {current.categorySlug === "movies" ? "الأفلام" : current.categorySlug === "series" ? "المسلسلات" : current.categorySlug === "anime" ? "الأنمي" : current.categorySlug}
+            </span>
+          </button>
+        )}
       </div>
 
       {/* Main Details Showcase Banner */}
