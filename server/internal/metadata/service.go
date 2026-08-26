@@ -55,9 +55,10 @@ func (s *Service) Lookup(ctx context.Context, query Query) (Result, error) {
 		}
 	}
 
-	// 1. If MAL is configured and type is anime
-	if query.Type == "anime" && s.mal != nil && s.mal.Configured() {
-		result, err := s.mal.Lookup(ctx, query)
+	// TMDB is the canonical provider for all media types, including anime.
+	// MAL remains an anime-only fallback so its IDs are never mistaken for TMDB IDs.
+	if s.tmdb != nil && s.tmdb.Configured() {
+		result, err := s.tmdb.Lookup(ctx, query)
 		if err == nil {
 			return result, nil
 		}
@@ -66,9 +67,8 @@ func (s *Service) Lookup(ctx context.Context, query Query) (Result, error) {
 		}
 	}
 
-	// 2. TMDB Smart Lookup
-	if s.tmdb != nil && s.tmdb.Configured() {
-		result, err := s.tmdb.Lookup(ctx, query)
+	if query.Type == "anime" && s.mal != nil && s.mal.Configured() {
+		result, err := s.mal.Lookup(ctx, query)
 		if err == nil {
 			return result, nil
 		}

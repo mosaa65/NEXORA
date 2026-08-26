@@ -390,6 +390,24 @@ func (c *TMDBClient) evaluateBestMatch(candidates []tmdbResult, query Query) (tm
 		popScore := math.Min(cand.Popularity/200.0, 0.10)
 		score += popScore
 
+		if query.Type == "anime" {
+			if strings.EqualFold(cand.OriginalLanguage, "ja") {
+				score += 0.25
+			}
+			for _, country := range cand.OriginCountry {
+				if strings.EqualFold(country, "JP") {
+					score += 0.15
+					break
+				}
+			}
+			for _, genreID := range cand.GenreIDs {
+				if genreID == 16 {
+					score += 0.15
+					break
+				}
+			}
+		}
+
 		if score > bestScore {
 			bestScore = score
 			bestIdx = idx

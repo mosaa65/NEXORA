@@ -194,10 +194,14 @@ export default function AdminMediaPage() {
     }
     setSaveLoading(true);
     try {
+      const payload = {
+        ...modalForm,
+        category_slug: modalForm.type === "anime" ? "anime" : modalForm.type === "series" ? "series" : modalForm.category_slug,
+      };
       if (isNewItem) {
-        await createMediaItem(modalForm);
+        await createMediaItem(payload);
       } else {
-        await updateMediaItem(editingItem.id, modalForm);
+        await updateMediaItem(editingItem.id, payload);
       }
       setEditingItem(null);
       loadMediaItems();
@@ -213,19 +217,21 @@ export default function AdminMediaPage() {
     setEnrichLoading(true);
     try {
       const res = await enrichMedia(editingItem.id);
-      const enriched = Array.isArray(res.metadata) ? res.metadata[0] : res.metadata;
-      if (enriched) {
+      const metadata = Array.isArray(res.metadata) ? res.metadata : [res.metadata].filter(Boolean);
+      const arabic = metadata.find((item) => String(item.locale || "").toLowerCase().startsWith("ar"));
+      const english = metadata.find((item) => String(item.locale || "").toLowerCase().startsWith("en")) || metadata[0];
+      if (english || arabic) {
         setModalForm((prev) => ({
           ...prev,
-          title_ar: enriched.originalTitle || enriched.title || prev.title_ar,
-          title_en: enriched.title || prev.title_en,
-          plot_ar: enriched.overview || prev.plot_ar,
-          plot_en: enriched.overview || prev.plot_en,
-          release_year: enriched.releaseYear || prev.release_year,
-          rating: enriched.rating || prev.rating,
-          poster_path: enriched.cachedPosterPath || enriched.posterPath || prev.poster_path,
-          banner_path: enriched.cachedBannerPath || enriched.bannerPath || prev.banner_path,
-          genres: enriched.genres?.length > 0 ? enriched.genres : prev.genres,
+          title_ar: arabic?.title || prev.title_ar,
+          title_en: english?.title || prev.title_en,
+          plot_ar: arabic?.overview || prev.plot_ar,
+          plot_en: english?.overview || prev.plot_en,
+          release_year: english?.releaseYear || arabic?.releaseYear || prev.release_year,
+          rating: english?.rating || arabic?.rating || prev.rating,
+          poster_path: english?.cachedPosterPath || english?.posterPath || arabic?.cachedPosterPath || prev.poster_path,
+          banner_path: english?.cachedBannerPath || english?.bannerPath || arabic?.cachedBannerPath || prev.banner_path,
+          genres: english?.genres?.length > 0 ? english.genres : prev.genres,
         }));
       }
     } catch (err) {
@@ -621,7 +627,14 @@ export default function AdminMediaPage() {
                 <Select
                   label="نوع العمل"
                   value={modalForm.type}
-                  onChange={(e) => setModalForm({ ...modalForm, type: e.target.value })}
+                  onChange={(e) => {
+                    const type = e.target.value;
+                    setModalForm({
+                      ...modalForm,
+                      type,
+                      category_slug: type === "anime" ? "anime" : type === "series" ? "series" : modalForm.category_slug,
+                    });
+                  }}
                   options={[
                     { value: "movie", label: "فيلم (Movie)" },
                     { value: "series", label: "مسلسل (Series)" },
