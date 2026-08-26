@@ -144,12 +144,13 @@ export default function DashboardPage({
       <SmartHubRail
         title="استكشف حسب ذوقك"
         description="محاور ذكية تتكوّن تلقائيًا من بيانات مكتبتك المحلية."
+        onViewAll={() => (window.location.hash = "#/directory/hubs")}
         onOpen={(hub) => (window.location.hash = `#/hub/${hub.slug}`)}
       />
 
-      <FranchiseRail onOpen={(franchise) => { window.location.hash = `#/franchise/${franchise.slug}`; }} />
+      <FranchiseRail onViewAll={() => (window.location.hash = "#/directory/franchises")} onOpen={(franchise) => { window.location.hash = `#/franchise/${franchise.slug}`; }} />
 
-      <PeopleRail onOpen={(person) => { window.location.hash = `#/person/${person.slug}`; }} />
+      <PeopleRail onViewAll={() => (window.location.hash = "#/directory/people")} onOpen={(person) => { window.location.hash = `#/person/${person.slug}`; }} />
 
       {/* 2. Featured Hub Banners Grid */}
       <div className="space-y-4">

@@ -7,6 +7,7 @@ import CategoryPage from "./pages/CategoryPage.jsx";
 import SmartHubPage from "./pages/SmartHubPage.jsx";
 import FranchisePage from "./pages/FranchisePage.jsx";
 import PersonPage from "./pages/PersonPage.jsx";
+import DirectoryPage from "./pages/DirectoryPage.jsx";
 import MediaDetailsPage from "./pages/MediaDetailsPage.jsx";
 import AdminCategoriesPage from "./pages/admin/AdminCategoriesPage.jsx";
 import AdminCollectionsPage from "./pages/admin/AdminCollectionsPage.jsx";
@@ -172,6 +173,9 @@ export default function App() {
           <Route path="hub/:slug" element={<SmartHubRouteWrapper onOpenMedia={(item) => (window.location.hash = `#/media/${item.id}`)} />} />
           <Route path="franchise/:slug" element={<FranchiseRouteWrapper onOpenMedia={(item) => (window.location.hash = `#/media/${item.id}`)} />} />
           <Route path="person/:slug" element={<PersonRouteWrapper onOpenMedia={(item) => (window.location.hash = `#/media/${item.id}`)} />} />
+          <Route path="directory/hubs" element={<DirectoryPage kind="hubs" onOpen={(hub) => (window.location.hash = `#/hub/${hub.slug}`)} />} />
+          <Route path="directory/people" element={<DirectoryPage kind="people" onOpen={(person) => (window.location.hash = `#/person/${person.slug}`)} />} />
+          <Route path="directory/franchises" element={<DirectoryPage kind="franchises" onOpen={(franchise) => (window.location.hash = `#/franchise/${franchise.slug}`)} />} />
 
           {/* Favorites Route */}
           <Route

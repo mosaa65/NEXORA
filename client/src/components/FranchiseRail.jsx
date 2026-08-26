@@ -17,9 +17,9 @@ function FranchiseCard({ item, onOpen }) {
   </button>;
 }
 
-export default function FranchiseRail({ onOpen }) {
+export default function FranchiseRail({ onOpen, onViewAll }) {
   const [items, setItems] = useState([]);
   useEffect(() => { let alive = true; getFranchises().then((data) => { if (alive) setItems(data.franchises || []); }).catch(() => { if (alive) setItems([]); }); return () => { alive = false; }; }, []);
   if (!items.length) return null;
-  return <section className="space-y-4" dir="rtl" aria-label="سلاسل الأفلام"><div><p className="text-xs font-bold text-fuchsia-300">مكتبتك المترابطة</p><h2 className="mt-1 flex items-center gap-2 text-xl font-black text-[var(--text-primary)]"><Icon name="film" className="h-5 w-5 text-fuchsia-300" />سلاسل الأفلام</h2><p className="mt-1 text-xs text-[var(--text-muted)]">تجميع تلقائي محفوظ محلياً من بيانات الأفلام المتاحة لديك.</p></div><div className="flex gap-4 overflow-x-auto px-1 pb-5 pt-3 scrollbar-none snap-x">{items.map((item) => <div key={item.slug} className="snap-start"><FranchiseCard item={item} onOpen={onOpen} /></div>)}</div></section>;
+  return <section className="space-y-4" dir="rtl" aria-label="سلاسل الأفلام"><div className="flex items-end justify-between gap-3"><div><p className="text-xs font-bold text-fuchsia-300">مكتبتك المترابطة</p><h2 className="mt-1 flex items-center gap-2 text-xl font-black text-[var(--text-primary)]"><Icon name="film" className="h-5 w-5 text-fuchsia-300" />سلاسل الأفلام</h2><p className="mt-1 text-xs text-[var(--text-muted)]">تجميع تلقائي محفوظ محلياً من بيانات الأفلام المتاحة لديك.</p></div>{onViewAll && <button type="button" onClick={onViewAll} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-fuchsia-400/25 bg-fuchsia-400/10 px-3 py-2 text-xs font-bold text-fuchsia-200 transition hover:border-fuchsia-300/50 hover:bg-fuchsia-400/20"><span>عرض الكل</span><span aria-hidden="true">←</span></button>}</div><div className="flex gap-4 overflow-x-auto px-1 pb-5 pt-3 scrollbar-none snap-x">{items.map((item) => <div key={item.slug} className="snap-start"><FranchiseCard item={item} onOpen={onOpen} /></div>)}</div></section>;
 }

@@ -11,9 +11,9 @@ function PersonCard({ person, onOpen }) {
   </button>;
 }
 
-export default function PeopleRail({ onOpen }) {
+export default function PeopleRail({ onOpen, onViewAll }) {
   const [people, setPeople] = useState([]);
   useEffect(() => { let alive = true; getPeople().then((data) => { if (alive) setPeople(data.people || []); }).catch(() => { if (alive) setPeople([]); }); return () => { alive = false; }; }, []);
   if (!people.length) return null;
-  return <section className="space-y-4" dir="rtl" aria-label="نجوم المكتبة"><div><p className="text-xs font-bold text-cyan-300">روابط محفوظة محلياً</p><h2 className="mt-1 flex items-center gap-2 text-xl font-black text-[var(--text-primary)]"><Icon name="user" className="h-5 w-5 text-cyan-300" />نجوم تتكرر أعمالهم لديك</h2><p className="mt-1 text-xs text-[var(--text-muted)]">أعمال مرتبطة بالممثلين والمخرجين من بيانات مكتبتك فقط.</p></div><div className="flex gap-4 overflow-x-auto px-1 pb-5 pt-3 scrollbar-none snap-x">{people.map((person) => <div key={person.slug} className="snap-start"><PersonCard person={person} onOpen={onOpen} /></div>)}</div></section>;
+  return <section className="space-y-4" dir="rtl" aria-label="نجوم المكتبة"><div className="flex items-end justify-between gap-3"><div><p className="text-xs font-bold text-cyan-300">روابط محفوظة محلياً</p><h2 className="mt-1 flex items-center gap-2 text-xl font-black text-[var(--text-primary)]"><Icon name="user" className="h-5 w-5 text-cyan-300" />نجوم تتكرر أعمالهم لديك</h2><p className="mt-1 text-xs text-[var(--text-muted)]">أعمال مرتبطة بالممثلين والمخرجين من بيانات مكتبتك فقط.</p></div>{onViewAll && <button type="button" onClick={onViewAll} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-cyan-400/25 bg-cyan-400/10 px-3 py-2 text-xs font-bold text-cyan-100 transition hover:border-cyan-300/50 hover:bg-cyan-400/20"><span>عرض الكل</span><span aria-hidden="true">←</span></button>}</div><div className="flex gap-4 overflow-x-auto px-1 pb-5 pt-3 scrollbar-none snap-x">{people.map((person) => <div key={person.slug} className="snap-start"><PersonCard person={person} onOpen={onOpen} /></div>)}</div></section>;
 }

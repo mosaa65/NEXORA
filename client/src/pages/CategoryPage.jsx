@@ -277,7 +277,7 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
       )}
 
       {/* 3. Grand Origin Hubs / Collections Section */}
-      {!selectedHub && <SmartHubRail scope={selectedCategory === "movies" ? "movies" : selectedCategory} title={`مجموعات ومحاور ${meta.titleAr}`} description="تصنيفات ذكية مبنية تلقائيًا من بيانات مكتبتك." onOpen={(hub) => (window.location.hash = `#/hub/${hub.slug}`)} />}
+      {!selectedHub && <SmartHubRail scope={selectedCategory === "movies" ? "movies" : selectedCategory} title={`مجموعات ومحاور ${meta.titleAr}`} description="تصنيفات ذكية مبنية تلقائيًا من بيانات مكتبتك." onViewAll={() => (window.location.hash = "#/directory/hubs")} onOpen={(hub) => (window.location.hash = `#/hub/${hub.slug}`)} />}
 
       {!selectedHub && activeHubs.length > 0 && (
         <div className="space-y-4">
