@@ -66,7 +66,7 @@ export default function ShowcaseHero({ context = "home", category, fallbackItems
 
   useEffect(() => {
     if (slides.length < 2 || paused || reduceMotion) return undefined;
-    const timer = window.setInterval(() => setActive((value) => (value + 1) % slides.length), 8000);
+    const timer = window.setInterval(() => setActive((value) => (value + 1) % slides.length), 7000);
     return () => window.clearInterval(timer);
   }, [slides.length, paused, reduceMotion]);
 
@@ -137,7 +137,11 @@ export default function ShowcaseHero({ context = "home", category, fallbackItems
         </div>
       </div>
 
-      {slides.length > 1 && <div className="absolute bottom-5 left-5 flex items-center gap-1.5 rounded-full border border-white/15 bg-black/35 p-1.5 backdrop-blur sm:bottom-7 sm:left-7" aria-label="شرائح العرض">{slides.map((slide, slideIndex) => <button key={slide.id} type="button" onClick={() => { setPaused(true); setActive(slideIndex); }} aria-label={`عرض الشريحة ${slideIndex + 1}`} aria-current={slideIndex === index} className={`h-2.5 rounded-full transition-all ${slideIndex === index ? "w-7 bg-white" : "w-2.5 bg-white/40 hover:bg-white/70"}`} />)}</div>}
+      {slides.length > 1 && <div className="absolute bottom-5 left-5 flex items-center gap-2 rounded-2xl border border-white/15 bg-black/35 p-1.5 backdrop-blur sm:bottom-7 sm:left-7" aria-label="شرائح العرض">
+        <button type="button" onClick={() => { setPaused(true); setActive((value) => (value - 1 + slides.length) % slides.length); }} aria-label="المحتوى السابق" title="المحتوى السابق" className="flex h-8 w-8 items-center justify-center rounded-xl text-lg text-white/80 transition hover:bg-white/15 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-white">‹</button>
+        <div className="flex items-center gap-1.5 px-1">{slides.map((slide, slideIndex) => <button key={slide.id} type="button" onClick={() => { setPaused(true); setActive(slideIndex); }} aria-label={`عرض الشريحة ${slideIndex + 1}`} aria-current={slideIndex === index} className={`h-2.5 rounded-full transition-all ${slideIndex === index ? "w-7 bg-white" : "w-2.5 bg-white/40 hover:bg-white/70"}`} />)}</div>
+        <button type="button" onClick={() => { setPaused(true); setActive((value) => (value + 1) % slides.length); }} aria-label="المحتوى التالي" title="المحتوى التالي" className="flex h-8 w-8 items-center justify-center rounded-xl text-lg text-white/80 transition hover:bg-white/15 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-white">›</button>
+      </div>}
     </section>
   );
 }
