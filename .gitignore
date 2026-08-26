@@ -14,6 +14,7 @@ server/*.exe
 server/*.exe~
 server/*.test
 server/coverage.out
+server/testdata/test_media_root/
 
 # === Node / Frontend ===
 client/node_modules/
