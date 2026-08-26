@@ -8,6 +8,39 @@ import PeopleRail from "../components/PeopleRail.jsx";
 import Icon from "../components/Icon.jsx";
 import { getDashboardStats, getMediaList } from "../lib/api.js";
 
+function useCarouselOverflow(ref, itemCount) {
+  const [hasOverflow, setHasOverflow] = useState(false);
+
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return undefined;
+
+    const update = () => setHasOverflow(element.scrollWidth > element.clientWidth + 1);
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    window.addEventListener("resize", update);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  }, [ref, itemCount]);
+
+  return hasOverflow;
+}
+
+function CarouselControls({ visible, onPrevious, onNext, label }) {
+  if (!visible) return null;
+  return <>
+    <button type="button" onClick={onPrevious} aria-label={`${label}: السابق`} title="السابق" className="absolute right-1 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-black/60 text-white shadow-xl backdrop-blur-md transition hover:scale-105 hover:border-white/45 hover:bg-black/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
+      <Icon name="arrowRight" className="h-5 w-5" />
+    </button>
+    <button type="button" onClick={onNext} aria-label={`${label}: التالي`} title="التالي" className="absolute left-1 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-black/60 text-white shadow-xl backdrop-blur-md transition hover:scale-105 hover:border-white/45 hover:bg-black/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
+      <Icon name="arrowLeft" className="h-5 w-5" />
+    </button>
+  </>;
+}
+
 export default function DashboardPage({
   searchQuery,
   onSearchChange,
@@ -23,6 +56,7 @@ export default function DashboardPage({
   const topRatedRef = useRef(null);
   const seriesRef = useRef(null);
   const moviesRef = useRef(null);
+  const featuredRef = useRef(null);
 
   useEffect(() => {
     let alive = true;
@@ -83,6 +117,10 @@ export default function DashboardPage({
   const seriesList = displayItems.filter((i) => i.type === "series" || i.type === "anime").slice(0, 15);
   const moviesList = displayItems.filter((i) => i.type === "movie").slice(0, 15);
   const topRatedList = [...displayItems].sort((a, b) => (b.rating || 0) - (a.rating || 0)).slice(0, 15);
+  const featuredCardsNeedScroll = useCarouselOverflow(featuredRef, 4);
+  const topRatedNeedsScroll = useCarouselOverflow(topRatedRef, topRatedList.length);
+  const seriesNeedsScroll = useCarouselOverflow(seriesRef, seriesList.length);
+  const moviesNeedScroll = useCarouselOverflow(moviesRef, moviesList.length);
 
   function scroll(ref, direction) {
     if (ref.current) {
@@ -123,7 +161,8 @@ export default function DashboardPage({
           <span className="text-xs font-bold text-gray-400">تصفح سريع</span>
         </div>
 
-        <div className="flex gap-4 overflow-x-auto pb-3 scrollbar-none snap-x touch-pan-x">
+        <div className="relative">
+        <div ref={featuredRef} className="flex gap-4 overflow-x-auto px-12 pb-5 pt-3 scrollbar-none snap-x touch-pan-x">
           <div className="w-[min(84vw,340px)] shrink-0 snap-start sm:w-80"><HubBannerCard
             title="👑 روائع الدراما التركية"
             subtitle="الحكايات العثمانية والدراما العائلية الرومانسية الكاملة"
@@ -165,6 +204,8 @@ export default function DashboardPage({
             onClick={() => onNavigateCategory && onNavigateCategory("kids")}
           /></div>
         </div>
+        <CarouselControls visible={featuredCardsNeedScroll} onPrevious={() => scroll(featuredRef, "right")} onNext={() => scroll(featuredRef, "left")} label="المجموعات" />
+        </div>
       </div>
 
       {/* 3. Carousel: Top Rated Showcase */}
@@ -178,28 +219,10 @@ export default function DashboardPage({
             <p className="text-xs text-gray-400">أقوى الأعمال الفنية المعتمدة من IMDB و TMDB</p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => scroll(topRatedRef, "right")}
-              className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-white transition border border-slate-700"
-              title="السابق"
-            >
-              ›
-            </button>
-            <button
-              onClick={() => scroll(topRatedRef, "left")}
-              className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-white transition border border-slate-700"
-              title="التالي"
-            >
-              ‹
-            </button>
-          </div>
         </div>
 
-        <div
-          ref={topRatedRef}
-          className="flex items-stretch gap-4 overflow-x-auto pb-4 scrollbar-none snap-x"
-        >
+        <div className="relative">
+        <div ref={topRatedRef} className="flex items-stretch gap-4 overflow-x-auto px-12 pb-5 pt-3 scrollbar-none snap-x">
           {topRatedList.map((media) => (
             <div key={media.id} className="w-[calc((100vw-3.75rem)/2)] shrink-0 snap-start sm:w-56 lg:w-60">
               <UnifiedMediaCard
@@ -209,6 +232,8 @@ export default function DashboardPage({
               />
             </div>
           ))}
+        </div>
+        <CarouselControls visible={topRatedNeedsScroll} onPrevious={() => scroll(topRatedRef, "right")} onNext={() => scroll(topRatedRef, "left")} label="الأعلى تقييماً" />
         </div>
       </div>
 
@@ -223,26 +248,10 @@ export default function DashboardPage({
             <p className="text-xs text-gray-400">حلقات ومواسم كاملة جاهزة للمشاهدة المباشرة</p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => scroll(seriesRef, "right")}
-              className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-white transition border border-slate-700"
-            >
-              ›
-            </button>
-            <button
-              onClick={() => scroll(seriesRef, "left")}
-              className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-white transition border border-slate-700"
-            >
-              ‹
-            </button>
-          </div>
         </div>
 
-        <div
-          ref={seriesRef}
-          className="flex items-stretch gap-4 overflow-x-auto pb-4 scrollbar-none snap-x"
-        >
+        <div className="relative">
+        <div ref={seriesRef} className="flex items-stretch gap-4 overflow-x-auto px-12 pb-5 pt-3 scrollbar-none snap-x">
           {seriesList.map((media) => (
             <div key={media.id} className="w-[calc((100vw-3.75rem)/2)] shrink-0 snap-start sm:w-56 lg:w-60">
               <UnifiedMediaCard
@@ -252,6 +261,8 @@ export default function DashboardPage({
               />
             </div>
           ))}
+        </div>
+        <CarouselControls visible={seriesNeedsScroll} onPrevious={() => scroll(seriesRef, "right")} onNext={() => scroll(seriesRef, "left")} label="المسلسلات" />
         </div>
       </div>
 
@@ -266,26 +277,10 @@ export default function DashboardPage({
             <p className="text-xs text-gray-400">أحدث الإصدارات العالمية والأجنبية</p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => scroll(moviesRef, "right")}
-              className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-white transition border border-slate-700"
-            >
-              ›
-            </button>
-            <button
-              onClick={() => scroll(moviesRef, "left")}
-              className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-white transition border border-slate-700"
-            >
-              ‹
-            </button>
-          </div>
         </div>
 
-        <div
-          ref={moviesRef}
-          className="flex items-stretch gap-4 overflow-x-auto pb-4 scrollbar-none snap-x"
-        >
+        <div className="relative">
+        <div ref={moviesRef} className="flex items-stretch gap-4 overflow-x-auto px-12 pb-5 pt-3 scrollbar-none snap-x">
           {moviesList.map((media) => (
             <div key={media.id} className="w-[calc((100vw-3.75rem)/2)] shrink-0 snap-start sm:w-56 lg:w-60">
               <UnifiedMediaCard
@@ -295,6 +290,8 @@ export default function DashboardPage({
               />
             </div>
           ))}
+        </div>
+        <CarouselControls visible={moviesNeedScroll} onPrevious={() => scroll(moviesRef, "right")} onNext={() => scroll(moviesRef, "left")} label="الأفلام" />
         </div>
       </div>
     </div>
