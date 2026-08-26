@@ -56,7 +56,7 @@
 
 | المسار | الطريقة | الوصف |
 |--------|---------|-------|
-| `/api/franchises?limit=24` | `GET` | السلاسل التي تضم جزأين محليين على الأقل، مرتبة محلياً |
+| `/api/franchises?limit=24` | `GET` | السلاسل المرتبطة بعمل محلي واحد أو أكثر، مرتبة محلياً |
 | `/api/franchises/:slug` | `GET` | بيانات سلسلة واحدة بالعربية والإنجليزية عند توفرهما |
 | `/api/franchises/:slug/media` | `GET` | الأعمال المتوفرة في هذه السلسلة فقط |
 | `/api/people?limit=24` | `GET` | الأشخاص الذين لديهم عملان محليان على الأقل |
@@ -64,6 +64,8 @@
 | `/api/people/:slug/media` | `GET` | أعمال الشخص الموجودة في مكتبة NEXORA فقط |
 | `/api/admin/catalog/sync-relations` | `POST` | إعادة استخراج السلاسل والاعتمادات من `metadata_snapshots` بدون شبكة؛ آمن للتكرار |
 | `/api/admin/franchises/:id` | `PUT` | إبراز/إخفاء/ترتيب سلسلة محلية (`is_featured`, `is_hidden`, `sort_priority`) |
+| `/api/admin/franchises/:id/refresh` | `POST` | تحديث كامل ومقصود لسلسلة واحدة من TMDB باللغتين `en-US` و`ar-SA`، ثم حفظ النصوص والأجزاء والصور محلياً |
+| `/api/admin/franchises/refresh-missing?limit=24` | `POST` | ترقية دفعة محدودة من السلاسل القديمة التي لا تحمل لقطة إنجليزية صالحة؛ لا يُستدعى أثناء التصفح |
 | `/api/admin/people/:id` | `PUT` | إبراز/إخفاء/ترتيب شخص محلي بالحقول نفسها |
 
 ---

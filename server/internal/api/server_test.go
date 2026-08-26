@@ -96,6 +96,15 @@ func (m *mockRepo) ListProviderCollections(ctx context.Context, limit int) ([]db
 func (m *mockRepo) GetProviderCollection(ctx context.Context, slug string) (*db.ProviderCollection, error) {
 	return &db.ProviderCollection{ID: 1, Slug: slug, Provider: "tmdb", ExternalID: "1", TitleEN: "Test Collection", LocalItemCount: 2}, nil
 }
+func (m *mockRepo) GetProviderCollectionByID(ctx context.Context, id int64) (*db.ProviderCollection, error) {
+	return &db.ProviderCollection{ID: id, Slug: "tmdb-collection-1", Provider: "tmdb", ExternalID: "1", TitleEN: "Test Collection", LocalItemCount: 2}, nil
+}
+func (m *mockRepo) ProviderCollectionNeedsRefresh(ctx context.Context, externalID string) (bool, error) {
+	return false, nil
+}
+func (m *mockRepo) ListProviderCollectionRefreshCandidates(ctx context.Context, limit int) ([]db.ProviderCollection, error) {
+	return []db.ProviderCollection{}, nil
+}
 func (m *mockRepo) ListProviderCollectionMedia(ctx context.Context, slug string, opts db.ListMediaOptions) (*db.ProviderCollection, *db.MediaListResult, error) {
 	return &db.ProviderCollection{ID: 1, Slug: slug, TitleEN: "Test Collection", LocalItemCount: 2}, &db.MediaListResult{Total: 2, Limit: opts.Limit, Items: []search.MediaDocument{{ID: 1, TitleEN: "Part One"}, {ID: 2, TitleEN: "Part Two"}}}, nil
 }

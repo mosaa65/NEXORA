@@ -61,6 +61,7 @@ type CollectionResult struct {
 	CachedPosterPath   string          `json:"cachedPosterPath,omitempty"`
 	CachedBackdropPath string          `json:"cachedBackdropPath,omitempty"`
 	PartsCount         int             `json:"partsCount"`
+	Rating             float64         `json:"rating,omitempty"`
 	PartExternalIDs    []string        `json:"partExternalIds,omitempty"`
 	RawPayload         json.RawMessage `json:"-"`
 }

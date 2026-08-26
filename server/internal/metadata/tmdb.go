@@ -80,7 +80,8 @@ type tmdbCollectionDetails struct {
 	PosterPath   string `json:"poster_path"`
 	BackdropPath string `json:"backdrop_path"`
 	Parts        []struct {
-		ID int `json:"id"`
+		ID          int     `json:"id"`
+		VoteAverage float64 `json:"vote_average"`
 	} `json:"parts"`
 }
 
@@ -175,7 +176,18 @@ func (c *TMDBClient) LookupCollectionByExternalID(ctx context.Context, externalI
 	if err := json.Unmarshal(raw, &details); err != nil {
 		return CollectionResult{}, fmt.Errorf("decode tmdb collection details: %w", err)
 	}
-	result := CollectionResult{Provider: "tmdb", ExternalID: strconv.Itoa(details.ID), Locale: language, Title: details.Name, Overview: details.Overview, PosterPath: c.imageURL(settings.PosterSize, details.PosterPath), BackdropPath: c.imageURL(settings.BackdropSize, details.BackdropPath), PartsCount: len(details.Parts), RawPayload: raw}
+	var ratingTotal float64
+	var ratedParts int
+	for _, part := range details.Parts {
+		if part.VoteAverage > 0 {
+			ratingTotal += part.VoteAverage
+			ratedParts++
+		}
+	}
+	result := CollectionResult{Provider: "tmdb", ExternalID: strconv.Itoa(details.ID), Locale: language, Title: details.Name, Overview: details.Overview, PosterPath: c.imageURL(settings.PosterSize, details.PosterPath), BackdropPath: c.imageURL(settings.BackdropSize, details.BackdropPath), PartsCount: len(details.Parts), Rating: 0, RawPayload: raw}
+	if ratedParts > 0 {
+		result.Rating = math.Round((ratingTotal/float64(ratedParts))*10) / 10
+	}
 	for _, part := range details.Parts {
 		result.PartExternalIDs = append(result.PartExternalIDs, strconv.Itoa(part.ID))
 	}

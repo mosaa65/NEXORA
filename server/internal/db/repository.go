@@ -258,6 +258,7 @@ type ProviderCollection struct {
 	PosterPath     string `json:"poster_path,omitempty"`
 	BackdropPath   string `json:"backdrop_path,omitempty"`
 	PartsCount     int    `json:"parts_count"`
+	Rating         float64 `json:"rating,omitempty"`
 	LocalItemCount int    `json:"local_item_count"`
 	IsFeatured     bool   `json:"is_featured"`
 	IsHidden       bool   `json:"is_hidden"`
@@ -266,12 +267,18 @@ type ProviderCollection struct {
 // ProviderCollectionPart is an official TMDB collection member. Local media
 // fields are populated only when this part exists in the NEXORA library.
 type ProviderCollectionPart struct {
-	ExternalID string `json:"external_id"`
-	Title      string `json:"title"`
-	Year       int    `json:"year,omitempty"`
-	PosterPath string `json:"poster_path,omitempty"`
-	Local      bool   `json:"local"`
-	MediaID    int64  `json:"media_id,omitempty"`
+	ExternalID string  `json:"external_id"`
+	Title      string  `json:"title"`
+	TitleAR    string  `json:"title_ar,omitempty"`
+	TitleEN    string  `json:"title_en,omitempty"`
+	Year       int     `json:"year,omitempty"`
+	Rating     float64 `json:"rating,omitempty"`
+	Overview   string  `json:"overview,omitempty"`
+	OverviewAR string  `json:"overview_ar,omitempty"`
+	OverviewEN string  `json:"overview_en,omitempty"`
+	PosterPath string  `json:"poster_path,omitempty"`
+	Local      bool    `json:"local"`
+	MediaID    int64   `json:"media_id,omitempty"`
 }
 
 type Person struct {
@@ -2133,8 +2140,8 @@ func (r *Repository) SaveProviderCollectionMetadata(ctx context.Context, meta me
 	}
 	var collectionID int64
 	err := r.db.QueryRowContext(ctx, `
-		INSERT INTO provider_collections (provider,external_id,kind,slug,title_ar,title_en,overview_ar,overview_en,poster_path,backdrop_path,parts_count,metadata_fetched_at,metadata_expires_at)
-		VALUES ('tmdb',$1,'movie_collection',$2,CASE WHEN $3 LIKE 'ar%%' THEN $4 ELSE NULL END,CASE WHEN $3 LIKE 'ar%%' THEN $4 ELSE $4 END,CASE WHEN $3 LIKE 'ar%%' THEN NULLIF($5,'') ELSE NULL END,CASE WHEN $3 LIKE 'ar%%' THEN NULL ELSE NULLIF($5,'') END,NULLIF($6,''),NULLIF($7,''),$8,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP + INTERVAL '30 days')
+		INSERT INTO provider_collections (provider,external_id,kind,slug,title_ar,title_en,overview_ar,overview_en,poster_path,backdrop_path,parts_count,rating,metadata_fetched_at,metadata_expires_at)
+		VALUES ('tmdb',$1,'movie_collection',$2,CASE WHEN $3 LIKE 'ar%%' THEN $4 ELSE NULL END,CASE WHEN $3 LIKE 'ar%%' THEN NULL ELSE $4 END,CASE WHEN $3 LIKE 'ar%%' THEN NULLIF($5,'') ELSE NULL END,CASE WHEN $3 LIKE 'ar%%' THEN NULL ELSE NULLIF($5,'') END,NULLIF($6,''),NULLIF($7,''),$8,NULLIF($9,0),CURRENT_TIMESTAMP,CURRENT_TIMESTAMP + INTERVAL '30 days')
 		ON CONFLICT (provider,external_id) DO UPDATE SET
 			title_ar=COALESCE(EXCLUDED.title_ar,provider_collections.title_ar),
 			title_en=CASE WHEN $3 LIKE 'ar%%' THEN provider_collections.title_en ELSE EXCLUDED.title_en END,
@@ -2142,8 +2149,8 @@ func (r *Repository) SaveProviderCollectionMetadata(ctx context.Context, meta me
 			overview_en=CASE WHEN $3 LIKE 'ar%%' THEN provider_collections.overview_en ELSE COALESCE(EXCLUDED.overview_en,provider_collections.overview_en) END,
 			poster_path=COALESCE(NULLIF(EXCLUDED.poster_path,''),provider_collections.poster_path),
 			backdrop_path=COALESCE(NULLIF(EXCLUDED.backdrop_path,''),provider_collections.backdrop_path),
-			parts_count=GREATEST(EXCLUDED.parts_count,provider_collections.parts_count),metadata_fetched_at=CURRENT_TIMESTAMP,metadata_expires_at=EXCLUDED.metadata_expires_at,updated_at=CURRENT_TIMESTAMP
-		RETURNING id`, meta.ExternalID, "tmdb-collection-"+meta.ExternalID, strings.ToLower(meta.Locale), meta.Title, meta.Overview, firstNonEmpty(meta.CachedPosterPath, meta.PosterPath), firstNonEmpty(meta.CachedBackdropPath, meta.BackdropPath), meta.PartsCount).Scan(&collectionID)
+			parts_count=GREATEST(EXCLUDED.parts_count,provider_collections.parts_count),rating=COALESCE(NULLIF(EXCLUDED.rating,0),provider_collections.rating),metadata_fetched_at=CURRENT_TIMESTAMP,metadata_expires_at=EXCLUDED.metadata_expires_at,updated_at=CURRENT_TIMESTAMP
+		RETURNING id`, meta.ExternalID, "tmdb-collection-"+meta.ExternalID, strings.ToLower(meta.Locale), meta.Title, meta.Overview, firstNonEmpty(meta.CachedPosterPath, meta.PosterPath), firstNonEmpty(meta.CachedBackdropPath, meta.BackdropPath), meta.PartsCount, meta.Rating).Scan(&collectionID)
 	if err != nil {
 		return fmt.Errorf("upsert collection metadata: %w", err)
 	}
@@ -2172,7 +2179,7 @@ func (r *Repository) ListProviderCollections(ctx context.Context, limit int) ([]
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id,slug,provider,external_id,kind,COALESCE(title_ar,''),title_en,
 			COALESCE(overview_ar,''),COALESCE(overview_en,''),COALESCE(poster_path,''),COALESCE(backdrop_path,''),
-			parts_count,(SELECT COUNT(*) FROM media_collection_links mcl WHERE mcl.collection_id=provider_collections.id),is_featured,is_hidden
+			parts_count,COALESCE(rating,0),(SELECT COUNT(*) FROM media_collection_links mcl WHERE mcl.collection_id=provider_collections.id),is_featured,is_hidden
 		FROM provider_collections
 		WHERE is_hidden=false AND (SELECT COUNT(*) FROM media_collection_links mcl WHERE mcl.collection_id=provider_collections.id) >= 1
 		ORDER BY is_featured DESC,sort_priority DESC,(SELECT COUNT(*) FROM media_collection_links mcl WHERE mcl.collection_id=provider_collections.id) DESC,title_en ASC
@@ -2184,7 +2191,7 @@ func (r *Repository) ListProviderCollections(ctx context.Context, limit int) ([]
 	items := make([]ProviderCollection, 0)
 	for rows.Next() {
 		var item ProviderCollection
-		if err := rows.Scan(&item.ID, &item.Slug, &item.Provider, &item.ExternalID, &item.Kind, &item.TitleAR, &item.TitleEN, &item.OverviewAR, &item.OverviewEN, &item.PosterPath, &item.BackdropPath, &item.PartsCount, &item.LocalItemCount, &item.IsFeatured, &item.IsHidden); err != nil {
+		if err := rows.Scan(&item.ID, &item.Slug, &item.Provider, &item.ExternalID, &item.Kind, &item.TitleAR, &item.TitleEN, &item.OverviewAR, &item.OverviewEN, &item.PosterPath, &item.BackdropPath, &item.PartsCount, &item.Rating, &item.LocalItemCount, &item.IsFeatured, &item.IsHidden); err != nil {
 			return nil, err
 		}
 		items = append(items, item)
@@ -2194,11 +2201,60 @@ func (r *Repository) ListProviderCollections(ctx context.Context, limit int) ([]
 
 func (r *Repository) GetProviderCollection(ctx context.Context, slug string) (*ProviderCollection, error) {
 	var item ProviderCollection
-	err := r.db.QueryRowContext(ctx, `SELECT id,slug,provider,external_id,kind,COALESCE(title_ar,''),title_en,COALESCE(overview_ar,''),COALESCE(overview_en,''),COALESCE(poster_path,''),COALESCE(backdrop_path,''),parts_count,(SELECT COUNT(*) FROM media_collection_links mcl WHERE mcl.collection_id=provider_collections.id),is_featured,is_hidden FROM provider_collections WHERE slug=$1 AND is_hidden=false`, strings.TrimSpace(slug)).Scan(&item.ID, &item.Slug, &item.Provider, &item.ExternalID, &item.Kind, &item.TitleAR, &item.TitleEN, &item.OverviewAR, &item.OverviewEN, &item.PosterPath, &item.BackdropPath, &item.PartsCount, &item.LocalItemCount, &item.IsFeatured, &item.IsHidden)
+	err := r.db.QueryRowContext(ctx, `SELECT id,slug,provider,external_id,kind,COALESCE(title_ar,''),title_en,COALESCE(overview_ar,''),COALESCE(overview_en,''),COALESCE(poster_path,''),COALESCE(backdrop_path,''),parts_count,COALESCE(rating,0),(SELECT COUNT(*) FROM media_collection_links mcl WHERE mcl.collection_id=provider_collections.id),is_featured,is_hidden FROM provider_collections WHERE slug=$1 AND is_hidden=false`, strings.TrimSpace(slug)).Scan(&item.ID, &item.Slug, &item.Provider, &item.ExternalID, &item.Kind, &item.TitleAR, &item.TitleEN, &item.OverviewAR, &item.OverviewEN, &item.PosterPath, &item.BackdropPath, &item.PartsCount, &item.Rating, &item.LocalItemCount, &item.IsFeatured, &item.IsHidden)
 	if err != nil {
 		return nil, err
 	}
 	return &item, nil
+}
+
+func (r *Repository) GetProviderCollectionByID(ctx context.Context, id int64) (*ProviderCollection, error) {
+	var item ProviderCollection
+	err := r.db.QueryRowContext(ctx, `SELECT id,slug,provider,external_id,kind,COALESCE(title_ar,''),title_en,COALESCE(overview_ar,''),COALESCE(overview_en,''),COALESCE(poster_path,''),COALESCE(backdrop_path,''),parts_count,COALESCE(rating,0),(SELECT COUNT(*) FROM media_collection_links mcl WHERE mcl.collection_id=provider_collections.id),is_featured,is_hidden FROM provider_collections WHERE id=$1`, id).Scan(&item.ID, &item.Slug, &item.Provider, &item.ExternalID, &item.Kind, &item.TitleAR, &item.TitleEN, &item.OverviewAR, &item.OverviewEN, &item.PosterPath, &item.BackdropPath, &item.PartsCount, &item.Rating, &item.LocalItemCount, &item.IsFeatured, &item.IsHidden)
+	if err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+// ProviderCollectionNeedsRefresh prevents repeated collection downloads while
+// ensuring older lightweight collection links are upgraded on first refresh.
+func (r *Repository) ProviderCollectionNeedsRefresh(ctx context.Context, externalID string) (bool, error) {
+	var needs bool
+	err := r.db.QueryRowContext(ctx, `SELECT NOT EXISTS (SELECT 1 FROM collection_metadata_snapshots cms JOIN provider_collections pc ON pc.id=cms.collection_id WHERE pc.provider='tmdb' AND pc.external_id=$1 AND cms.locale LIKE 'en%' AND (cms.expires_at IS NULL OR cms.expires_at > CURRENT_TIMESTAMP))`, strings.TrimSpace(externalID)).Scan(&needs)
+	return needs, err
+}
+
+// ListProviderCollectionRefreshCandidates is used by an explicit admin
+// maintenance action. It skips collections already carrying a fresh full
+// English snapshot, so it never re-downloads data unnecessarily.
+func (r *Repository) ListProviderCollectionRefreshCandidates(ctx context.Context, limit int) ([]ProviderCollection, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 24
+	}
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT pc.id,pc.slug,pc.provider,pc.external_id,pc.kind,COALESCE(pc.title_ar,''),pc.title_en,
+			COALESCE(pc.overview_ar,''),COALESCE(pc.overview_en,''),COALESCE(pc.poster_path,''),COALESCE(pc.backdrop_path,''),
+			pc.parts_count,COALESCE(pc.rating,0),(SELECT COUNT(*) FROM media_collection_links mcl WHERE mcl.collection_id=pc.id),pc.is_featured,pc.is_hidden
+		FROM provider_collections pc
+		WHERE pc.provider='tmdb' AND NOT EXISTS (
+			SELECT 1 FROM collection_metadata_snapshots cms
+			WHERE cms.collection_id=pc.id AND cms.locale LIKE 'en%' AND (cms.expires_at IS NULL OR cms.expires_at > CURRENT_TIMESTAMP)
+		)
+		ORDER BY pc.updated_at ASC,pc.id ASC LIMIT $1`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := make([]ProviderCollection, 0)
+	for rows.Next() {
+		var item ProviderCollection
+		if err := rows.Scan(&item.ID, &item.Slug, &item.Provider, &item.ExternalID, &item.Kind, &item.TitleAR, &item.TitleEN, &item.OverviewAR, &item.OverviewEN, &item.PosterPath, &item.BackdropPath, &item.PartsCount, &item.Rating, &item.LocalItemCount, &item.IsFeatured, &item.IsHidden); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
 }
 
 func (r *Repository) UpdateProviderCollectionAdmin(ctx context.Context, id int64, update CatalogEntityAdminUpdate) error {
@@ -2260,42 +2316,67 @@ func (r *Repository) ListProviderCollectionParts(ctx context.Context, slug strin
 	if err != nil {
 		return nil, nil, err
 	}
-	var raw []byte
-	err = r.db.QueryRowContext(ctx, `SELECT raw_payload FROM collection_metadata_snapshots WHERE collection_id=$1 AND locale LIKE 'en%' ORDER BY fetched_at DESC LIMIT 1`, collection.ID).Scan(&raw)
+	var englishRaw []byte
+	err = r.db.QueryRowContext(ctx, `SELECT raw_payload FROM collection_metadata_snapshots WHERE collection_id=$1 AND locale LIKE 'en%' ORDER BY fetched_at DESC LIMIT 1`, collection.ID).Scan(&englishRaw)
 	if errors.Is(err, sql.ErrNoRows) {
 		return collection, []ProviderCollectionPart{}, nil
 	}
 	if err != nil {
 		return nil, nil, err
 	}
-	var snapshot struct {
-		Parts []struct {
-			ID              int64  `json:"id"`
-			Title           string `json:"title"`
-			ReleaseDate     string `json:"release_date"`
-			PosterPath      string `json:"poster_path"`
-			LocalPosterPath string `json:"local_poster_path"`
-		} `json:"parts"`
+	type snapshotPart struct {
+		ID              int64   `json:"id"`
+		Title           string  `json:"title"`
+		ReleaseDate     string  `json:"release_date"`
+		PosterPath      string  `json:"poster_path"`
+		LocalPosterPath string  `json:"local_poster_path"`
+		VoteAverage     float64 `json:"vote_average"`
+		Overview        string  `json:"overview"`
 	}
-	if err := json.Unmarshal(raw, &snapshot); err != nil {
+	var englishSnapshot struct {
+		Parts []snapshotPart `json:"parts"`
+	}
+	if err := json.Unmarshal(englishRaw, &englishSnapshot); err != nil {
 		return nil, nil, err
 	}
-	parts := make([]ProviderCollectionPart, 0, len(snapshot.Parts))
-	for _, part := range snapshot.Parts {
-		item := ProviderCollectionPart{ExternalID: fmt.Sprint(part.ID), Title: part.Title, PosterPath: firstNonEmpty(part.LocalPosterPath, part.PosterPath)}
+	parts := make([]ProviderCollectionPart, 0, len(englishSnapshot.Parts))
+	byExternal := make(map[string]int, len(englishSnapshot.Parts))
+	for _, part := range englishSnapshot.Parts {
+		item := ProviderCollectionPart{ExternalID: fmt.Sprint(part.ID), Title: part.Title, TitleEN: part.Title, Rating: part.VoteAverage, Overview: part.Overview, OverviewEN: part.Overview, PosterPath: firstNonEmpty(part.LocalPosterPath, part.PosterPath)}
 		if len(part.ReleaseDate) >= 4 {
 			item.Year, _ = strconv.Atoi(part.ReleaseDate[:4])
 		}
+		byExternal[item.ExternalID] = len(parts)
 		parts = append(parts, item)
+	}
+	var arabicRaw []byte
+	if err := r.db.QueryRowContext(ctx, `SELECT raw_payload FROM collection_metadata_snapshots WHERE collection_id=$1 AND locale LIKE 'ar%' ORDER BY fetched_at DESC LIMIT 1`, collection.ID).Scan(&arabicRaw); err == nil {
+		var arabicSnapshot struct {
+			Parts []snapshotPart `json:"parts"`
+		}
+		if json.Unmarshal(arabicRaw, &arabicSnapshot) == nil {
+			for _, part := range arabicSnapshot.Parts {
+				index, found := byExternal[fmt.Sprint(part.ID)]
+				if !found {
+					continue
+				}
+				if strings.TrimSpace(part.Title) != "" {
+					parts[index].TitleAR = part.Title
+					parts[index].Title = part.Title
+				}
+				if strings.TrimSpace(part.Overview) != "" {
+					parts[index].OverviewAR = part.Overview
+					parts[index].Overview = part.Overview
+				}
+			}
+		}
 	}
 	if len(parts) == 0 {
 		return collection, parts, nil
 	}
 	ids := make([]string, 0, len(parts))
-	byExternal := make(map[string]int, len(parts))
 	for index := range parts {
 		ids = append(ids, parts[index].ExternalID)
-		byExternal[parts[index].ExternalID] = index
 	}
 	rows, err := r.db.QueryContext(ctx, `SELECT id,metadata_external_id FROM media_items WHERE metadata_provider='tmdb' AND metadata_external_id = ANY($1::text[])`, pq.Array(ids))
 	if err != nil {

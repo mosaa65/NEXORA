@@ -150,6 +150,12 @@ export async function getFranchiseMedia(slug, options = {}) {
   if (options.sort) params.set("sort", options.sort);
   return requestJSON(`/api/franchises/${encodeURIComponent(slug)}/media?${params.toString()}`);
 }
+export async function refreshFranchise(id) {
+  return requestJSON(`/api/admin/franchises/${encodeURIComponent(id)}/refresh`, { method: "POST" });
+}
+export async function refreshMissingFranchises(limit = 24) {
+  return requestJSON(`/api/admin/franchises/refresh-missing?limit=${encodeURIComponent(limit)}`, { method: "POST" });
+}
 
 // The showcase endpoint is database-first: editorial collections and media
 // summaries have already been persisted by NEXORA before the UI renders them.
@@ -343,7 +349,7 @@ export function resolveAPIURL(path) {
   if (!path) {
     return "";
   }
-  if (/^https?:\/\//i.test(path)) {
+  if (/^(?:https?:\/\/|data:|blob:)/i.test(path)) {
     return path;
   }
   return `${API_BASE}${path.startsWith("/") ? path : `/${path}`}`;

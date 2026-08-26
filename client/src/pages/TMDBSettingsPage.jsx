@@ -10,6 +10,9 @@ import {
   getTMDBRemoteConfiguration,
   searchLibrary,
   getTMDBPreview,
+  getFranchises,
+  refreshFranchise,
+  refreshMissingFranchises,
 } from "../lib/api";
 import Icon from "../components/Icon";
 
@@ -28,6 +31,8 @@ export default function TMDBSettingsPage() {
   const [previewResult, setPreviewResult] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [searchSampleList, setSearchSampleList] = useState([]);
+  const [franchises, setFranchises] = useState([]);
+  const [franchiseRefreshing, setFranchiseRefreshing] = useState(null);
 
   // Filter category in modules view
   const [activeCategory, setActiveCategory] = useState("all");
@@ -50,6 +55,7 @@ export default function TMDBSettingsPage() {
         setModules(modulesRes.value?.modules || []);
       }
       if (statsRes.status === "fulfilled") setStats(statsRes.value);
+      getFranchises(24).then((res) => setFranchises(res?.franchises || [])).catch(() => {});
 
       // Load search sample items for preview
       searchLibrary("", { limit: 10 })
@@ -61,6 +67,34 @@ export default function TMDBSettingsPage() {
       showMessage("فشل تحميل إعدادات TMDB: " + err.message, "error");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleRefreshFranchise(id) {
+    setFranchiseRefreshing(id);
+    try {
+      await refreshFranchise(id);
+      showMessage("تم تحديث بيانات السلسلة باللغتين بنجاح", "success");
+      const res = await getFranchises(24);
+      setFranchises(res?.franchises || []);
+    } catch (err) {
+      showMessage("تعذر تحديث السلسلة: " + err.message, "error");
+    } finally {
+      setFranchiseRefreshing(null);
+    }
+  }
+
+  async function handleRefreshMissingFranchises() {
+    setFranchiseRefreshing("all");
+    try {
+      const res = await refreshMissingFranchises();
+      showMessage(`تم تحديث ${res?.refreshed?.length || 0} سلسلة قديمة`, "success");
+      const list = await getFranchises(24);
+      setFranchises(list?.franchises || []);
+    } catch (err) {
+      showMessage("تعذر تحديث السلاسل القديمة: " + err.message, "error");
+    } finally {
+      setFranchiseRefreshing(null);
     }
   }
 
@@ -303,6 +337,24 @@ export default function TMDBSettingsPage() {
           </button>
         </div>
       </div>
+
+      <section className="space-y-4 rounded-3xl border border-amber-500/20 bg-amber-950/10 p-5 backdrop-blur-xl">
+        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+          <div>
+            <h2 className="text-lg font-bold text-white">مزامنة سلاسل TMDB</h2>
+            <p className="mt-1 text-xs text-gray-400">يتم جلب التفاصيل بالإنجليزية والعربية مرة واحدة ثم تخزينها 30 يومًا.</p>
+          </div>
+          <button onClick={handleRefreshMissingFranchises} disabled={franchiseRefreshing !== null} className="rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-2 text-xs font-bold text-amber-200 disabled:opacity-50">
+            {franchiseRefreshing === "all" ? "جارٍ تحديث السلاسل..." : "تحديث السلاسل القديمة"}
+          </button>
+        </div>
+        {franchises.length > 0 && <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {franchises.map((franchise) => <div key={franchise.id} className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/20 p-3">
+            <div className="min-w-0"><p className="truncate text-sm font-bold text-white">{franchise.title_ar || franchise.title_en}</p><p className="text-[11px] text-gray-500">{franchise.parts_count || 0} أجزاء · {franchise.rating ? Number(franchise.rating).toFixed(1) : "بدون تقييم"}</p></div>
+            <button onClick={() => handleRefreshFranchise(franchise.id)} disabled={franchiseRefreshing !== null} className="shrink-0 rounded-lg border border-white/15 px-2.5 py-1.5 text-[11px] font-bold text-gray-200 disabled:opacity-50">{franchiseRefreshing === franchise.id ? "جارٍ..." : "تحديث"}</button>
+          </div>)}
+        </div>}
+      </section>
 
       {/* 1. Live Stats & Bandwidth Monitoring Bar */}
       {stats && (

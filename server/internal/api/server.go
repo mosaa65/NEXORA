@@ -52,6 +52,9 @@ type repository interface {
 	ListMediaItems(ctx context.Context, opts db.ListMediaOptions) (*db.MediaListResult, error)
 	ListProviderCollections(ctx context.Context, limit int) ([]db.ProviderCollection, error)
 	GetProviderCollection(ctx context.Context, slug string) (*db.ProviderCollection, error)
+	GetProviderCollectionByID(ctx context.Context, id int64) (*db.ProviderCollection, error)
+	ProviderCollectionNeedsRefresh(ctx context.Context, externalID string) (bool, error)
+	ListProviderCollectionRefreshCandidates(ctx context.Context, limit int) ([]db.ProviderCollection, error)
 	ListProviderCollectionMedia(ctx context.Context, slug string, opts db.ListMediaOptions) (*db.ProviderCollection, *db.MediaListResult, error)
 	ListProviderCollectionParts(ctx context.Context, slug string) (*db.ProviderCollection, []db.ProviderCollectionPart, error)
 	UpdateProviderCollectionAdmin(ctx context.Context, id int64, update db.CatalogEntityAdminUpdate) error
@@ -174,6 +177,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/franchises/{slug}", s.handleFranchise)
 	s.mux.HandleFunc("GET /api/franchises/{slug}/media", s.handleFranchiseMedia)
 	s.mux.HandleFunc("PUT /api/admin/franchises/{id}", s.handleFranchiseAdminUpdate)
+	s.mux.HandleFunc("POST /api/admin/franchises/{id}/refresh", s.handleFranchiseRefresh)
+	s.mux.HandleFunc("POST /api/admin/franchises/refresh-missing", s.handleFranchiseRefreshMissing)
 	s.mux.HandleFunc("GET /api/people", s.handlePeople)
 	s.mux.HandleFunc("GET /api/people/{slug}", s.handlePerson)
 	s.mux.HandleFunc("GET /api/people/{slug}/media", s.handlePersonMedia)
@@ -1319,6 +1324,58 @@ func (s *Server) handleFranchiseAdminUpdate(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "id": id})
 }
 
+// handleFranchiseRefresh is the explicit admin control for an existing
+// collection. It fetches en-US and ar-SA once, caches fields and images, then
+// leaves all visitor-facing routes fully local.
+func (s *Server) handleFranchiseRefresh(w http.ResponseWriter, r *http.Request) {
+	id, ok := parsePositiveID(r.PathValue("id"))
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "franchise id must be positive"})
+		return
+	}
+	collection, err := s.repository.GetProviderCollectionByID(r.Context(), id)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, sql.ErrNoRows) {
+			status = http.StatusNotFound
+		}
+		writeJSON(w, status, map[string]any{"error": err.Error()})
+		return
+	}
+	warnings := s.refreshProviderCollectionMetadata(r.Context(), collection.ExternalID)
+	if len(warnings) > 0 {
+		writeJSON(w, http.StatusBadGateway, map[string]any{"error": "some collection fields could not be refreshed", "warnings": warnings})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "id": id, "external_id": collection.ExternalID})
+}
+
+// handleFranchiseRefreshMissing upgrades pre-existing lightweight collection
+// links in a deliberate batch. It is never reached by customer browsing.
+func (s *Server) handleFranchiseRefreshMissing(w http.ResponseWriter, r *http.Request) {
+	limit := 24
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		if value, err := strconv.Atoi(raw); err == nil && value > 0 {
+			limit = value
+		}
+	}
+	candidates, err := s.repository.ListProviderCollectionRefreshCandidates(r.Context(), limit)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+	refreshed, warnings := make([]string, 0, len(candidates)), make([]string, 0)
+	for _, candidate := range candidates {
+		issues := s.refreshProviderCollectionMetadata(r.Context(), candidate.ExternalID)
+		if len(issues) > 0 {
+			warnings = append(warnings, candidate.ExternalID+": "+strings.Join(issues, "; "))
+			continue
+		}
+		refreshed = append(refreshed, candidate.ExternalID)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "refreshed": refreshed, "warnings": warnings})
+}
+
 // handlePeople and its detail endpoints are backed exclusively by media_credits
 // and people tables populated during enrichment or the local rebuild action.
 func (s *Server) handlePeople(w http.ResponseWriter, r *http.Request) {
@@ -1666,15 +1723,11 @@ func (s *Server) handleMediaEnrich(w http.ResponseWriter, r *http.Request) {
 	// Normal franchise GET requests remain strictly database-only.
 	if canonical.Provider == "tmdb" && item.Type == "movie" {
 		if collectionID := tmdbCollectionID(canonical.RawPayload); collectionID != "" {
-			for _, language := range []string{"en-US", "ar-SA"} {
-				collection, collectionErr := s.metadata.LookupCollectionByExternalID(r.Context(), collectionID, language)
-				if collectionErr != nil {
-					lookupWarnings = append(lookupWarnings, "collection "+language+": "+collectionErr.Error())
-					continue
-				}
-				if saveErr := s.repository.SaveProviderCollectionMetadata(r.Context(), collection); saveErr != nil {
-					lookupWarnings = append(lookupWarnings, "collection cache "+language+": "+saveErr.Error())
-				}
+			needsRefresh, needsErr := s.repository.ProviderCollectionNeedsRefresh(r.Context(), collectionID)
+			if needsErr != nil {
+				lookupWarnings = append(lookupWarnings, "collection cache state: "+needsErr.Error())
+			} else if needsRefresh {
+				lookupWarnings = append(lookupWarnings, s.refreshProviderCollectionMetadata(r.Context(), collectionID)...)
 			}
 		}
 	}
@@ -1740,6 +1793,21 @@ func tmdbCollectionID(raw json.RawMessage) string {
 		return ""
 	}
 	return payload.Collection.ID.String()
+}
+
+func (s *Server) refreshProviderCollectionMetadata(ctx context.Context, externalID string) []string {
+	warnings := make([]string, 0)
+	for _, language := range []string{"en-US", "ar-SA"} {
+		collection, err := s.metadata.LookupCollectionByExternalID(ctx, externalID, language)
+		if err != nil {
+			warnings = append(warnings, "collection "+language+": "+err.Error())
+			continue
+		}
+		if err := s.repository.SaveProviderCollectionMetadata(ctx, collection); err != nil {
+			warnings = append(warnings, "collection cache "+language+": "+err.Error())
+		}
+	}
+	return warnings
 }
 
 func tmdbSeasonNumbers(raw json.RawMessage) []int {

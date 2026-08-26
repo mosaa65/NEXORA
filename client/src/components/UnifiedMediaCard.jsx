@@ -99,7 +99,7 @@ export default function UnifiedMediaCard({ media, onOpen, variant = "standard", 
       aria-label={`فتح تفاصيل ${title}`} dir="rtl">
       <div className="relative aspect-[4/5] w-full overflow-hidden bg-[#151225]">
         <img src={posterURL} alt={`بوستر ${title}`} loading="lazy" onError={(event) => { event.currentTarget.src = "/nexora-poster-placeholder.PNG"; }} className="h-full w-full object-cover transition-transform duration-700 motion-reduce:transition-none group-hover:scale-[1.055]" />
-        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(5,4,12,.34)_0%,transparent_36%,rgba(8,7,14,.08)_52%,#0d0c17_100%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(5,4,12,.34)_0%,transparent_36%,rgba(8,7,14,.08)_52%,transparent_100%)]" />
         <div className="absolute inset-x-2 top-2 flex items-start justify-between gap-1">
           <div className="flex min-w-0 flex-nowrap items-center justify-end gap-1 whitespace-nowrap">
             <span className={`inline-flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-1 text-[9px] font-extrabold shadow-sm backdrop-blur-md sm:px-2 sm:text-[10px] ${typeStyles[mediaKind] || "border-white/15 bg-black/55 text-white/95"}`}><Icon name={typeIcons[mediaKind] || "film"} className="h-2.5 w-2.5 shrink-0 sm:h-3 sm:w-3" />{typeLabels[mediaKind] || "مكتبة"}</span>
