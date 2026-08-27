@@ -1,75 +1,100 @@
 /*
- * NEXORA Light Theme
- * Applied via [data-theme="light"]
+ * ============================================================
+ *  NEXORA Light Theme (المظهر الفاتح الاحترافي)
+ * ============================================================
+ *  Applied via [data-theme="light"]
+ * ============================================================
  */
+
 [data-theme="light"] {
   color-scheme: light;
 
-  /* === Backgrounds === */
+  /* === Backgrounds (خلفيات نقية وعصرية) === */
   --bg-base: #F8FAFC;
-  --bg-surface: rgba(0, 0, 0, 0.03);
-  --bg-elevated: rgba(0, 0, 0, 0.06);
-  --bg-overlay: rgba(255, 255, 255, 0.90);
+  --bg-surface: #FFFFFF;
+  --bg-elevated: #F1F5F9;
+  --bg-overlay: rgba(15, 23, 42, 0.75);
   --bg-card: #FFFFFF;
-  --bg-input: rgba(0, 0, 0, 0.05);
+  --bg-input: #F1F5F9;
 
-  /* === Borders === */
-  --border-default: rgba(0, 0, 0, 0.12);
-  --border-subtle: rgba(0, 0, 0, 0.06);
+  /* === Borders (حدود ناعمة وواضحة) === */
+  --border-default: #E2E8F0;
+  --border-subtle: #F1F5F9;
   --border-glass: rgba(0, 0, 0, 0.08);
 
-  /* === Text === */
+  /* === Text (تباين عالي ومريح للعين) === */
   --text-primary: #0F172A;
   --text-secondary: #475569;
-  --text-muted: #94A3B8;
+  --text-muted: #64748B;
   --text-inverse: #F8FAFC;
 
-  /* === Glassmorphism === */
-  --glass-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.85), rgba(248, 250, 252, 0.75));
+  /* === Semantic Colors === */
+  --color-primary: #6D28D9;
+  --color-primary-hover: #7C3AED;
+  --color-primary-light: rgba(109, 40, 217, 0.12);
+  --color-primary-glow: rgba(109, 40, 217, 0.20);
 
-  /* === Shadows (lighter for light mode) === */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.08);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.10);
-  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.12);
-  --shadow-xl: 0 24px 80px rgba(0, 0, 0, 0.15);
+  --color-secondary: #1D4ED8;
+  --color-secondary-hover: #2563EB;
+  --color-secondary-light: rgba(29, 78, 216, 0.12);
+
+  --color-accent: #A21CAF;
+  --color-accent-hover: #C026D3;
+  --color-accent-light: rgba(162, 28, 175, 0.12);
+  --color-accent-glow: rgba(162, 28, 175, 0.20);
+
+  --color-success: #059669;
+  --color-success-hover: #10B981;
+  --color-success-light: rgba(5, 150, 105, 0.12);
+  --color-success-bg: rgba(5, 150, 105, 0.08);
+
+  --color-warning: #D97706;
+  --color-warning-hover: #F59E0B;
+  --color-warning-light: rgba(217, 119, 6, 0.12);
+  --color-warning-bg: rgba(217, 119, 6, 0.08);
+
+  --color-danger: #DC2626;
+  --color-danger-hover: #EF4444;
+  --color-danger-light: rgba(220, 38, 38, 0.12);
+  --color-danger-bg: rgba(220, 38, 38, 0.08);
+
+  --color-info: #0284C7;
+  --color-info-hover: #0EA5E9;
+  --color-info-light: rgba(2, 132, 199, 0.12);
+
+  /* === Glassmorphism (زجاج مضيء) === */
+  --glass-bg: rgba(255, 255, 255, 0.90);
+  --glass-border: 1px solid var(--border-default);
+
+  /* === Shadows (ظلال احترافية ناعمة) === */
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.07), 0 4px 6px -4px rgba(0, 0, 0, 0.03);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.03);
+  --shadow-glow-primary: 0 0 20px var(--color-primary-glow);
+  --shadow-glow-accent: 0 0 20px var(--color-accent-glow);
+  --shadow-glow-success: 0 0 15px rgba(5, 150, 105, 0.2);
 
   /* === Gradients === */
-  --gradient-card: linear-gradient(180deg, rgba(255, 255, 255, 0.90), rgba(248, 250, 252, 0.80));
-  --gradient-surface: linear-gradient(180deg, rgba(0,0,0,0.02), rgba(0,0,0,0.01));
+  --gradient-card: linear-gradient(180deg, #FFFFFF, #F8FAFC);
+  --gradient-surface: linear-gradient(180deg, #FFFFFF, #F1F5F9);
 }
 
-/* Legacy catalogue surfaces still use white/black utility classes. Keep them
-   readable in light mode while the pages migrate to design tokens. */
-[data-theme="light"] .theme-aware-shell [class*="text-white"],
-[data-theme="light"] .theme-aware-page [class*="text-white"] {
-  color: var(--text-primary);
+/* Light mode specific background and glow adjustments */
+[data-theme="light"] body::before {
+  opacity: 0.06;
 }
 
-[data-theme="light"] .theme-aware-shell [class*="text-gray-"],
-[data-theme="light"] .theme-aware-page [class*="text-gray-"] {
-  color: var(--text-secondary);
+[data-theme="light"] body::after {
+  opacity: 0.35;
+  mix-blend-mode: normal;
+  background:
+    radial-gradient(circle at 20% 10%, rgba(147, 51, 234, 0.05), transparent 30%),
+    radial-gradient(circle at 80% 20%, rgba(14, 165, 233, 0.05), transparent 30%),
+    radial-gradient(circle at 50% 90%, rgba(217, 70, 239, 0.04), transparent 35%);
 }
 
-[data-theme="light"] .theme-aware-shell [class*="border-white"],
-[data-theme="light"] .theme-aware-page [class*="border-white"] {
-  border-color: var(--border-default);
-}
-
-[data-theme="light"] .theme-aware-shell [class*="bg-white/"],
-[data-theme="light"] .theme-aware-page [class*="bg-white/"] {
-  background-color: var(--bg-surface);
-}
-
-[data-theme="light"] .theme-aware-shell [class*="bg-black/"],
-[data-theme="light"] .theme-aware-page [class*="bg-black/"] {
-  background-color: var(--bg-input);
-}
-
-[data-theme="light"] .theme-aware-shell [class*="bg-[#0"],
-[data-theme="light"] .theme-aware-page [class*="bg-[#0"] {
-  background-color: var(--bg-card);
-}
-
-[data-theme="light"] .theme-aware-shell [class*="shadow-"] {
-  --tw-shadow-color: var(--shadow-md);
+/* Ambient glow in CustomerCinemaLayout */
+[data-theme="light"] .theme-aware-shell .pointer-events-none .rounded-full {
+  opacity: 0.25;
 }

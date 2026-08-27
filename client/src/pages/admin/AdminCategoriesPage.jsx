@@ -103,17 +103,17 @@ export default function AdminCategoriesPage({ onNavigateToMedia }) {
   return (
     <div className="space-y-6 text-right animate-fadeIn" dir="rtl">
       {/* Header & Add Button */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-3xl border border-white/10 bg-[#0C0A18]/80 backdrop-blur-2xl shadow-xl">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] backdrop-blur-2xl shadow-[var(--shadow-md)]">
         <div>
           <div className="flex items-center gap-2">
             <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-teal-500/20 text-teal-400">
               <Icon name="mask" className="h-4 w-4" />
             </span>
-            <h1 className="text-xl sm:text-2xl font-black text-white">
+            <h1 className="text-xl sm:text-2xl font-black text-[var(--text-primary)]">
               الأقسام والتصنيفات (Categories)
             </h1>
           </div>
-          <p className="text-xs text-white/55 mt-1 max-w-xl">
+          <p className="text-xs text-[var(--text-muted)] mt-1 max-w-xl">
             إدارة الأقسام الرئيسية في المكتبة السينمائية مع متابعة إجمالي الأعمال والملفات المفهرسة في كل قسم.
           </p>
         </div>
@@ -129,7 +129,7 @@ export default function AdminCategoriesPage({ onNavigateToMedia }) {
 
       {/* Categories Grid */}
       {categoriesLoading ? (
-        <div className="p-20 text-center text-white/60">
+        <div className="p-20 text-center text-[var(--text-muted)]">
           <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-fuchsia-500 border-t-transparent" />
           <p className="mt-3 text-xs font-bold">جارٍ تحميل التصنيفات...</p>
         </div>
@@ -142,7 +142,7 @@ export default function AdminCategoriesPage({ onNavigateToMedia }) {
             return (
               <div
                 key={cat.id || cat.slug}
-                className="group relative flex flex-col justify-between p-5 rounded-3xl border border-white/10 bg-[#0E0C1A] hover:border-fuchsia-500/50 hover:shadow-2xl hover:shadow-purple-950/50 transition-all duration-300"
+                className="group relative flex flex-col justify-between p-5 rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] shadow-[var(--shadow-sm)] hover:border-[var(--color-accent)] hover:shadow-[var(--shadow-lg)] transition-all duration-300"
               >
                 <div>
                   {/* Top Row: Icon & Slug */}
@@ -150,38 +150,38 @@ export default function AdminCategoriesPage({ onNavigateToMedia }) {
                     <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-purple-800 to-fuchsia-900 text-white shadow-md">
                       <Icon name={cat.icon || "film"} className="h-5 w-5 text-fuchsia-300" />
                     </div>
-                    <span className="text-[10px] font-mono font-bold text-fuchsia-400 bg-fuchsia-500/10 px-2.5 py-1 rounded-full border border-fuchsia-500/20">
+                    <span className="text-[10px] font-mono font-bold text-[var(--color-accent)] bg-[var(--color-accent-light)] px-2.5 py-1 rounded-full border border-fuchsia-500/20">
                       slug: {cat.slug}
                     </span>
                   </div>
 
                   {/* Name & English */}
-                  <h3 className="mt-4 text-lg font-black text-white group-hover:text-fuchsia-300 transition-colors">
+                  <h3 className="mt-4 text-lg font-black text-[var(--text-primary)] group-hover:text-[var(--color-accent)] transition-colors">
                     {cat.name_ar || cat.nameAr}
                   </h3>
-                  <p className="text-xs text-white/40 font-mono mt-0.5" dir="ltr">
+                  <p className="text-xs text-[var(--text-muted)] font-mono mt-0.5" dir="ltr">
                     {cat.name_en || cat.nameEn || cat.slug}
                   </p>
 
                   {/* Statistics Counters */}
                   <div className="mt-4 grid grid-cols-2 gap-2 text-center">
-                    <div className="p-2.5 rounded-2xl bg-black/40 border border-white/5">
-                      <p className="text-base font-black text-white">{count}</p>
-                      <p className="text-[10px] text-white/50">عمل مفهرس</p>
+                    <div className="p-2.5 rounded-2xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)]">
+                      <p className="text-base font-black text-[var(--text-primary)]">{count}</p>
+                      <p className="text-[10px] text-[var(--text-muted)]">عمل مفهرس</p>
                     </div>
-                    <div className="p-2.5 rounded-2xl bg-black/40 border border-white/5">
-                      <p className="text-base font-black text-emerald-400">{fileCount}</p>
-                      <p className="text-[10px] text-white/50">ملف فيديو</p>
+                    <div className="p-2.5 rounded-2xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)]">
+                      <p className="text-base font-black text-[var(--color-success)]">{fileCount}</p>
+                      <p className="text-[10px] text-[var(--text-muted)]">ملف فيديو</p>
                     </div>
                   </div>
                 </div>
 
                 {/* Actions Footer */}
-                <div className="mt-5 flex items-center justify-between border-t border-white/10 pt-3 text-xs">
+                <div className="mt-5 flex items-center justify-between border-t border-[var(--border-subtle)] pt-3 text-xs">
                   <button
                     type="button"
                     onClick={() => onNavigateToMedia?.(cat.slug)}
-                    className="text-fuchsia-400 font-bold hover:text-fuchsia-300 hover:underline transition"
+                    className="text-[var(--color-accent)] font-bold hover:underline transition"
                   >
                     تصفح الأعمال ↵
                   </button>
