@@ -27,18 +27,32 @@
 html,
 body,
 #root {
+  height: 100%;
   min-height: 100%;
+}
+
+html {
+  direction: ltr;
 }
 
 body {
   margin: 0;
   min-width: 320px;
+  direction: ltr;
+  overflow: hidden;
   font-family: var(--font-family);
   background: var(--bg-base);
   color: var(--text-primary);
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   font-feature-settings: "kern" 1, "ss01" 1;
+}
+
+#root {
+  direction: rtl;
+  height: 100dvh;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 body::before {
