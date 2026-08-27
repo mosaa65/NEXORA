@@ -13,6 +13,9 @@ import {
   getFranchises,
   refreshFranchise,
   refreshMissingFranchises,
+  getTMDBQueue,
+  cancelTMDBQueueJob,
+  getTMDBUsageHistory,
 } from "../lib/api";
 import Icon from "../components/Icon";
 
@@ -33,9 +36,15 @@ export default function TMDBSettingsPage() {
   const [searchSampleList, setSearchSampleList] = useState([]);
   const [franchises, setFranchises] = useState([]);
   const [franchiseRefreshing, setFranchiseRefreshing] = useState(null);
+  const [queueJobs, setQueueJobs] = useState([]);
+  const [usageHistory, setUsageHistory] = useState([]);
 
   // Filter category in modules view
   const [activeCategory, setActiveCategory] = useState("all");
+
+  function updateRefreshSetting(key, value) {
+    setSettings((current) => ({ ...current, [key]: value }));
+  }
 
   useEffect(() => {
     loadAllData();
@@ -56,6 +65,8 @@ export default function TMDBSettingsPage() {
       }
       if (statsRes.status === "fulfilled") setStats(statsRes.value);
       getFranchises(24).then((res) => setFranchises(res?.franchises || [])).catch(() => {});
+      getTMDBQueue().then((res) => setQueueJobs(res?.jobs || [])).catch(() => {});
+      getTMDBUsageHistory(90).then((res) => setUsageHistory(res?.history || [])).catch(() => {});
 
       // Load search sample items for preview
       searchLibrary("", { limit: 10 })
@@ -95,6 +106,15 @@ export default function TMDBSettingsPage() {
       showMessage("تعذر تحديث السلاسل القديمة: " + err.message, "error");
     } finally {
       setFranchiseRefreshing(null);
+    }
+  }
+
+  async function handleCancelQueueJob(id) {
+    try {
+      await cancelTMDBQueueJob(id);
+      setQueueJobs((jobs) => jobs.map((job) => job.id === id ? { ...job, status: "cancelled" } : job));
+    } catch (err) {
+      showMessage("تعذر إلغاء المهمة: " + err.message, "error");
     }
   }
 
@@ -354,6 +374,28 @@ export default function TMDBSettingsPage() {
             <button onClick={() => handleRefreshFranchise(franchise.id)} disabled={franchiseRefreshing !== null} className="shrink-0 rounded-lg border border-white/15 px-2.5 py-1.5 text-[11px] font-bold text-gray-200 disabled:opacity-50">{franchiseRefreshing === franchise.id ? "جارٍ..." : "تحديث"}</button>
           </div>)}
         </div>}
+      </section>
+
+      {settings && <section className="space-y-4 rounded-3xl border border-cyan-500/20 bg-cyan-950/10 p-5 backdrop-blur-xl">
+        <div><h2 className="text-lg font-bold text-white">سياسة التحديث والطابور</h2><p className="mt-1 text-xs text-gray-400">تحكم في التحديث التلقائي ومدة صلاحية بيانات TMDB.</p></div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <label className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 p-3 text-xs font-bold text-white"><span>التحديث التلقائي</span><input type="checkbox" checked={Boolean(settings.auto_refresh_enabled)} onChange={(event) => updateRefreshSetting("auto_refresh_enabled", event.target.checked)} /></label>
+          <label className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 p-3 text-xs font-bold text-white"><span>عند فتح العمل</span><input type="checkbox" checked={Boolean(settings.refresh_on_open)} onChange={(event) => updateRefreshSetting("refresh_on_open", event.target.checked)} /></label>
+          <label className="rounded-xl border border-white/10 bg-black/20 p-3 text-xs font-bold text-white">مدة التحديث بالأيام<input type="number" min="1" max="365" value={settings.refresh_interval_days || 30} onChange={(event) => updateRefreshSetting("refresh_interval_days", Number(event.target.value) || 1)} className="mt-2 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-white" /></label>
+          <label className="rounded-xl border border-white/10 bg-black/20 p-3 text-xs font-bold text-white">يعتبر قديمًا بعد<input type="number" min="1" max="365" value={settings.refresh_stale_days || 7} onChange={(event) => updateRefreshSetting("refresh_stale_days", Number(event.target.value) || 1)} className="mt-2 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-white" /></label>
+          <label className="rounded-xl border border-white/10 bg-black/20 p-3 text-xs font-bold text-white">المهام المتزامنة<input type="number" min="1" max="4" value={settings.queue_max_concurrent || 1} onChange={(event) => updateRefreshSetting("queue_max_concurrent", Number(event.target.value) || 1)} className="mt-2 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-white" /></label>
+        </div>
+        <p className="text-[11px] text-cyan-100/60">يتم حفظ هذه القيم عبر زر حفظ التغييرات. تشغيل العامل الخلفي سيستخدمها لتحديد المهام المستحقة.</p>
+      </section>}
+
+      <section className="space-y-4 rounded-3xl border border-white/10 bg-black/15 p-5">
+        <div><h2 className="text-lg font-bold text-white">طابور تحديث TMDB</h2><p className="mt-1 text-xs text-gray-400">المهام تنفذ حسب الأولوية وبمهمة واحدة افتراضيًا.</p></div>
+        {queueJobs.length ? <div className="space-y-2">{queueJobs.map((job) => <div key={job.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 p-3 text-xs"><span className="text-white">#{job.id} · العمل {job.media_item_id}</span><span className="text-gray-400">{job.status} · محاولات {job.attempts}</span>{job.status === "pending" && <button type="button" onClick={() => handleCancelQueueJob(job.id)} className="rounded-lg border border-rose-400/25 px-2.5 py-1 text-rose-200">إلغاء</button>}</div>)}</div> : <p className="text-xs text-gray-500">لا توجد مهام في الطابور.</p>}
+      </section>
+
+      <section className="space-y-4 rounded-3xl border border-white/10 bg-black/15 p-5">
+        <div><h2 className="text-lg font-bold text-white">سجل استهلاك TMDB</h2><p className="mt-1 text-xs text-gray-400">ملخص يومي لآخر 90 يومًا من الطلبات والبيانات والصور.</p></div>
+        {usageHistory.length ? <div className="overflow-x-auto"><table className="w-full min-w-[620px] text-right text-xs"><thead className="text-gray-400"><tr><th className="p-2">اليوم</th><th className="p-2">الطلبات</th><th className="p-2">البيانات</th><th className="p-2">الصور</th><th className="p-2">نجاح</th><th className="p-2">فشل</th></tr></thead><tbody>{usageHistory.map((day) => <tr key={day.day} className="border-t border-white/10 text-gray-200"><td className="p-2 font-mono">{day.day}</td><td className="p-2">{day.requests}</td><td className="p-2">{Number(day.mb_downloaded || 0).toFixed(2)} MB</td><td className="p-2">{day.images_downloaded}</td><td className="p-2 text-emerald-300">{day.successful}</td><td className="p-2 text-rose-300">{day.failed}</td></tr>)}</tbody></table></div> : <p className="text-xs text-gray-500">لا يوجد سجل استهلاك بعد.</p>}
       </section>
 
       {/* 1. Live Stats & Bandwidth Monitoring Bar */}

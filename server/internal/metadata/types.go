@@ -17,6 +17,18 @@ type Query struct {
 	Language string `json:"language,omitempty"`
 }
 
+type Candidate struct {
+	Provider      string  `json:"provider"`
+	ExternalID    string  `json:"externalId"`
+	Title         string  `json:"title"`
+	OriginalTitle string  `json:"originalTitle,omitempty"`
+	Overview      string  `json:"overview,omitempty"`
+	Year          int     `json:"year,omitempty"`
+	Rating        float64 `json:"rating,omitempty"`
+	PosterPath    string  `json:"posterPath,omitempty"`
+	MediaKind     string  `json:"mediaKind"`
+}
+
 type Result struct {
 	Provider         string   `json:"provider"`
 	ExternalID       string   `json:"externalId"`

@@ -202,7 +202,15 @@ func (m *mockRepo) SaveTMDBSettings(ctx context.Context, settings metadata.TMDBS
 func (m *mockRepo) GetTMDBUsageSummary(ctx context.Context) (*metadata.TMDBUsageSummary, error) {
 	return &metadata.TMDBUsageSummary{}, nil
 }
+func (m *mockRepo) GetTMDBUsageHistory(ctx context.Context, days int) ([]metadata.TMDBUsageDay, error) { return []metadata.TMDBUsageDay{}, nil }
 func (m *mockRepo) LogTMDBUsage(ctx context.Context, entry db.TMDBLogEntry) error { return nil }
+func (m *mockRepo) EnqueueTMDBRefresh(ctx context.Context, mediaID int64, priority int) error { return nil }
+func (m *mockRepo) EnqueueStaleTMDBRefreshes(ctx context.Context, staleDays, limit int) error { return nil }
+func (m *mockRepo) EnqueueTMDBRefreshIfStale(ctx context.Context, mediaID int64, staleDays int) error { return nil }
+func (m *mockRepo) ListTMDBQueue(ctx context.Context, limit int) ([]db.TMDBQueueJob, error) { return []db.TMDBQueueJob{}, nil }
+func (m *mockRepo) CancelTMDBQueueJob(ctx context.Context, id int64) error { return nil }
+func (m *mockRepo) ClaimTMDBQueueJob(ctx context.Context) (*db.TMDBQueueJob, error) { return nil, nil }
+func (m *mockRepo) FinishTMDBQueueJob(ctx context.Context, id int64, succeeded bool, message string) error { return nil }
 
 type mockSearch struct{}
 
@@ -217,6 +225,9 @@ type mockMetadata struct{}
 
 func (m *mockMetadata) Lookup(ctx context.Context, query metadata.Query) (metadata.Result, error) {
 	return metadata.Result{Title: query.Title, ReleaseYear: 2010, Rating: 8.8, Provider: "tmdb"}, nil
+}
+func (m *mockMetadata) SearchCandidates(ctx context.Context, query metadata.Query) ([]metadata.Candidate, error) {
+	return []metadata.Candidate{{Provider: "tmdb", ExternalID: "1", Title: query.Title, MediaKind: "tv"}}, nil
 }
 func (m *mockMetadata) LookupByExternalID(ctx context.Context, query metadata.Query, externalID string) (metadata.Result, error) {
 	return metadata.Result{Title: "Inception", ExternalID: externalID, Locale: query.Language, Provider: "tmdb"}, nil

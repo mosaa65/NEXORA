@@ -337,6 +337,32 @@ func (c *TMDBClient) searchCandidates(ctx context.Context, mediaKind string, que
 	return payload.Results, nil
 }
 
+func (c *TMDBClient) SearchCandidates(ctx context.Context, query Query) ([]Candidate, error) {
+	kind := "movie"
+	if query.Type == "series" || query.Type == "anime" || query.Type == "tv" {
+		kind = "tv"
+	}
+	results, err := c.searchCandidates(ctx, kind, query)
+	if err != nil {
+		return nil, err
+	}
+	settings := c.GetSettings()
+	candidates := make([]Candidate, 0, len(results))
+	for _, item := range results {
+		candidates = append(candidates, Candidate{
+			Provider: "tmdb", ExternalID: strconv.Itoa(item.ID),
+			Title: firstNonEmpty(item.Title, item.Name),
+			OriginalTitle: firstNonEmpty(item.OriginalTitle, item.OriginalName),
+			Overview: item.Overview,
+			Year: yearFromDate(firstNonEmpty(item.ReleaseDate, item.FirstAirDate)),
+			Rating: item.VoteAverage,
+			PosterPath: c.imageURL(settings.PosterSize, item.PosterPath),
+			MediaKind: kind,
+		})
+	}
+	return candidates, nil
+}
+
 // evaluateBestMatch scores search candidates based on title distance, year proximity, and popularity
 func (c *TMDBClient) evaluateBestMatch(candidates []tmdbResult, query Query) (tmdbResult, float64) {
 	if len(candidates) == 0 {

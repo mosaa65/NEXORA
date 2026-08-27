@@ -89,6 +89,13 @@ func (s *Service) Lookup(ctx context.Context, query Query) (Result, error) {
 	return Result{}, ErrNotFound
 }
 
+func (s *Service) SearchCandidates(ctx context.Context, query Query) ([]Candidate, error) {
+	if s.tmdb == nil || !s.tmdb.Configured() {
+		return nil, ErrNotConfigured
+	}
+	return s.tmdb.SearchCandidates(ctx, query)
+}
+
 // LookupByExternalID fetches another locale for an already-confirmed TMDB ID
 func (s *Service) LookupByExternalID(ctx context.Context, query Query, externalID string) (Result, error) {
 	if s.tmdb == nil || !s.tmdb.Configured() {

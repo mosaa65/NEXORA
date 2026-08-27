@@ -14,6 +14,11 @@ CREATE TABLE IF NOT EXISTS tmdb_settings (
     backdrop_size VARCHAR(20) NOT NULL DEFAULT 'original',
     profile_size VARCHAR(20) NOT NULL DEFAULT 'w185',
     still_size VARCHAR(20) NOT NULL DEFAULT 'w300',
+    auto_refresh_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    refresh_interval_days INT NOT NULL DEFAULT 30,
+    refresh_on_open BOOLEAN NOT NULL DEFAULT FALSE,
+    refresh_stale_days INT NOT NULL DEFAULT 7,
+    queue_max_concurrent INT NOT NULL DEFAULT 1,
     modules JSONB NOT NULL DEFAULT '{}'::jsonb,
     remote_config JSONB NOT NULL DEFAULT '{}'::jsonb,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP

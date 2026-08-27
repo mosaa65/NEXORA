@@ -9,11 +9,13 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"nexora/server/internal/config"
@@ -83,7 +85,15 @@ type repository interface {
 	GetTMDBSettings(ctx context.Context) (*metadata.TMDBSettings, error)
 	SaveTMDBSettings(ctx context.Context, s metadata.TMDBSettings) error
 	GetTMDBUsageSummary(ctx context.Context) (*metadata.TMDBUsageSummary, error)
+	GetTMDBUsageHistory(ctx context.Context, days int) ([]metadata.TMDBUsageDay, error)
 	LogTMDBUsage(ctx context.Context, entry db.TMDBLogEntry) error
+	EnqueueTMDBRefresh(ctx context.Context, mediaID int64, priority int) error
+	EnqueueStaleTMDBRefreshes(ctx context.Context, staleDays, limit int) error
+	EnqueueTMDBRefreshIfStale(ctx context.Context, mediaID int64, staleDays int) error
+	ListTMDBQueue(ctx context.Context, limit int) ([]db.TMDBQueueJob, error)
+	CancelTMDBQueueJob(ctx context.Context, id int64) error
+	ClaimTMDBQueueJob(ctx context.Context) (*db.TMDBQueueJob, error)
+	FinishTMDBQueueJob(ctx context.Context, id int64, succeeded bool, message string) error
 	CacheLocalArtwork(sourcePath string) string
 }
 
@@ -94,6 +104,7 @@ type searchClient interface {
 
 type metadataService interface {
 	Lookup(ctx context.Context, query metadata.Query) (metadata.Result, error)
+	SearchCandidates(ctx context.Context, query metadata.Query) ([]metadata.Candidate, error)
 	LookupByExternalID(ctx context.Context, query metadata.Query, externalID string) (metadata.Result, error)
 	LookupSeasonByExternalID(ctx context.Context, externalID string, seasonNumber int, language string) (metadata.SeasonResult, error)
 	LookupCollectionByExternalID(ctx context.Context, externalID, language string) (metadata.CollectionResult, error)
@@ -157,7 +168,44 @@ func NewServer(
 		mux:         http.NewServeMux(),
 	}
 	server.routes()
+	go server.runTMDBQueue()
 	return server.withMiddleware(server.mux)
+}
+
+func (s *Server) runTMDBQueue() {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+	for range ticker.C {
+		settings := s.metadata.GetTMDBSettings()
+		if settings.AutoRefreshEnabled {
+			_ = s.repository.EnqueueStaleTMDBRefreshes(context.Background(), settings.RefreshIntervalDays, 100)
+		}
+		workers := settings.QueueMaxConcurrent
+		if workers < 1 { workers = 1 }
+		if workers > 4 { workers = 4 }
+		var group sync.WaitGroup
+		for index := 0; index < workers; index++ {
+			job, err := s.repository.ClaimTMDBQueueJob(context.Background())
+			if err != nil || job == nil { break }
+			group.Add(1)
+			go func(job *db.TMDBQueueJob) {
+				defer group.Done()
+				s.processTMDBQueueJob(job)
+			}(job)
+		}
+		group.Wait()
+	}
+}
+
+func (s *Server) processTMDBQueueJob(job *db.TMDBQueueJob) {
+		request := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/media/%d/enrich", job.MediaItemID), nil)
+		request.SetPathValue("id", strconv.FormatInt(job.MediaItemID, 10))
+		response := httptest.NewRecorder()
+		s.handleMediaEnrich(response, request)
+		succeeded := response.Code >= 200 && response.Code < 300
+		message := ""
+		if !succeeded { message = strings.TrimSpace(response.Body.String()) }
+		_ = s.repository.FinishTMDBQueueJob(context.Background(), job.ID, succeeded, message)
 }
 
 func (s *Server) routes() {
@@ -214,6 +262,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/library/classify-origins", s.handleClassifyOrigins)
 	s.mux.HandleFunc("POST /api/search/sync", s.handleSearchSync)
 	s.mux.HandleFunc("POST /api/metadata/lookup", s.handleMetadataLookup)
+	s.mux.HandleFunc("GET /api/tmdb/candidates", s.handleTMDBCandidates)
 	s.mux.HandleFunc("POST /api/media/verify", s.handleMediaVerify)
 	s.mux.HandleFunc("POST /api/media/inspect", s.handleMediaInspect)
 	s.mux.HandleFunc("POST /api/media/thumbnail", s.handleThumbnail)
@@ -228,6 +277,10 @@ func (s *Server) routes() {
 
 	// TMDB Control Panel & Integration Endpoints
 	s.mux.HandleFunc("GET /api/tmdb/settings", s.handleTMDBSettingsGet)
+	s.mux.HandleFunc("GET /api/tmdb/queue", s.handleTMDBQueueGet)
+	s.mux.HandleFunc("GET /api/tmdb/usage/history", s.handleTMDBUsageHistory)
+	s.mux.HandleFunc("POST /api/tmdb/queue", s.handleTMDBQueueCreate)
+	s.mux.HandleFunc("POST /api/tmdb/queue/{id}/cancel", s.handleTMDBQueueCancel)
 	s.mux.HandleFunc("PUT /api/tmdb/settings", s.handleTMDBSettingsUpdate)
 	s.mux.HandleFunc("GET /api/tmdb/stats", s.handleTMDBStatsGet)
 	s.mux.HandleFunc("GET /api/tmdb/modules", s.handleTMDBModulesGet)
@@ -1579,6 +1632,10 @@ func (s *Server) handleMediaDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, item)
+	settings := s.metadata.GetTMDBSettings()
+	if settings.AutoRefreshEnabled && settings.RefreshOnOpen {
+		_ = s.repository.EnqueueTMDBRefreshIfStale(r.Context(), mediaID, settings.RefreshStaleDays)
+	}
 }
 
 func (s *Server) handleMediaCreate(w http.ResponseWriter, r *http.Request) {
@@ -1678,9 +1735,15 @@ func (s *Server) handleMediaEnrich(w http.ResponseWriter, r *http.Request) {
 		lookupTitle = item.TitleAR
 	}
 
-	canonical, lookupErr := s.metadata.Lookup(r.Context(), metadata.Query{
-		Title: lookupTitle, Type: item.Type, Year: item.ReleaseYear, Language: "en-US",
-	})
+	var canonical metadata.Result
+	var lookupErr error
+	if selectedID := strings.TrimSpace(r.URL.Query().Get("tmdb_id")); selectedID != "" {
+		canonical, lookupErr = s.metadata.LookupByExternalID(r.Context(), metadata.Query{Type: item.Type, Language: "en-US"}, selectedID)
+	} else {
+		canonical, lookupErr = s.metadata.Lookup(r.Context(), metadata.Query{
+			Title: lookupTitle, Type: item.Type, Year: item.ReleaseYear, Language: "en-US",
+		})
+	}
 	if lookupErr != nil {
 		_ = s.repository.LogTMDBUsage(r.Context(), db.TMDBLogEntry{
 			MediaItemID:  &mediaID,
@@ -2073,6 +2136,54 @@ func (s *Server) handleTMDBSettingsGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, settings)
+}
+
+func (s *Server) handleTMDBQueueGet(w http.ResponseWriter, r *http.Request) {
+	jobs, err := s.repository.ListTMDBQueue(r.Context(), 100)
+	if err != nil { writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()}); return }
+	writeJSON(w, http.StatusOK, map[string]any{"jobs": jobs})
+}
+
+func (s *Server) handleTMDBUsageHistory(w http.ResponseWriter, r *http.Request) {
+	days := 90
+	if raw := r.URL.Query().Get("days"); raw != "" { if parsed, err := strconv.Atoi(raw); err == nil { days = parsed } }
+	history, err := s.repository.GetTMDBUsageHistory(r.Context(), days)
+	if err != nil { writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()}); return }
+	writeJSON(w, http.StatusOK, map[string]any{"history": history})
+}
+
+func (s *Server) handleTMDBQueueCreate(w http.ResponseWriter, r *http.Request) {
+	var request struct { MediaItemID int64 `json:"media_item_id"`; Priority int `json:"priority"` }
+	if err := decodeJSON(r, &request); err != nil || request.MediaItemID <= 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "media_item_id must be positive"}); return
+	}
+	if err := s.repository.EnqueueTMDBRefresh(r.Context(), request.MediaItemID, request.Priority); err != nil { writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()}); return }
+	writeJSON(w, http.StatusAccepted, map[string]any{"ok": true, "media_item_id": request.MediaItemID})
+}
+
+func (s *Server) handleTMDBQueueCancel(w http.ResponseWriter, r *http.Request) {
+	id, ok := parsePositiveID(r.PathValue("id"))
+	if !ok { writeJSON(w, http.StatusBadRequest, map[string]any{"error": "queue id must be positive"}); return }
+	if err := s.repository.CancelTMDBQueueJob(r.Context(), id); err != nil { writeJSON(w, http.StatusNotFound, map[string]any{"error": err.Error()}); return }
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "id": id})
+}
+
+func (s *Server) handleTMDBCandidates(w http.ResponseWriter, r *http.Request) {
+	title := strings.TrimSpace(r.URL.Query().Get("title"))
+	if title == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "title is required"})
+		return
+	}
+	year := 0
+	if raw := r.URL.Query().Get("year"); raw != "" {
+		year, _ = strconv.Atoi(raw)
+	}
+	candidates, err := s.metadata.SearchCandidates(r.Context(), metadata.Query{Title: title, Type: strings.TrimSpace(r.URL.Query().Get("type")), Year: year, Language: "en-US"})
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"candidates": candidates})
 }
 
 func (s *Server) handleTMDBSettingsUpdate(w http.ResponseWriter, r *http.Request) {

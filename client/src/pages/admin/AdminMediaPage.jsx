@@ -17,8 +17,10 @@ import {
   createMediaItem,
   deleteMediaItem,
   enrichMedia,
+  enqueueTMDBRefresh,
   getCategories,
   getMediaList,
+  searchTMDBCandidates,
   updateMediaItem,
 } from "../../lib/api.js";
 import {
@@ -69,6 +71,8 @@ export default function AdminMediaPage() {
     genres: [],
   });
   const [enrichLoading, setEnrichLoading] = useState(false);
+  const [candidateLoading, setCandidateLoading] = useState(false);
+  const [candidates, setCandidates] = useState([]);
   const [bulkEnrichStatus, setBulkEnrichStatus] = useState({
     state: "idle",
     completed: 0,
@@ -162,6 +166,7 @@ export default function AdminMediaPage() {
       banner_path: item.banner_path || "",
       genres: item.genres || [],
     });
+    setCandidates([]);
   }
 
   function handleOpenAddNew() {
@@ -185,6 +190,38 @@ export default function AdminMediaPage() {
       banner_path: "",
       genres: [],
     });
+    setCandidates([]);
+  }
+
+  async function handleSearchCandidates() {
+    const title = modalForm.title_en.trim() || modalForm.title_ar.trim();
+    if (!title) return;
+    setCandidateLoading(true);
+    try {
+      const result = await searchTMDBCandidates({ title, type: modalForm.type, year: modalForm.release_year });
+      setCandidates(result?.candidates || []);
+    } catch (err) {
+      alert("تعذر البحث في TMDB: " + (err?.message || ""));
+    } finally {
+      setCandidateLoading(false);
+    }
+  }
+
+  async function handleChooseCandidate(candidate) {
+    if (!editingItem || isNewItem) return;
+    setCandidates([]);
+    setEnrichLoading(true);
+    try {
+      const res = await enrichMedia(editingItem.id, { tmdbId: candidate.externalId });
+      const metadata = Array.isArray(res.metadata) ? res.metadata : [res.metadata].filter(Boolean);
+      const arabic = metadata.find((item) => String(item.locale || "").toLowerCase().startsWith("ar"));
+      const english = metadata.find((item) => String(item.locale || "").toLowerCase().startsWith("en")) || metadata[0];
+      if (english || arabic) setModalForm((prev) => ({ ...prev, title_ar: arabic?.title || prev.title_ar, title_en: english?.title || prev.title_en, plot_ar: arabic?.overview || prev.plot_ar, plot_en: english?.overview || prev.plot_en, release_year: english?.releaseYear || prev.release_year, rating: english?.rating || prev.rating, poster_path: english?.cachedPosterPath || english?.posterPath || prev.poster_path, banner_path: english?.cachedBannerPath || english?.bannerPath || prev.banner_path, genres: english?.genres?.length ? english.genres : prev.genres }));
+    } catch (err) {
+      alert("تعذر اعتماد النتيجة: " + (err?.message || ""));
+    } finally {
+      setEnrichLoading(false);
+    }
   }
 
   async function handleSaveMedia() {
@@ -238,6 +275,16 @@ export default function AdminMediaPage() {
       alert("تعذر الجلب: " + (err?.message || ""));
     } finally {
       setEnrichLoading(false);
+    }
+  }
+
+  async function handleQueueRefresh() {
+    if (!editingItem || isNewItem) return;
+    try {
+      await enqueueTMDBRefresh(editingItem.id, 10);
+      alert("تمت إضافة العمل إلى طابور تحديث TMDB");
+    } catch (err) {
+      alert("تعذر إضافة العمل للطابور: " + (err?.message || ""));
     }
   }
 
@@ -579,6 +626,7 @@ export default function AdminMediaPage() {
                   <span>{enrichLoading ? "جارٍ الجلب..." : "✨ جلب فوري من TMDB"}</span>
                 </Button>
               )}
+              {!isNewItem && <Button variant="ghost" onClick={handleQueueRefresh}>إضافة للطابور</Button>}
               <Button variant="ghost" onClick={() => setEditingItem(null)}>
                 إلغاء
               </Button>
@@ -594,6 +642,10 @@ export default function AdminMediaPage() {
           }
         >
           <div className="space-y-6 max-h-[75vh] overflow-y-auto pr-1 pl-1">
+            {!isNewItem && <div className="rounded-2xl border border-cyan-400/20 bg-cyan-950/15 p-4 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-3"><div><h4 className="text-sm font-black text-cyan-100">اختيار نتيجة TMDB</h4><p className="mt-1 text-[11px] text-cyan-100/60">ابحث ثم اعتمد العمل الصحيح قبل جلب التفاصيل.</p></div><Button variant="secondary" onClick={handleSearchCandidates} loading={candidateLoading}>بحث في TMDB</Button></div>
+              {candidates.length > 0 && <div className="grid gap-2 sm:grid-cols-2">{candidates.slice(0, 8).map((candidate) => <button key={candidate.externalId} type="button" onClick={() => handleChooseCandidate(candidate)} className="flex gap-3 rounded-xl border border-white/10 bg-black/20 p-2 text-right transition hover:border-cyan-300/50 hover:bg-cyan-950/30"><div className="h-20 w-14 shrink-0 overflow-hidden rounded-lg bg-black/40">{candidate.posterPath && <img src={candidate.posterPath} alt="" className="h-full w-full object-cover" />}</div><span className="min-w-0 py-1"><strong className="block truncate text-xs font-bold text-white">{candidate.title}</strong><small className="mt-1 block truncate text-[10px] text-white/60">{candidate.originalTitle}</small><small className="mt-2 block text-[10px] text-amber-300">{candidate.year || "-"} · ★ {candidate.rating ? candidate.rating.toFixed(1) : "-"} · TMDB #{candidate.externalId}</small></span></button>)}</div>}
+            </div>}
             {/* Section 1: Basic Information */}
             <div className="space-y-3">
               <h4 className="text-xs font-black text-fuchsia-400 uppercase tracking-wider flex items-center gap-1.5">

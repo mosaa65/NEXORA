@@ -204,10 +204,18 @@ export async function getMediaSeasonMetadata(mediaId, locale = "ar-SA") {
   return requestJSON(`/api/media/${encodeURIComponent(mediaId)}/metadata/seasons?locale=${encodeURIComponent(locale)}`);
 }
 
-export async function enrichMedia(mediaId) {
-  return requestJSON(`/api/media/${encodeURIComponent(mediaId)}/enrich`, {
+export async function enrichMedia(mediaId, options = {}) {
+  const selected = options.tmdbId;
+  const query = selected ? `?tmdb_id=${encodeURIComponent(selected)}` : "";
+  return requestJSON(`/api/media/${encodeURIComponent(mediaId)}/enrich${query}`, {
     method: "POST"
   });
+}
+
+export async function searchTMDBCandidates({ title, type, year }) {
+  const params = new URLSearchParams({ title, type: type || "movie" });
+  if (year) params.set("year", String(year));
+  return requestJSON(`/api/tmdb/candidates?${params.toString()}`);
 }
 
 export async function createMediaItem(data) {
@@ -264,10 +272,17 @@ export async function updateTMDBSettings(settings) {
 export async function getTMDBStats() {
   return requestJSON("/api/tmdb/stats");
 }
+export async function getTMDBUsageHistory(days = 90) { return requestJSON(`/api/tmdb/usage/history?days=${encodeURIComponent(days)}`); }
 
 export async function getTMDBModules() {
   return requestJSON("/api/tmdb/modules");
 }
+
+export async function getTMDBQueue() { return requestJSON("/api/tmdb/queue"); }
+export async function enqueueTMDBRefresh(mediaItemId, priority = 0) {
+  return requestJSON("/api/tmdb/queue", { method: "POST", body: JSON.stringify({ media_item_id: mediaItemId, priority }) });
+}
+export async function cancelTMDBQueueJob(id) { return requestJSON(`/api/tmdb/queue/${encodeURIComponent(id)}/cancel`, { method: "POST" }); }
 
 export async function updateTMDBModules(payload) {
   return requestJSON("/api/tmdb/modules", {

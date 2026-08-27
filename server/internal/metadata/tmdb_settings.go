@@ -73,6 +73,11 @@ type TMDBSettings struct {
 	BackdropSize         string       `json:"backdrop_size"`          // original, w1280, w780
 	ProfileSize          string       `json:"profile_size"`           // w185, h632, original
 	StillSize            string       `json:"still_size"`             // w300, original
+	AutoRefreshEnabled   bool         `json:"auto_refresh_enabled"`
+	RefreshIntervalDays  int          `json:"refresh_interval_days"`
+	RefreshOnOpen        bool         `json:"refresh_on_open"`
+	RefreshStaleDays     int          `json:"refresh_stale_days"`
+	QueueMaxConcurrent   int          `json:"queue_max_concurrent"`
 	Modules              ModuleConfig `json:"modules"`
 	UpdatedAt            time.Time    `json:"updated_at"`
 }
@@ -106,6 +111,11 @@ func DefaultSettings() TMDBSettings {
 		BackdropSize:         "original",
 		ProfileSize:          "w185",
 		StillSize:            "w300",
+		AutoRefreshEnabled:   false,
+		RefreshIntervalDays:  30,
+		RefreshOnOpen:        false,
+		RefreshStaleDays:     7,
+		QueueMaxConcurrent:   1,
 		Modules: ModuleConfig{
 			FetchTitle:            true,
 			FetchOverview:         true,
@@ -247,6 +257,16 @@ type TMDBUsageSummary struct {
 	EnrichedMediaCount     int64     `json:"enriched_media_count"`
 	PendingMediaCount      int64     `json:"pending_media_count"`
 	LastRequestAt          *time.Time `json:"last_request_at,omitempty"`
+}
+
+type TMDBUsageDay struct {
+	Day              string  `json:"day"`
+	Requests         int64   `json:"requests"`
+	BytesDownloaded  int64   `json:"bytes_downloaded"`
+	MBDownloaded     float64 `json:"mb_downloaded"`
+	ImagesDownloaded int64   `json:"images_downloaded"`
+	Successful       int64   `json:"successful"`
+	Failed           int64   `json:"failed"`
 }
 
 // ModuleItemInfo represents a descriptor for UI render
