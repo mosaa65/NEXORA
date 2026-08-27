@@ -285,24 +285,24 @@ export default function MediaDetailsPage({
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <p dir="ltr" className="text-left text-2xl font-black tracking-tight text-white sm:text-3xl lg:text-5xl">{englishTitle}</p>
-                  <p className="mt-2 text-sm font-medium text-white/70 sm:text-base">{arabicTitle}</p>
+                  <p className="mt-2 text-sm font-medium text-white sm:text-base drop-shadow-sm">{arabicTitle}</p>
                 </div>
                 <div className="rounded-full border border-amber-400/30 bg-amber-500/10 px-3 py-1.5 text-sm font-black text-amber-300">
                   ★ {Number(current.rating || 8.5).toFixed(1)}
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2 text-[11px] font-bold text-white/80">
-                <span className="rounded-full bg-white/10 px-2.5 py-1">{current.year || 2023}</span>
-                <span className="rounded-full bg-white/10 px-2.5 py-1">HD</span>
+              <div className="flex flex-wrap items-center gap-2 text-[11px] font-bold text-white">
+                <span className="rounded-full bg-white/15 px-2.5 py-1 text-white">{current.year || 2023}</span>
+                <span className="rounded-full bg-white/15 px-2.5 py-1 text-white">HD</span>
                 {(current.highlights || []).slice(0, 4).map((h) => (
-                  <span key={h} className="rounded-full border border-fuchsia-400/30 bg-fuchsia-500/10 px-2.5 py-1 text-fuchsia-200">
+                  <span key={h} className="rounded-full border border-fuchsia-400/30 bg-fuchsia-500/20 px-2.5 py-1 text-fuchsia-100 font-bold">
                     {h}
                   </span>
                 ))}
               </div>
 
-              <p className="max-w-3xl text-sm leading-7 text-white/75 sm:text-[15px]">{current.plot}</p>
+              <p className="max-w-3xl text-sm leading-7 text-white sm:text-[15px] drop-shadow-sm">{current.plot}</p>
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
@@ -402,7 +402,44 @@ export default function MediaDetailsPage({
         </section>
       )}
 
-      {cast.length > 0 && <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5 shadow-[var(--shadow-sm)]"><h2 className="text-lg font-black text-[var(--text-primary)]">طاقم العمل</h2><div onWheel={horizontalWheel} className="mt-4 flex gap-3 overflow-x-auto pb-2">{cast.slice(0, 20).map((person) => { const englishPerson = englishCastByID.get(person.id); const profileURL = resolveAPIURL(englishPerson?.local_profile_path || person.local_profile_path) || tmdbImageURL(person.profile_path || englishPerson?.profile_path, "w185"); return <article key={person.id} className="w-28 shrink-0 overflow-hidden rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)]"><div className="aspect-[4/5] bg-[var(--bg-surface)]">{profileURL ? <img src={profileURL} alt={person.name} className="h-full w-full object-cover" loading="lazy" /> : <div className="flex h-full items-center justify-center text-3xl text-[var(--text-muted)]">♙</div>}</div><div className="p-2"><p className="truncate text-xs font-bold text-[var(--text-primary)]">{person.name}</p><p className="mt-1 truncate text-[10px] text-[var(--text-muted)]">{person.character || person.roles?.[0]?.character || "طاقم العمل"}</p></div></article>; })}</div></section>}
+      {cast.length > 0 && (
+        <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5 shadow-[var(--shadow-sm)]">
+          <h2 className="text-lg font-black text-[var(--text-primary)]">طاقم العمل</h2>
+          <div onWheel={horizontalWheel} className="mt-4 flex gap-3 overflow-x-auto pb-2">
+            {cast.slice(0, 20).map((person) => {
+              const englishPerson = englishCastByID.get(person.id);
+              const profileURL = resolveAPIURL(englishPerson?.local_profile_path || person.local_profile_path) || tmdbImageURL(person.profile_path || englishPerson?.profile_path, "w185");
+              return (
+                <article key={person.id} className="w-28 sm:w-32 shrink-0 overflow-hidden rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] shadow-sm">
+                  <div className="relative aspect-[4/5] bg-gradient-to-br from-cyan-950/40 via-purple-950/20 to-fuchsia-950/30 overflow-hidden">
+                    {profileURL ? (
+                      <img
+                        src={profileURL}
+                        alt={person.name}
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                        onError={(e) => {
+                          e.currentTarget.style.display = "none";
+                          if (e.currentTarget.nextElementSibling) e.currentTarget.nextElementSibling.classList.remove("hidden");
+                        }}
+                      />
+                    ) : null}
+                    <div className={`${profileURL ? "hidden" : ""} absolute inset-0 flex items-center justify-center p-2`}>
+                      <span className="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)] text-[var(--color-info)] shadow-inner">
+                        <Icon name="user" className="h-5 w-5 sm:h-6 sm:w-6" />
+                      </span>
+                    </div>
+                  </div>
+                  <div className="p-2 sm:p-2.5">
+                    <p className="truncate text-xs font-bold text-[var(--text-primary)]">{person.name}</p>
+                    <p className="mt-0.5 truncate text-[10px] text-[var(--text-muted)]">{person.character || person.roles?.[0]?.character || "طاقم العمل"}</p>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {related.length > 0 && <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5 shadow-[var(--shadow-sm)]"><h2 className="text-lg font-black text-[var(--text-primary)]">قد يعجبك أيضاً</h2><div onWheel={horizontalWheel} className="mt-4 flex gap-3 overflow-x-auto pb-2">{related.slice(0, 12).map((item) => { const englishItem = englishRelatedByID.get(item.id); const titleEN = englishItem?.title || englishItem?.name || item.original_title || item.original_name || item.title || item.name; const titleAR = hasArabicText(item.title || item.name) ? (item.title || item.name) : "لا تتوفر ترجمة عربية"; const relatedPoster = resolveAPIURL(englishItem?.local_poster_path || item.local_poster_path) || tmdbImageURL(item.poster_path || englishItem?.poster_path); return <article key={item.id} className="w-40 shrink-0 overflow-hidden rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)]"><div className="aspect-[2/3] bg-[var(--bg-surface)]">{relatedPoster ? <img src={relatedPoster} alt={titleEN} className="h-full w-full object-cover" loading="lazy" /> : <div className="flex h-full items-center justify-center text-xs text-[var(--text-muted)]">لا توجد صورة</div>}</div><div className="p-3"><p dir="ltr" className="line-clamp-2 text-left text-xs font-bold text-[var(--text-primary)]">{titleEN}</p><p className="mt-1 line-clamp-2 text-xs text-[var(--text-secondary)]">{titleAR}</p><p className="mt-2 text-xs text-amber-500 font-bold">★ {Number(item.vote_average || englishItem?.vote_average || 0).toFixed(1)}</p></div></article>; })}</div></section>}
 

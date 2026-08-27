@@ -123,11 +123,11 @@ export default function ShowcaseHero({ context = "home", category, fallbackItems
 
         <div className="space-y-2">
           <h1 className={`max-w-xl text-3xl font-black leading-[1.15] tracking-tight text-white drop-shadow sm:text-4xl lg:text-5xl ${englishOnly ? "text-left" : ""}`} dir={englishOnly ? "ltr" : "rtl"}>{title}</h1>
-          {current.title_ar && current.title_en && <p className="text-sm font-semibold tracking-wide text-white/65" dir="ltr">{current.title_en}</p>}
-          <p className="line-clamp-2 max-w-xl text-sm leading-7 text-white/78 sm:text-base">{description}</p>
+          {current.title_ar && current.title_en && <p className="text-sm font-semibold tracking-wide text-white drop-shadow-sm" dir="ltr">{current.title_en}</p>}
+          <p className="line-clamp-2 max-w-xl text-sm leading-7 text-white drop-shadow-sm sm:text-base">{description}</p>
         </div>
 
-        {facts.length > 0 && <div className="flex flex-wrap gap-2">{facts.map((fact) => <span key={fact} className="rounded-lg border border-white/15 bg-black/25 px-2.5 py-1.5 text-xs font-bold text-white/90 backdrop-blur">{fact}</span>)}</div>}
+        {facts.length > 0 && <div className="flex flex-wrap gap-2">{facts.map((fact) => <span key={fact} className="rounded-lg border border-white/20 bg-black/35 px-2.5 py-1.5 text-xs font-bold text-white backdrop-blur">{fact}</span>)}</div>}
 
         <div className="flex flex-wrap items-center gap-3 pt-1">
           <button type="button" onClick={open} className={`min-h-11 rounded-xl bg-gradient-to-l ${accent} px-5 text-sm font-extrabold text-white shadow-lg transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white`}>

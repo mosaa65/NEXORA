@@ -9,14 +9,55 @@ const directoryConfig = {
 };
 
 function DirectoryCard({ kind, item, onOpen }) {
+  const isPerson = kind === "people";
+  const [imgError, setImgError] = useState(false);
+
   if (kind === "hubs") {
     const image = resolveAPIURL(item.artwork_path) || "/nexora-library-backdrop.PNG";
     return <button type="button" onClick={() => onOpen(item)} className="group relative min-h-56 overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] text-right shadow-lg transition hover:-translate-y-1 hover:border-fuchsia-400/50" dir="rtl"><img src={image} alt="" className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-105" onError={(event) => { event.currentTarget.src = "/nexora-library-backdrop.PNG"; }} /><span className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/45 to-transparent" /><span className="relative flex min-h-56 flex-col justify-end gap-2 p-5 text-white"><Icon name={item.icon || "spark"} className="h-7 w-7 text-fuchsia-300" /><strong className="text-lg font-black">{item.title_ar || item.title_en}</strong><small className="text-xs text-white/65">{item.item_count || 0} عمل</small></span></button>;
   }
 
-  const isPerson = kind === "people";
-  const image = resolveAPIURL(isPerson ? item.profile_path : (item.backdrop_path || item.poster_path));
-  return <button type="button" onClick={() => onOpen(item)} className={`group overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] text-right shadow-lg transition hover:-translate-y-1 ${isPerson ? "" : "min-h-48"}`} dir="rtl"><div className={`relative overflow-hidden bg-black/20 ${isPerson ? "aspect-[4/5]" : "h-32"}`}>{image ? <img src={image} alt="" className="h-full w-full object-cover transition duration-500 group-hover:scale-105" onError={(event) => { event.currentTarget.src = isPerson ? "/nexora-poster-placeholder.PNG" : "/nexora-library-backdrop.PNG"; }} /> : <span className="absolute inset-0 flex items-center justify-center text-[var(--text-muted)]"><Icon name={isPerson ? "user" : "film"} className="h-10 w-10" /></span>}</div><span className="block space-y-1 p-4"><strong className="block truncate text-sm font-black text-[var(--text-primary)]">{isPerson ? (item.name_ar || item.name_en) : (item.title_ar || item.title_en)}</strong>{isPerson && item.name_ar && item.name_en && <small className="block truncate text-left text-[10px] text-[var(--text-muted)]" dir="ltr">{item.name_en}</small>}<small className="text-xs text-[var(--text-muted)]">{isPerson ? `${item.local_media_count || 0} أعمال محلية` : `${item.local_item_count || 0} أفلام متاحة`}</small></span></button>;
+  const rawImage = isPerson ? item.profile_path : (item.backdrop_path || item.poster_path);
+  const image = resolveAPIURL(rawImage);
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(item)}
+      className={`group overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] text-right shadow-[var(--shadow-sm)] transition duration-300 hover:-translate-y-1 hover:border-[var(--color-info)] hover:shadow-[var(--shadow-lg)] ${isPerson ? "" : "min-h-48"}`}
+      dir="rtl"
+    >
+      <div className={`relative overflow-hidden ${isPerson ? "aspect-[4/5] bg-gradient-to-br from-cyan-950/40 via-purple-950/20 to-fuchsia-950/30" : "h-32 bg-black/20"}`}>
+        {!imgError && image ? (
+          <img
+            src={image}
+            alt=""
+            className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+            onError={() => setImgError(true)}
+          />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center p-3 text-center">
+            <span className="flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--color-info)] shadow-inner">
+              <Icon name={isPerson ? "user" : "film"} className="h-7 w-7 sm:h-8 sm:w-8" />
+            </span>
+          </div>
+        )}
+      </div>
+      <span className="block space-y-1 p-3.5 sm:p-4">
+        <strong className="block truncate text-xs sm:text-sm font-black text-[var(--text-primary)]">
+          {isPerson ? (item.name_ar || item.name_en) : (item.title_ar || item.title_en)}
+        </strong>
+        {isPerson && item.name_ar && item.name_en && (
+          <small className="block truncate text-left text-[10px] sm:text-[11px] font-semibold text-[var(--text-muted)]" dir="ltr">
+            {item.name_en}
+          </small>
+        )}
+        <small className="inline-flex items-center gap-1 rounded-md bg-[var(--color-info-light)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--color-info)]">
+          <Icon name="film" className="h-3 w-3" />
+          {isPerson ? `${item.local_media_count || 0} أعمال محلية` : `${item.local_item_count || 0} أفلام متاحة`}
+        </small>
+      </span>
+    </button>
+  );
 }
 
 export default function DirectoryPage({ kind, onOpen }) {
