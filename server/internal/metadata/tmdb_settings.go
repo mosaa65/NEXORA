@@ -130,8 +130,8 @@ func DefaultSettings() TMDBSettings {
 			FetchCreditsText:      true,
 			FetchRecommendations:  true,
 			FetchSimilar:          true,
-			FetchReviews:          false,
-			FetchWatchProviders:   false,
+			FetchReviews:          true,
+			FetchWatchProviders:   true,
 			FetchPoster:           true,
 			FetchBackdrop:         true,
 			MaxCastImages:         0, // Text names only by default in standard
