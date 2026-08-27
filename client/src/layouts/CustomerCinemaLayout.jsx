@@ -60,7 +60,7 @@ export default function CustomerCinemaLayout({
   }
 
   return (
-    <div className="relative min-h-screen bg-[var(--bg-base)] text-[var(--text-primary)] selection:bg-[var(--color-accent-light)] font-sans text-right" dir="rtl">
+    <div className="theme-aware-shell relative min-h-screen bg-[var(--bg-base)] text-[var(--text-primary)] selection:bg-[var(--color-accent-light)] font-sans text-right" dir="rtl">
       {/* Background Ambient Glow */}
       <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
         <div className="absolute -right-40 -top-40 h-[500px] w-[500px] rounded-full bg-purple-900/15 blur-[120px]" />

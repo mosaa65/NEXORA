@@ -59,14 +59,14 @@ export function MetricCard({
   label,
   value,
   subtext,
-  accentColor = "text-white",
+  accentColor = "text-[var(--text-primary)]",
   className = "",
 }) {
   return (
     <Card className={`p-5 ${className}`}>
-      <p className="text-xs font-bold text-white/50">{label}</p>
+      <p className="text-xs font-bold text-[var(--text-muted)]">{label}</p>
       <p className={`mt-2 text-3xl font-black ${accentColor}`}>{value}</p>
-      {subtext && <p className="text-xs text-white/40 mt-1">{subtext}</p>}
+      {subtext && <p className="text-xs text-[var(--text-secondary)] mt-1">{subtext}</p>}
     </Card>
   );
 }

@@ -37,14 +37,14 @@ export default function TopBar({
   };
 
   return (
-    <header className="sticky top-0 z-40 mb-6 flex items-center justify-between gap-3 sm:gap-4 rounded-2xl sm:rounded-full border border-white/15 bg-[#090812]/90 px-3 sm:px-6 py-2.5 shadow-2xl backdrop-blur-2xl transition-all">
+    <header className="sticky top-0 z-40 mb-6 flex items-center justify-between gap-3 sm:gap-4 rounded-2xl sm:rounded-full border border-[var(--border-default)] bg-[var(--bg-card)]/90 px-3 sm:px-6 py-2.5 shadow-[var(--shadow-lg)] backdrop-blur-2xl transition-all">
       {/* Actions (Left Side in RTL): Sidebar Toggle & Theme Toggle */}
       <div className="flex items-center gap-2 shrink-0">
         {/* Sidebar Toggle (Mobile Drawer & Desktop Icon/Full Collapsed Mode) */}
         <button
           type="button"
           onClick={onToggleSidebar}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/5 text-white/90 transition-all duration-200 hover:bg-white/15 hover:text-white hover:scale-105 active:scale-95 shadow-sm"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] transition-all duration-200 hover:bg-[var(--bg-surface)] hover:text-[var(--text-primary)] hover:scale-105 active:scale-95 shadow-sm"
           title={isCollapsed ? "توسيع القائمة الجانبية" : "تصغير القائمة لأيقونات"}
           aria-label="تبديل القائمة الجانبية"
         >
@@ -55,7 +55,7 @@ export default function TopBar({
         <button
           type="button"
           onClick={toggleTheme}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/5 text-white/90 transition-all duration-200 hover:bg-white/15 hover:text-white hover:scale-105 active:scale-95 shadow-sm"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] transition-all duration-200 hover:bg-[var(--bg-surface)] hover:text-[var(--text-primary)] hover:scale-105 active:scale-95 shadow-sm"
           title={theme === "dark" ? "تفعيل المظهر الفاتح" : "تفعيل المظهر الداكن"}
           aria-label="تبديل مظهر التطبيق"
         >
@@ -70,7 +70,7 @@ export default function TopBar({
 
       {/* Main Search Input & Live Results */}
       <div ref={searchContainerRef} className="relative flex-1 max-w-xl mx-2 sm:mx-4">
-        <div className="flex w-full items-center gap-3 rounded-full border border-white/15 bg-black/60 px-4 py-2 text-white shadow-inner transition focus-within:border-fuchsia-500/80 focus-within:bg-black/90 focus-within:ring-2 focus-within:ring-fuchsia-500/25">
+        <div className="flex w-full items-center gap-3 rounded-full border border-[var(--border-default)] bg-[var(--bg-input)] px-4 py-2 text-[var(--text-primary)] shadow-inner transition focus-within:border-[var(--color-accent)] focus-within:bg-[var(--bg-input)] focus-within:ring-2 focus-within:ring-[var(--color-accent-light)]">
           <Icon name="search" className="h-4 w-4 text-fuchsia-400 shrink-0" />
           <input
             type="text"
@@ -82,7 +82,7 @@ export default function TopBar({
             onFocus={() => setShowSearchDropdown(true)}
             onKeyDown={handleKeyDown}
             placeholder="ابحث عن أنمي، فيلم، مسلسل..."
-            className="w-full bg-transparent text-xs sm:text-sm font-semibold text-white outline-none placeholder:text-white/50 text-right selection:bg-fuchsia-600"
+            className="w-full bg-transparent text-xs sm:text-sm font-semibold text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)] text-right selection:bg-[var(--color-accent-light)]"
           />
           {searchQuery && (
             <button
@@ -91,7 +91,7 @@ export default function TopBar({
                 onSearchChange("");
                 setShowSearchDropdown(false);
               }}
-              className="flex h-5 w-5 items-center justify-center rounded-full bg-white/10 text-xs text-white/70 hover:bg-white/20 hover:text-white transition"
+              className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--bg-elevated)] text-xs text-[var(--text-muted)] hover:bg-[var(--bg-surface)] hover:text-[var(--text-primary)] transition"
               title="مسح البحث"
             >
               ✕
@@ -101,8 +101,8 @@ export default function TopBar({
 
         {/* Live Search Dropdown */}
         {showSearchDropdown && searchQuery.trim() && (
-          <div className="absolute right-0 top-full z-50 mt-2 max-h-96 w-full overflow-y-auto rounded-2xl border border-white/15 bg-[#0C0B18]/98 p-2 shadow-2xl backdrop-blur-2xl ring-1 ring-white/10 scrollbar-thin scrollbar-thumb-white/10">
-            <div className="flex items-center justify-between border-b border-white/10 px-3 py-2 text-xs font-bold text-white/60">
+          <div className="absolute right-0 top-full z-50 mt-2 max-h-96 w-full overflow-y-auto rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-2 shadow-[var(--shadow-xl)] backdrop-blur-2xl ring-1 ring-[var(--border-subtle)] scrollbar-thin">
+            <div className="flex items-center justify-between border-b border-[var(--border-subtle)] px-3 py-2 text-xs font-bold text-[var(--text-muted)]">
               <span className="flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full bg-fuchsia-500 animate-pulse" />
                 نتائج البحث ({searchResults.length})
@@ -110,7 +110,7 @@ export default function TopBar({
               <button
                 type="button"
                 onClick={() => setShowSearchDropdown(false)}
-                className="text-white/50 hover:text-white transition text-xs"
+                className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition text-xs"
               >
                 إغلاق ✕
               </button>
@@ -123,7 +123,7 @@ export default function TopBar({
                   return (
                     <div
                       key={item.id}
-                      className="group flex items-center justify-between gap-3 p-2 transition hover:bg-white/5 rounded-xl border border-transparent hover:border-white/10"
+                      className="group flex items-center justify-between gap-3 p-2 transition hover:bg-[var(--bg-elevated)] rounded-xl border border-transparent hover:border-[var(--border-subtle)]"
                     >
                       {/* Quick Play Button */}
                       <button
@@ -145,13 +145,13 @@ export default function TopBar({
                           onOpenMedia(item);
                           setShowSearchDropdown(false);
                         }}
-                        className="flex flex-1 items-center gap-3 text-right min-w-0"
+                        className="flex flex-1 items-center gap-3 text-right min-w-0 text-[var(--text-primary)]"
                       >
                         <div className="flex flex-1 flex-col min-w-0">
-                          <p className="truncate text-xs sm:text-sm font-bold text-white group-hover:text-fuchsia-300 transition-colors">
+                          <p className="truncate text-xs sm:text-sm font-bold text-[var(--text-primary)] group-hover:text-[var(--color-accent-hover)] transition-colors">
                             {item.title_ar || item.titleAr || item.title_en || item.titleEn}
                           </p>
-                          <div className="flex items-center gap-2 text-[11px] text-white/50 truncate mt-0.5">
+                          <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)] truncate mt-0.5">
                             {(item.title_en || item.titleEn) && (
                               <span className="truncate" dir="ltr">{item.title_en || item.titleEn}</span>
                             )}
@@ -179,7 +179,7 @@ export default function TopBar({
                 })}
               </div>
             ) : (
-              <div className="p-6 text-center text-xs text-white/50 space-y-1">
+              <div className="p-6 text-center text-xs text-[var(--text-muted)] space-y-1">
                 <p className="text-sm">🔍</p>
                 <p>لا توجد نتائج تطابق "{searchQuery}"</p>
               </div>

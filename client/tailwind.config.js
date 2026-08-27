@@ -1,6 +1,14 @@
 /** @type {import('tailwindcss').Config} */
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const clientRoot = path.dirname(fileURLToPath(import.meta.url));
+
 export default {
-  content: ["./index.html", "./src/**/*.{js,jsx}"],
+  content: [
+    path.join(clientRoot, "index.html"),
+    path.join(clientRoot, "src/**/*.{js,jsx}")
+  ],
   theme: {
     extend: {
       colors: {

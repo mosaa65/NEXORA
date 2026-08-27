@@ -1,3 +1,5 @@
+@config "../../tailwind.config.js";
+
 @font-face { font-family: "NEXORA Arabic"; src: url("/fonts/ibm-plex-arabic-400.ttf") format("truetype"); font-weight: 400; font-style: normal; font-display: swap; }
 @font-face { font-family: "NEXORA Arabic"; src: url("/fonts/ibm-plex-arabic-500.ttf") format("truetype"); font-weight: 500; font-style: normal; font-display: swap; }
 @font-face { font-family: "NEXORA Arabic"; src: url("/fonts/ibm-plex-arabic-600.ttf") format("truetype"); font-weight: 600; font-style: normal; font-display: swap; }

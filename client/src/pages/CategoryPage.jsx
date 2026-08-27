@@ -348,14 +348,14 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
           <div className="flex items-center justify-center py-20">
             <div className="text-center space-y-3">
               <div className="w-10 h-10 border-4 border-fuchsia-500/30 border-t-fuchsia-500 rounded-full animate-spin mx-auto" />
-              <p className="text-xs text-gray-400">جاري تحميل الأعمال الفنية...</p>
+              <p className="text-xs text-[var(--text-secondary)]">جاري تحميل الأعمال الفنية...</p>
             </div>
           </div>
         ) : filteredItems.length === 0 ? (
-          <div className="p-16 rounded-3xl border border-dashed border-white/10 bg-black/30 text-center space-y-3">
+          <div className="p-16 rounded-3xl border border-dashed border-[var(--border-default)] bg-[var(--bg-card)] text-center space-y-3">
             <span className="text-4xl">🎬</span>
-            <h3 className="text-base font-bold text-white">لا توجد أعمال تطابق الفلاتر المحددة</h3>
-            <p className="text-xs text-gray-400 max-w-sm mx-auto">
+            <h3 className="text-base font-bold text-[var(--text-primary)]">لا توجد أعمال تطابق الفلاتر المحددة</h3>
+            <p className="text-xs text-[var(--text-secondary)] max-w-sm mx-auto">
               جرب تغيير خيارات البحث أو إعادة ضبط فلاتر الدولة والتصنيف.
             </p>
           </div>

@@ -30,7 +30,7 @@ export default function Input({
       {label && (
         <label
           htmlFor={inputId}
-          className="block text-xs font-bold text-white/70"
+          className="block text-xs font-bold text-[var(--text-secondary)]"
         >
           {label}
         </label>
@@ -40,7 +40,7 @@ export default function Input({
         className={`
           w-full border border-[var(--border-default)] bg-[var(--bg-input)]
           text-[var(--text-primary)] outline-none
-          placeholder:text-white/30
+          placeholder:text-[var(--text-muted)]
           focus:border-[var(--color-accent)] focus:ring-1 focus:ring-[var(--color-accent)]
           transition duration-200
           ${mono ? "font-mono" : ""}
@@ -70,7 +70,7 @@ export function Textarea({
       {label && (
         <label
           htmlFor={textareaId}
-          className="block text-xs font-bold text-white/70"
+          className="block text-xs font-bold text-[var(--text-secondary)]"
         >
           {label}
         </label>
@@ -81,7 +81,7 @@ export function Textarea({
         className={`
           w-full rounded-xl border border-[var(--border-default)] bg-[var(--bg-input)]
           p-3 text-xs text-[var(--text-primary)] outline-none
-          placeholder:text-white/30
+          placeholder:text-[var(--text-muted)]
           focus:border-[var(--color-accent)]
           transition duration-200
           ${className}
@@ -110,7 +110,7 @@ export function Select({
       {label && (
         <label
           htmlFor={selectId}
-          className="block text-[11px] font-bold text-white/50"
+          className="block text-[11px] font-bold text-[var(--text-muted)]"
         >
           {label}
         </label>
@@ -118,7 +118,7 @@ export function Select({
       <select
         id={selectId}
         className={`
-          w-full border border-[var(--border-default)] bg-black/50
+          w-full border border-[var(--border-default)] bg-[var(--bg-input)]
           text-[var(--text-primary)] outline-none
           focus:border-[var(--color-accent)]
           ${SIZE_CLASSES[size] || SIZE_CLASSES.md}
@@ -127,7 +127,7 @@ export function Select({
         {...props}
       >
         {options.map((opt) => (
-          <option key={opt.value ?? opt.id} value={opt.value ?? opt.id}>
+          <option key={opt.value ?? opt.id} value={opt.value ?? opt.id} className="bg-[var(--bg-card)] text-[var(--text-primary)]">
             {opt.label}
           </option>
         ))}

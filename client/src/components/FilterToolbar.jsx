@@ -68,28 +68,28 @@ export default function FilterToolbar({
 
   return (
     <div
-      className="space-y-4 rounded-3xl border border-white/12 bg-[#0C0B18]/85 p-4 sm:p-5 shadow-2xl backdrop-blur-2xl transition-all"
+      className="space-y-4 rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4 sm:p-5 shadow-[var(--shadow-lg)] backdrop-blur-2xl transition-all"
       dir="rtl"
     >
       {/* Top Controls Row: Search, Results Counter, Sort & Reset */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1 border-b border-white/5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1 border-b border-[var(--border-subtle)]">
         {/* Search Field */}
         {showSearch && (
           <div className="relative flex-1 sm:max-w-xs md:max-w-sm">
-            <div className="flex w-full items-center gap-2.5 rounded-full border border-white/15 bg-black/60 px-3.5 py-2 text-white shadow-inner transition focus-within:border-fuchsia-500/80 focus-within:bg-black/90 focus-within:ring-2 focus-within:ring-fuchsia-500/25">
+            <div className="flex w-full items-center gap-2.5 rounded-full border border-[var(--border-default)] bg-[var(--bg-input)] px-3.5 py-2 text-[var(--text-primary)] shadow-inner transition focus-within:border-[var(--color-accent)] focus-within:bg-[var(--bg-input)] focus-within:ring-2 focus-within:ring-[var(--color-accent-light)]">
               <Icon name="search" className="h-4 w-4 text-fuchsia-400 shrink-0" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => onSearchChange && onSearchChange(e.target.value)}
                 placeholder="بحث فوري في هذا القسم..."
-                className="w-full bg-transparent text-xs sm:text-sm font-semibold text-white outline-none placeholder:text-white/50 text-right selection:bg-fuchsia-600"
+                className="w-full bg-transparent text-xs sm:text-sm font-semibold text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)] text-right selection:bg-[var(--color-accent-light)]"
               />
               {searchQuery && (
                 <button
                   type="button"
                   onClick={() => onSearchChange && onSearchChange("")}
-                  className="flex h-5 w-5 items-center justify-center rounded-full bg-white/10 text-xs text-white/70 hover:bg-white/20 hover:text-white transition"
+                  className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--bg-elevated)] text-xs text-[var(--text-muted)] hover:bg-[var(--bg-surface)] hover:text-[var(--text-primary)] transition"
                   title="مسح البحث"
                 >
                   ✕
@@ -102,9 +102,9 @@ export default function FilterToolbar({
         {/* Right Area: Results Counter, Sort Dropdown, and Clear Filters Button */}
         <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2.5">
           {/* Results Badge */}
-          <div className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/70">
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--text-secondary)]">
             <span>النتائج:</span>
-            <span className="font-mono font-black text-fuchsia-300">{resultCount}</span>
+            <span className="font-mono font-black text-fuchsia-400">{resultCount}</span>
           </div>
 
           {/* Reset Filters Action */}
@@ -123,20 +123,20 @@ export default function FilterToolbar({
           {/* Sort Selector */}
           {showSort && (
             <div className="flex items-center gap-2">
-              <span className="text-xs text-white/50 hidden md:inline">الترتيب:</span>
+              <span className="text-xs text-[var(--text-muted)] hidden md:inline">الترتيب:</span>
               <div className="relative">
                 <select
                   value={activeSort}
                   onChange={(e) => onSelectSort && onSelectSort(e.target.value)}
-                  className="appearance-none rounded-full border border-white/15 bg-black/60 py-1.5 pl-8 pr-4 text-xs font-bold text-white shadow-sm outline-none transition hover:border-white/30 focus:border-fuchsia-500 cursor-pointer text-right"
+                  className="appearance-none rounded-full border border-[var(--border-default)] bg-[var(--bg-input)] py-1.5 pl-8 pr-4 text-xs font-bold text-[var(--text-primary)] shadow-sm outline-none transition hover:border-[var(--color-accent)] focus:border-[var(--color-accent)] cursor-pointer text-right"
                 >
                   {sorts.map((opt) => (
-                    <option key={opt.id} value={opt.id} className="bg-[#0C0B18] text-white">
+                    <option key={opt.id} value={opt.id} className="bg-[var(--bg-card)] text-[var(--text-primary)]">
                       {opt.label}
                     </option>
                   ))}
                 </select>
-                <div className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/50 text-[10px]">
+                <div className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] text-[10px]">
                   ▼
                 </div>
               </div>
@@ -148,8 +148,8 @@ export default function FilterToolbar({
       {/* Origin/Country Filters Row */}
       {showOriginFilter && (
         <div className="space-y-1.5">
-          <div className="flex items-center gap-2 overflow-x-auto pb-1.5 pt-0.5 scrollbar-thin scrollbar-thumb-white/10">
-            <span className="shrink-0 text-xs font-bold text-white/50 ml-1">المنشأ:</span>
+          <div className="flex items-center gap-2 overflow-x-auto pb-1.5 pt-0.5 scrollbar-thin">
+            <span className="shrink-0 text-xs font-bold text-[var(--text-muted)] ml-1">المنشأ:</span>
             {origins.map((origin) => {
               const isSelected = activeOrigin === origin.id;
               return (
@@ -160,7 +160,7 @@ export default function FilterToolbar({
                   className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-bold transition-all duration-200 active:scale-95 ${
                     isSelected
                       ? "bg-gradient-to-r from-fuchsia-600 via-purple-600 to-fuchsia-700 text-white shadow-md shadow-fuchsia-950/60 border border-fuchsia-400 ring-2 ring-fuchsia-500/20"
-                      : "bg-white/[0.04] text-white/70 border border-white/8 hover:bg-white/10 hover:text-white hover:border-white/20"
+                      : "bg-[var(--bg-surface)] text-[var(--text-secondary)] border border-[var(--border-subtle)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)] hover:border-[var(--border-default)]"
                   }`}
                 >
                   {origin.label}
@@ -174,8 +174,8 @@ export default function FilterToolbar({
       {/* Genre/Category Filters Row */}
       {showGenreFilter && (
         <div className="space-y-1.5">
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-0.5 scrollbar-thin scrollbar-thumb-white/10">
-            <span className="shrink-0 text-xs font-bold text-white/50 ml-1">التصنيف:</span>
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-0.5 scrollbar-thin">
+            <span className="shrink-0 text-xs font-bold text-[var(--text-muted)] ml-1">التصنيف:</span>
             {genres.map((genre) => {
               const isSelected = activeGenre === genre.id;
               return (
@@ -186,7 +186,7 @@ export default function FilterToolbar({
                   className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-bold transition-all duration-200 active:scale-95 ${
                     isSelected
                       ? "bg-purple-600 text-white shadow-sm border border-purple-400 ring-2 ring-purple-500/20"
-                      : "bg-white/[0.03] text-white/60 border border-white/5 hover:bg-white/10 hover:text-white hover:border-white/15"
+                      : "bg-[var(--bg-surface)] text-[var(--text-secondary)] border border-[var(--border-subtle)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)] hover:border-[var(--border-default)]"
                   }`}
                 >
                   {genre.label}

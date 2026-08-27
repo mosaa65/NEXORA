@@ -130,7 +130,7 @@ export default function DashboardPage({
   }
 
   return (
-    <div className="space-y-10 pb-16 text-right" dir="rtl">
+    <div className="theme-aware-page space-y-10 pb-16 text-right" dir="rtl">
       {/* 1. Database-backed editorial showcase */}
       {heroItems.length > 0 && (
         <ShowcaseHero
@@ -155,11 +155,11 @@ export default function DashboardPage({
       {/* 2. Featured Hub Banners Grid */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-black text-white flex items-center gap-2">
+          <h2 className="text-xl font-black text-[var(--text-primary)] flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-fuchsia-500 shadow-[0_0_12px_#e879f9]" />
             مجموعات الاستراحة الحصرية
           </h2>
-          <span className="text-xs font-bold text-gray-400">تصفح سريع</span>
+          <span className="text-xs font-bold text-[var(--text-secondary)]">تصفح سريع</span>
         </div>
 
         <div className="relative">
@@ -213,11 +213,11 @@ export default function DashboardPage({
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg sm:text-xl font-black text-white flex items-center gap-2">
+            <h2 className="text-lg sm:text-xl font-black text-[var(--text-primary)] flex items-center gap-2">
               <span className="text-amber-400">⭐</span>
               الأعلى تقييماً في المكتبة (Top Rated)
             </h2>
-            <p className="text-xs text-gray-400">أقوى الأعمال الفنية المعتمدة من IMDB و TMDB</p>
+            <p className="text-xs text-[var(--text-secondary)]">أقوى الأعمال الفنية المعتمدة من IMDB و TMDB</p>
           </div>
 
         </div>
@@ -242,11 +242,11 @@ export default function DashboardPage({
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg sm:text-xl font-black text-white flex items-center gap-2">
+            <h2 className="text-lg sm:text-xl font-black text-[var(--text-primary)] flex items-center gap-2">
               <span className="text-fuchsia-400">📺</span>
               المسلسلات والدراما الأكثر إقبالاً
             </h2>
-            <p className="text-xs text-gray-400">حلقات ومواسم كاملة جاهزة للمشاهدة المباشرة</p>
+            <p className="text-xs text-[var(--text-secondary)]">حلقات ومواسم كاملة جاهزة للمشاهدة المباشرة</p>
           </div>
 
         </div>
@@ -271,11 +271,11 @@ export default function DashboardPage({
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg sm:text-xl font-black text-white flex items-center gap-2">
+            <h2 className="text-lg sm:text-xl font-black text-[var(--text-primary)] flex items-center gap-2">
               <span className="text-cyan-400">🎬</span>
               الأفلام والسينما (Blockbuster Cinema)
             </h2>
-            <p className="text-xs text-gray-400">أحدث الإصدارات العالمية والأجنبية</p>
+            <p className="text-xs text-[var(--text-secondary)]">أحدث الإصدارات العالمية والأجنبية</p>
           </div>
 
         </div>

@@ -37,3 +37,39 @@
   --gradient-card: linear-gradient(180deg, rgba(255, 255, 255, 0.90), rgba(248, 250, 252, 0.80));
   --gradient-surface: linear-gradient(180deg, rgba(0,0,0,0.02), rgba(0,0,0,0.01));
 }
+
+/* Legacy catalogue surfaces still use white/black utility classes. Keep them
+   readable in light mode while the pages migrate to design tokens. */
+[data-theme="light"] .theme-aware-shell [class*="text-white"],
+[data-theme="light"] .theme-aware-page [class*="text-white"] {
+  color: var(--text-primary);
+}
+
+[data-theme="light"] .theme-aware-shell [class*="text-gray-"],
+[data-theme="light"] .theme-aware-page [class*="text-gray-"] {
+  color: var(--text-secondary);
+}
+
+[data-theme="light"] .theme-aware-shell [class*="border-white"],
+[data-theme="light"] .theme-aware-page [class*="border-white"] {
+  border-color: var(--border-default);
+}
+
+[data-theme="light"] .theme-aware-shell [class*="bg-white/"],
+[data-theme="light"] .theme-aware-page [class*="bg-white/"] {
+  background-color: var(--bg-surface);
+}
+
+[data-theme="light"] .theme-aware-shell [class*="bg-black/"],
+[data-theme="light"] .theme-aware-page [class*="bg-black/"] {
+  background-color: var(--bg-input);
+}
+
+[data-theme="light"] .theme-aware-shell [class*="bg-[#0"],
+[data-theme="light"] .theme-aware-page [class*="bg-[#0"] {
+  background-color: var(--bg-card);
+}
+
+[data-theme="light"] .theme-aware-shell [class*="shadow-"] {
+  --tw-shadow-color: var(--shadow-md);
+}

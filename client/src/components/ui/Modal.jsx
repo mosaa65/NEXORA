@@ -71,7 +71,7 @@ export default function Modal({
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-xl border border-[var(--border-default)] p-1.5 text-white/60 hover:text-white transition"
+                className="rounded-xl border border-[var(--border-default)] p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition"
               >
                 ✕
               </button>
@@ -115,15 +115,15 @@ export function ConfirmModal({
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-rose-500/20 text-2xl text-rose-400">
           🗑️
         </div>
-        <h3 className="text-xl font-bold text-white">{title}</h3>
+        <h3 className="text-xl font-bold text-[var(--text-primary)]">{title}</h3>
         {message && (
-          <p className="text-xs text-white/70 leading-relaxed">{message}</p>
+          <p className="text-xs text-[var(--text-secondary)] leading-relaxed">{message}</p>
         )}
         <div className="flex items-center justify-center gap-3 pt-2">
           <button
             type="button"
             onClick={onClose}
-            className="px-5 py-2.5 rounded-xl border border-white/10 bg-white/[0.05] text-xs font-bold text-white"
+            className="px-5 py-2.5 rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
           >
             {cancelText}
           </button>
