@@ -209,7 +209,7 @@
 .navigation-item:hover .navigation-item__icon {
   color: color-mix(in srgb, var(--item-color) 72%, var(--text-primary));
   filter: drop-shadow(0 0 8px color-mix(in srgb, var(--item-color) 55%, transparent));
-  transform: scale(1.12);
+  transform: rotate(-10deg) scale(1.12);
 }
 
 .navigation-item.is-active {
@@ -218,7 +218,11 @@
 }
 
 .navigation-item.is-active::after { background: var(--item-color); box-shadow: 0 0 10px color-mix(in srgb, var(--item-color) 80%, transparent); }
-.navigation-item.is-active .navigation-item__icon { color: var(--item-color); filter: drop-shadow(0 0 7px color-mix(in srgb, var(--item-color) 65%, transparent)); }
+.navigation-item.is-active .navigation-item__icon {
+  color: var(--item-color);
+  filter: drop-shadow(0 0 7px color-mix(in srgb, var(--item-color) 65%, transparent));
+  transform: rotate(-7deg) scale(1.08);
+}
 
 .navigation-item--dashboard { --item-color: var(--color-info); }
 .navigation-item--movies, .navigation-item--media { --item-color: var(--color-danger-hover); }
