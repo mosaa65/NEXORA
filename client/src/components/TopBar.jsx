@@ -37,10 +37,10 @@ export default function TopBar({
   };
 
   return (
-    <header className="luminous-container sticky top-0 z-40 mb-6 flex items-center justify-between gap-3 sm:gap-4 rounded-2xl sm:rounded-full bg-[var(--bg-card)]/95 px-3 sm:px-6 py-2.5 backdrop-blur-2xl transition-all">
-      {/* Actions (Left Side in RTL): Sidebar Toggle & Theme Toggle */}
+    <header className="luminous-container sticky top-0 z-40 mb-6 flex items-center justify-between gap-2.5 sm:gap-4 rounded-full bg-[var(--bg-card)]/95 px-3 sm:px-6 py-2 sm:py-2.5 border border-[var(--border-default)] shadow-[var(--shadow-md)] backdrop-blur-2xl transition-all" dir="rtl">
+      {/* Actions: Sidebar Toggle & Theme Toggle */}
       <div className="flex items-center gap-2 shrink-0">
-        {/* Sidebar Toggle (Mobile Drawer & Desktop Icon/Full Collapsed Mode) */}
+        {/* Sidebar Toggle */}
         <button
           type="button"
           onClick={onToggleSidebar}
@@ -68,9 +68,9 @@ export default function TopBar({
         </button>
       </div>
 
-      {/* Main Search Input & Live Results */}
-      <div ref={searchContainerRef} className="relative flex-1 max-w-xl mx-2 sm:mx-4">
-        <div className="flex w-full items-center gap-3 rounded-full border-[1.5px] border-[var(--border-luminous)] bg-[var(--bg-input)] px-4 py-2 text-[var(--text-primary)] shadow-[var(--shadow-luminous)] transition focus-within:border-[var(--color-accent)] focus-within:ring-2 focus-within:ring-[var(--color-accent-light)]">
+      {/* Main Search Input & Live Results (Expands to fill all available space) */}
+      <div ref={searchContainerRef} className="relative flex-1 min-w-0 mx-1 sm:mx-3">
+        <div className="flex w-full items-center gap-2.5 sm:gap-3 rounded-full border border-[var(--border-default)] bg-[var(--bg-input)] px-3.5 sm:px-4 py-2 text-[var(--text-primary)] shadow-inner transition focus-within:border-[var(--color-accent)] focus-within:ring-2 focus-within:ring-[var(--color-accent-light)]">
           <Icon name="search" className="h-4 w-4 text-fuchsia-400 shrink-0" />
           <input
             type="text"
@@ -81,8 +81,8 @@ export default function TopBar({
             }}
             onFocus={() => setShowSearchDropdown(true)}
             onKeyDown={handleKeyDown}
-            placeholder="ابحث عن أنمي، فيلم، مسلسل..."
-            className="w-full bg-transparent text-xs sm:text-sm font-semibold text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)] text-right selection:bg-[var(--color-accent-light)]"
+            placeholder="ابحث عن فيلم، كرتون، مسلسل، أو شخصية..."
+            className="w-full min-w-0 bg-transparent text-xs sm:text-sm font-semibold text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)] text-right selection:bg-[var(--color-accent-light)]"
           />
           {searchQuery && (
             <button
@@ -91,7 +91,7 @@ export default function TopBar({
                 onSearchChange("");
                 setShowSearchDropdown(false);
               }}
-              className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--bg-elevated)] text-xs text-[var(--text-muted)] hover:bg-[var(--bg-surface)] hover:text-[var(--text-primary)] transition"
+              className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--bg-elevated)] text-xs text-[var(--text-muted)] hover:bg-[var(--bg-surface)] hover:text-[var(--text-primary)] transition"
               title="مسح البحث"
             >
               ✕
@@ -158,20 +158,15 @@ export default function TopBar({
                             {(item.release_year || item.year) && (
                               <span>• {item.release_year || item.year}</span>
                             )}
-                            {(item.best_resolution || item.resolution) && (
-                              <span className="rounded bg-white/10 px-1 py-0.2 text-[9px] font-bold text-fuchsia-300">
-                                {item.best_resolution || item.resolution}
-                              </span>
-                            )}
                           </div>
                         </div>
-
-                        {/* Thumbnail */}
                         <img
                           src={poster}
                           alt=""
-                          className="h-11 w-8 rounded-lg object-cover border border-white/10 shrink-0 shadow"
-                          onError={(e) => { e.target.src = "/nexora-poster-placeholder.PNG"; }}
+                          className="h-12 w-9 rounded-lg object-cover bg-black/20 shrink-0 border border-[var(--border-default)]"
+                          onError={(e) => {
+                            e.target.src = "/nexora-poster-placeholder.PNG";
+                          }}
                         />
                       </button>
                     </div>
@@ -179,24 +174,12 @@ export default function TopBar({
                 })}
               </div>
             ) : (
-              <div className="p-6 text-center text-xs text-[var(--text-muted)] space-y-1">
-                <p className="text-sm">🔍</p>
-                <p>لا توجد نتائج تطابق "{searchQuery}"</p>
+              <div className="p-6 text-center text-xs text-[var(--text-muted)]">
+                لا توجد نتائج مطابقة لـ "{searchQuery}"
               </div>
             )}
           </div>
         )}
-      </div>
-
-      {/* Official Brand Logo Only */}
-      <div className="flex items-center gap-2 shrink-0">
-        <img
-          src="/nexora-brand-logo.PNG"
-          alt="NEXORA"
-          className="h-8 sm:h-9 md:h-10 w-auto object-contain cursor-pointer transition-transform duration-200 hover:scale-105 select-none"
-          onClick={() => { window.location.hash = "#/"; }}
-          title="NEXORA الرئيسية"
-        />
       </div>
     </header>
   );
