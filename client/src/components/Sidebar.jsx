@@ -10,6 +10,10 @@ const cinemaNavItems = [
   { id: "kids", label: "الأطفال والكرتون", icon: "smile" },
   { id: "documentaries", label: "الوثائقيات", icon: "book" },
   { id: "plays", label: "المسرحيات", icon: "mask" },
+  { id: "ramadan", label: "رمضانيات", icon: "spark" },
+  { id: "wrestling", label: "المصارعة والرياضة", icon: "shield" },
+  { id: "music", label: "الموسيقى والصوتيات", icon: "music" },
+  { id: "apps", label: "البرامج والتطبيقات", icon: "grid" },
   { id: "favorites", label: "المفضلة", icon: "star" },
 ];
 

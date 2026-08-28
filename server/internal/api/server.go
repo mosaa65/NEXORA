@@ -95,6 +95,7 @@ type repository interface {
 	ClaimTMDBQueueJob(ctx context.Context) (*db.TMDBQueueJob, error)
 	FinishTMDBQueueJob(ctx context.Context, id int64, succeeded bool, message string) error
 	CacheLocalArtwork(sourcePath string) string
+	CleanAndSyncAllGenres(ctx context.Context) (int, error)
 }
 
 type searchClient interface {
@@ -143,6 +144,7 @@ type Server struct {
 	quality     qualityService
 	diskManager *disks.Manager
 	mux         *http.ServeMux
+	cache       *responseCache
 }
 
 func NewServer(
@@ -166,6 +168,7 @@ func NewServer(
 		quality:     qualityService,
 		diskManager: disks.NewManager(),
 		mux:         http.NewServeMux(),
+		cache:       newResponseCache(),
 	}
 	server.routes()
 	go server.runTMDBQueue()
@@ -1253,7 +1256,43 @@ func (s *Server) withMiddleware(next http.Handler) http.Handler {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
-		next.ServeHTTP(w, r)
+		if r.Method != http.MethodGet {
+			// All catalogue writes invalidate the short-lived server cache. This is
+			// deliberately broad so a newly indexed or edited title is never hidden.
+			s.cache.clear()
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		ttl := catalogueCacheTTL(r.URL.Path)
+		if ttl <= 0 {
+			next.ServeHTTP(w, r)
+			return
+		}
+		key := cacheKey(r)
+		if entry, ok := s.cache.get(key); ok {
+			w.Header().Set("Content-Type", entry.contentType)
+			w.Header().Set("Cache-Control", "private, max-age=20, must-revalidate")
+			w.Header().Set("X-NEXORA-Cache", "HIT")
+			w.WriteHeader(entry.status)
+			_, _ = w.Write(entry.body)
+			return
+		}
+
+		recorder := httptest.NewRecorder()
+		next.ServeHTTP(recorder, r)
+		result := recorder.Result()
+		body := recorder.Body.Bytes()
+		for header, values := range result.Header {
+			w.Header()[header] = append([]string(nil), values...)
+		}
+		w.Header().Set("Cache-Control", "private, max-age=20, must-revalidate")
+		w.Header().Set("X-NEXORA-Cache", "MISS")
+		w.WriteHeader(result.StatusCode)
+		_, _ = w.Write(body)
+		if result.StatusCode >= http.StatusOK && result.StatusCode < http.StatusMultipleChoices {
+			s.cache.set(key, cachedResponse{status: result.StatusCode, body: append([]byte(nil), body...), contentType: result.Header.Get("Content-Type"), expiresAt: time.Now().Add(ttl)})
+		}
 	})
 }
 
@@ -2498,4 +2537,3 @@ func (s *Server) handleCleanGenres(w http.ResponseWriter, r *http.Request) {
 		"message": fmt.Sprintf("تم تنظيف وتوحيد التصنيفات واستخراج التصنيف العمري لـ %d عملاً بنجاح", updated),
 	})
 }
-

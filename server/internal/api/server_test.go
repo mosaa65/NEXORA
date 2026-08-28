@@ -192,6 +192,7 @@ func (m *mockRepo) DeleteMediaItem(ctx context.Context, id int64) error {
 	return nil
 }
 func (m *mockRepo) CacheLocalArtwork(sourcePath string) string { return sourcePath }
+func (m *mockRepo) CleanAndSyncAllGenres(ctx context.Context) (int, error) { return 0, nil }
 func (m *mockRepo) GetTMDBSettings(ctx context.Context) (*metadata.TMDBSettings, error) {
 	settings := metadata.DefaultSettings()
 	return &settings, nil

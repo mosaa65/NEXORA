@@ -10,6 +10,10 @@ export const DEFAULT_CATEGORIES = [
   { id: 4, slug: "kids", name_ar: "الأطفال والكرتون", name_en: "Kids & Cartoons", icon: "smile", color: "from-amber-500 to-orange-600" },
   { id: 5, slug: "documentaries", name_ar: "الوثائقيات", name_en: "Documentaries", icon: "book", color: "from-cyan-600 to-blue-700" },
   { id: 6, slug: "plays", name_ar: "المسرحيات", name_en: "Plays", icon: "mask", color: "from-rose-600 to-pink-700" },
+  { id: 7, slug: "ramadan", name_ar: "رمضانيات", name_en: "Ramadan", icon: "spark", color: "from-amber-600 to-yellow-600" },
+  { id: 8, slug: "wrestling", name_ar: "المصارعة والرياضة", name_en: "Wrestling & Sports", icon: "shield", color: "from-red-600 to-rose-700" },
+  { id: 9, slug: "music", name_ar: "الموسيقى والصوتيات", name_en: "Music & Audio", icon: "music", color: "from-indigo-600 to-purple-700" },
+  { id: 10, slug: "apps", name_ar: "البرامج والتطبيقات", name_en: "Apps & Shows", icon: "grid", color: "from-blue-600 to-cyan-600" },
 ];
 
 export const ALL_GENRES = [
