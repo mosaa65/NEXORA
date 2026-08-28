@@ -4,15 +4,16 @@ import SideNavigation from "./layout/SideNavigation.jsx";
 
 const cinemaNavItems = [
   { id: "dashboard", label: "الرئيسية", icon: "dashboard" },
-  { id: "movies", label: "الأفلام", icon: "film" },
-  { id: "series", label: "المسلسلات", icon: "tv" },
-  { id: "anime", label: "الأنمي", icon: "spark" },
-  { id: "kids", label: "الأطفال والكرتون", icon: "smile" },
-  { id: "documentaries", label: "الوثائقيات", icon: "book" },
-  { id: "plays", label: "المسرحيات", icon: "mask" },
-  { id: "ramadan", label: "رمضانيات", icon: "spark" },
-  { id: "wrestling", label: "المصارعة والرياضة", icon: "shield" },
-  { id: "music", label: "الموسيقى والصوتيات", icon: "music" },
+  { id: "movies", label: "الأفلام السينمائية", icon: "film" },
+  { id: "series", label: "المسلسلات والدراما", icon: "tv" },
+  { id: "anime", label: "الأنمي والرسوم اليابانية", icon: "spark" },
+  { id: "kids", label: "الأطفال والكرتون العائلي", icon: "smile" },
+  { id: "family", label: "العائلة والسينما العائلية", icon: "smile" },
+  { id: "documentaries", label: "الوثائقيات والمعرفة", icon: "book" },
+  { id: "plays", label: "المسرحيات والكوميديا", icon: "mask" },
+  { id: "ramadan", label: "الرمضانيات والإنتاج الرمضاني", icon: "spark" },
+  { id: "wrestling", label: "المصارعة الحرة والرياضة", icon: "shield" },
+  { id: "music", label: "المكتبة الصوتية والموسيقى", icon: "music" },
   { id: "apps", label: "البرامج والتطبيقات", icon: "grid" },
   { id: "favorites", label: "المفضلة", icon: "star" },
 ];
@@ -57,7 +58,7 @@ export default function Sidebar({
                     <span className="navigation-item__icon">
                       <Icon name={item.icon} />
                     </span>
-                    <span>{item.label}</span>
+                    <span className="truncate">{item.label}</span>
                   </button>
                 </li>
               );

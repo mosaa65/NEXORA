@@ -7,7 +7,7 @@ import MediaCollection from "../components/MediaCollection.jsx";
 import SmartHubRail from "../components/SmartHubRail.jsx";
 import Icon from "../components/Icon.jsx";
 import { getMediaList } from "../lib/api.js";
-import { getCategoryConfig, MASTER_CATEGORIES } from "../data/categoryConfig.js";
+import { getCategoryConfig } from "../data/categoryConfig.js";
 
 export default function CategoryPage({ selectedCategory = "series", onOpenMedia, onQuickPlay }) {
   const [items, setItems] = useState([]);
@@ -74,8 +74,7 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
   async function loadCategoryItems() {
     setLoading(true);
     try {
-      const res = await getMediaList({
-        category: selectedCategory,
+      const fetchParams = {
         sort:
           activeSort === "rating"
             ? "rating"
@@ -85,7 +84,14 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
             ? "title"
             : "",
         limit: 1000,
-      });
+      };
+
+      // If category is "family", fetch all media items to index family-safe titles across all types
+      if (selectedCategory !== "family") {
+        fetchParams.category = selectedCategory;
+      }
+
+      const res = await getMediaList(fetchParams);
 
       const transformed = (res?.items || []).map((item) => ({
         id: item.id,
@@ -125,16 +131,29 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
   // 100% Context-Aware Multi-Dimensional Filtering Logic
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
-      // 0. Strict Self-Containment Isolation
       const itemCat = (item.categorySlug || "").toLowerCase();
       const genresStr = (item.genres || []).join(" ").toLowerCase();
+      const cr = String(item.contentRating || "").toUpperCase().trim();
 
+      // 0. Strict Self-Containment Isolation & Family Aggregation Rules
       if (selectedCategory === "movies") {
-        // Exclude pure anime and kids items from the standard movies section
+        // ONLY EXCLUDE ANIME - Cartoons/Animation (Disney/Pixar/Dreamworks) ARE KEPT in Movies!
         if (itemCat === "anime" || genresStr.includes("أنمي") || genresStr.includes("anime")) return false;
       } else if (selectedCategory === "series") {
-        // Exclude anime series from the standard series section
+        // ONLY EXCLUDE ANIME SERIES
         if (itemCat === "anime" || genresStr.includes("أنمي") || genresStr.includes("anime")) return false;
+      } else if (selectedCategory === "family") {
+        // Family Cinema: Index any movie/series that is suitable for families
+        const isAdult = ["R", "NC-17", "TV-MA", "18+", "18", "MA"].includes(cr);
+        if (isAdult) return false;
+        const isFamilySafe =
+          ["G", "PG", "TV-G", "TV-Y", "TV-Y7", "TV-PG", "ALL"].includes(cr) ||
+          genresStr.includes("عائلي") ||
+          genresStr.includes("أطفال") ||
+          genresStr.includes("كرتون") ||
+          genresStr.includes("family") ||
+          genresStr.includes("animation");
+        if (!isFamilySafe) return false;
       }
 
       // 1. Search Query
@@ -154,6 +173,21 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
           return false;
         }
         if (selectedHub.genreTerm && !item.genres.some((g) => g.includes(selectedHub.genreTerm))) {
+          return false;
+        }
+        if (selectedHub.id === "cartoons_world" && !genresStr.includes("كرتون") && !genresStr.includes("رسوم") && itemCat !== "kids") {
+          return false;
+        }
+        if (selectedHub.id === "toddlers" && !genresStr.includes("تعليم") && !genresStr.includes("أطفال") && !["TV-Y", "G"].includes(cr)) {
+          return false;
+        }
+        if (selectedHub.id === "disney_pixar" && !genresStr.includes("ديزني") && !genresStr.includes("بيكسار") && !genresStr.includes("disney") && !genresStr.includes("pixar")) {
+          return false;
+        }
+        if (selectedHub.id === "dreamworks" && !genresStr.includes("دريم وركس") && !genresStr.includes("dreamworks") && !genresStr.includes("إلومينيشن") && !genresStr.includes("illumination")) {
+          return false;
+        }
+        if (selectedHub.id === "spacetoon_golden" && !genresStr.includes("سبيستون") && !genresStr.includes("الزهرة") && !genresStr.includes("spacetoon")) {
           return false;
         }
       }
@@ -296,7 +330,6 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
 
       // 15. Content Rating
       if (activeContentRating !== "all") {
-        const cr = String(item.contentRating || "").toUpperCase().trim();
         if (activeContentRating === "family") {
           if (!["G", "PG", "TV-G", "TV-Y", "TV-Y7", "ALL"].includes(cr)) return false;
         } else if (activeContentRating === "teen") {
@@ -372,6 +405,9 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
   // Fallback showcase items
   const heroItems = useMemo(() => items.slice(0, 5), [items]);
 
+  // Hubs defined for the active category (e.g. Kids, Family, Movies, etc.)
+  const categoryHubs = categoryConfig.hubs || [];
+
   return (
     <div className="space-y-8 pb-16 text-right" dir="rtl">
       {/* 1. Unified database-backed showcase */}
@@ -413,18 +449,61 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
         </div>
       )}
 
-      {/* 3. Grand Origin Hubs / Collections Section */}
+      {/* 3. Category Specialized Hubs Quick Bar (Kids, Family, Anime, Series, Movies) */}
+      {!selectedHub && categoryHubs.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-fuchsia-500 shadow-[0_0_10px_#e879f9]" />
+              محاور واستكشاف {categoryConfig.titleAr}
+            </h2>
+            <span className="text-[11px] font-mono font-bold text-gray-400 bg-white/5 px-3 py-1 rounded-full border border-white/10">
+              {filteredItems.length} {categoryConfig.label}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            {categoryHubs.map((hub) => {
+              const isSelected = selectedHub?.id === hub.id;
+              return (
+                <button
+                  key={hub.id}
+                  type="button"
+                  onClick={() => setSelectedHub(isSelected ? null : hub)}
+                  className={`group relative overflow-hidden rounded-2xl border p-4 text-right transition-all duration-300 ${
+                    isSelected
+                      ? "border-fuchsia-500 bg-fuchsia-950/40 shadow-[0_0_20px_rgba(217,70,239,0.3)] ring-1 ring-fuchsia-500"
+                      : "border-white/10 bg-white/[0.03] hover:border-fuchsia-500/50 hover:bg-white/[0.07]"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <span className="rounded-full bg-fuchsia-500/20 px-2 py-0.5 text-[10px] font-black text-fuchsia-300 border border-fuchsia-500/30">
+                      {hub.tag || "محور خاص"}
+                    </span>
+                    <span className="text-xs text-gray-400 group-hover:text-white transition">‹</span>
+                  </div>
+                  <h3 className="text-xs sm:text-sm font-bold text-white group-hover:text-fuchsia-300 transition line-clamp-1">
+                    {hub.title}
+                  </h3>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 4. Grand Origin Hubs / Collections Rail */}
       {!selectedHub && (
         <SmartHubRail
           scope={selectedCategory === "movies" ? "movies" : selectedCategory}
-          title={`مجموعات ومحاور ${categoryConfig.titleAr}`}
-          description="تصنيفات ذكية ومحاور متقدمة مبنية تلقائيًا من مكتبتك الفنية."
+          title={`المجموعات والسلاسل الفنية في ${categoryConfig.titleAr}`}
+          description="تصنيفات ذكية وسلاسل متصلة مبنية تلقائيًا من مكتبتك."
           onViewAll={() => (window.location.hash = "#/directory/hubs")}
           onOpen={(hub) => (window.location.hash = `#/hub/${hub.slug}`)}
         />
       )}
 
-      {/* 4. Multi-Dimensional Context-Aware Filter Toolbar */}
+      {/* 5. Multi-Dimensional Context-Aware Filter Toolbar */}
       <FilterToolbar
         // State values
         activeOrigin={activeOrigin}
@@ -512,7 +591,7 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
         }}
       />
 
-      {/* 5. Items Grid Section */}
+      {/* 6. Items Grid Section */}
       <div className="space-y-4">
         {loading ? (
           <div className="flex items-center justify-center py-20">

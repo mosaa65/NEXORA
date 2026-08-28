@@ -19,15 +19,16 @@ const categoryTitleLookup = Object.fromEntries(
 
 export const navigationItems = [
   { id: "dashboard", label: "الرئيسية", icon: "dashboard" },
-  { id: "movies", label: "الأفلام", icon: "film" },
-  { id: "series", label: "المسلسلات", icon: "tv" },
-  { id: "anime", label: "الأنمي", icon: "spark" },
-  { id: "kids", label: "الأطفال", icon: "smile" },
-  { id: "documentaries", label: "الوثائقيات", icon: "book" },
-  { id: "plays", label: "المسرحيات", icon: "mask" },
-  { id: "ramadan", label: "رمضانيات", icon: "spark" },
-  { id: "wrestling", label: "المصارعة والرياضة", icon: "shield" },
-  { id: "music", label: "الموسيقى والصوتيات", icon: "music" },
+  { id: "movies", label: "الأفلام السينمائية", icon: "film" },
+  { id: "series", label: "المسلسلات والدراما", icon: "tv" },
+  { id: "anime", label: "الأنمي والرسوم اليابانية", icon: "spark" },
+  { id: "kids", label: "الأطفال والكرتون العائلي", icon: "smile" },
+  { id: "family", label: "العائلة والسينما العائلية", icon: "smile" },
+  { id: "documentaries", label: "الوثائقيات والمعرفة", icon: "book" },
+  { id: "plays", label: "المسرحيات والكوميديا", icon: "mask" },
+  { id: "ramadan", label: "الرمضانيات والإنتاج الرمضاني", icon: "spark" },
+  { id: "wrestling", label: "المصارعة الحرة والرياضة", icon: "shield" },
+  { id: "music", label: "المكتبة الصوتية والموسيقى", icon: "music" },
   { id: "apps", label: "البرامج والتطبيقات", icon: "grid" },
   { id: "favorites", label: "المفضلة", icon: "star" },
   { id: "downloads", label: "التنزيلات", icon: "download" },
@@ -69,6 +70,7 @@ export function getMediaTypeLabel(type) {
     wrestling: "عرض مصارعة",
     music: "محتوى صوتي",
     app: "برنامج / تطبيق",
+    family: "عمل عائلي",
   };
   return lookup[type] || type;
 }
