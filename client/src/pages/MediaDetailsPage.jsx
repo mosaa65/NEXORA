@@ -184,11 +184,17 @@ export default function MediaDetailsPage({
         <div className="flex items-center justify-between gap-4 pb-2">
           <button
             type="button"
-            onClick={() => (onOpenCategory ? onOpenCategory("movies") : window.history.back())}
+            onClick={() => {
+              if (window.history.length > 1) {
+                window.history.back();
+              } else {
+                window.location.hash = "#/";
+              }
+            }}
             className="group inline-flex items-center gap-2.5 rounded-full border border-[var(--border-default)] bg-[var(--bg-card)] px-5 py-2.5 text-xs font-bold text-[var(--text-primary)] shadow-[var(--shadow-md)] backdrop-blur-xl"
           >
             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--bg-elevated)] text-[var(--text-primary)]">‹</span>
-            <span>العودة للمكتبة</span>
+            <span>العودة</span>
           </button>
         </div>
         <div className="h-96 rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] flex items-center justify-center">
@@ -207,11 +213,17 @@ export default function MediaDetailsPage({
         <div className="flex items-center justify-between gap-4 pb-2">
           <button
             type="button"
-            onClick={() => (onOpenCategory ? onOpenCategory("movies") : window.history.back())}
+            onClick={() => {
+              if (window.history.length > 1) {
+                window.history.back();
+              } else {
+                window.location.hash = "#/";
+              }
+            }}
             className="group inline-flex items-center gap-2.5 rounded-full border border-[var(--border-default)] bg-[var(--bg-card)] hover:bg-[var(--bg-elevated)] px-5 py-2.5 text-xs font-bold text-[var(--text-primary)] shadow-[var(--shadow-md)] backdrop-blur-xl transition"
           >
             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--bg-elevated)] text-[var(--text-primary)]">‹</span>
-            <span>العودة للمكتبة</span>
+            <span>العودة</span>
           </button>
         </div>
         <div className="p-16 rounded-3xl border border-dashed border-[var(--border-default)] bg-[var(--bg-card)] text-center space-y-3">
@@ -277,16 +289,16 @@ export default function MediaDetailsPage({
         <button
           type="button"
           onClick={() => {
-            if (onOpenCategory) {
-              onOpenCategory(current.categorySlug || "movies");
-            } else {
+            if (window.history.length > 1) {
               window.history.back();
+            } else {
+              window.location.hash = "#/";
             }
           }}
           className="group inline-flex items-center gap-2.5 rounded-full border border-[var(--border-default)] bg-[var(--bg-card)] px-4 py-2 text-xs font-bold text-[var(--text-primary)] shadow-[var(--shadow-sm)] backdrop-blur-xl transition hover:border-[var(--color-accent)] hover:bg-[var(--bg-elevated)]"
         >
           <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--bg-elevated)] text-lg leading-none text-[var(--text-primary)] transition group-hover:bg-[var(--color-accent)] group-hover:text-white">‹</span>
-          <span>العودة للمكتبة</span>
+          <span>العودة</span>
         </button>
 
         {current.categorySlug && (
