@@ -30,25 +30,27 @@ type MediaDocument struct {
 	TitleAR      string   `json:"title_ar,omitempty"`
 	TitleEN      string   `json:"title_en"`
 	Type         string   `json:"type"`
-	PlotAR       string   `json:"plot_ar,omitempty"`
-	PlotEN       string   `json:"plot_en,omitempty"`
-	ReleaseYear  int      `json:"release_year,omitempty"`
-	Rating       float64  `json:"rating,omitempty"`
-	PosterPath   string   `json:"poster_path,omitempty"`
-	BannerPath   string   `json:"banner_path,omitempty"`
+	PlotAR        string   `json:"plot_ar,omitempty"`
+	PlotEN        string   `json:"plot_en,omitempty"`
+	ReleaseYear   int      `json:"release_year,omitempty"`
+	Rating        float64  `json:"rating,omitempty"`
+	PosterPath    string   `json:"poster_path,omitempty"`
+	BannerPath    string   `json:"banner_path,omitempty"`
 	Genres       []string `json:"genres,omitempty"`
-	CategorySlug string   `json:"category_slug,omitempty"`
-	CategoryAR   string   `json:"category_ar,omitempty"`
-	CategoryEN   string   `json:"category_en,omitempty"`
-	FileCount    int      `json:"file_count"`
-	Status       string   `json:"status,omitempty"`
-	SeasonCount  int      `json:"season_count,omitempty"`
-	TMDBSeasonCount int   `json:"tmdb_season_count,omitempty"`
-	TMDBEpisodeCount int  `json:"tmdb_episode_count,omitempty"`
-	TotalSize    int64    `json:"total_size,omitempty"`
-	BestResolution string `json:"best_resolution,omitempty"`
-	RuntimeMinutes int   `json:"runtime_minutes,omitempty"`
-	HasArabicAudio bool  `json:"has_arabic_audio,omitempty"`
+	GenreIDs     []int    `json:"genre_ids,omitempty"`
+	ContentRating string  `json:"content_rating,omitempty"`
+	CategorySlug   string   `json:"category_slug,omitempty"`
+	CategoryAR     string   `json:"category_ar,omitempty"`
+	CategoryEN     string   `json:"category_en,omitempty"`
+	FileCount      int      `json:"file_count"`
+	Status         string   `json:"status,omitempty"`
+	SeasonCount    int      `json:"season_count,omitempty"`
+	TMDBSeasonCount int     `json:"tmdb_season_count,omitempty"`
+	TMDBEpisodeCount int    `json:"tmdb_episode_count,omitempty"`
+	TotalSize      int64    `json:"total_size,omitempty"`
+	BestResolution string   `json:"best_resolution,omitempty"`
+	RuntimeMinutes int      `json:"runtime_minutes,omitempty"`
+	HasArabicAudio bool     `json:"has_arabic_audio,omitempty"`
 	HasArabicSubtitles bool `json:"has_arabic_subtitles,omitempty"`
 }
 

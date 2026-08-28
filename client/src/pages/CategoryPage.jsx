@@ -128,6 +128,12 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
   // Filter States
   const [activeOrigin, setActiveOrigin] = useState("all");
   const [activeGenre, setActiveGenre] = useState("all");
+  const [activeType, setActiveType] = useState("all");
+  const [activeQuality, setActiveQuality] = useState("all");
+  const [activeYear, setActiveYear] = useState("all");
+  const [activeRating, setActiveRating] = useState("all");
+  const [hasArabicAudio, setHasArabicAudio] = useState(false);
+  const [hasArabicSubtitles, setHasArabicSubtitles] = useState(false);
   const [activeSort, setActiveSort] = useState("newest");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedHub, setSelectedHub] = useState(null);
@@ -138,6 +144,7 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
     // Reset filters on category switch
     setActiveOrigin("all");
     setActiveGenre("all");
+    setActiveType("all"); setActiveQuality("all"); setActiveYear("all"); setActiveRating("all"); setHasArabicAudio(false); setHasArabicSubtitles(false);
     setSearchQuery("");
     setSelectedHub(null);
     loadCategoryItems();
@@ -225,9 +232,35 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
         if (!hasGenre) return false;
       }
 
+      if (activeType !== "all" && item.type !== activeType) return false;
+      if (activeQuality !== "all" && item.bestResolution !== activeQuality) return false;
+      if (activeRating !== "all" && (item.rating || 0) < Number(activeRating)) return false;
+      if (hasArabicAudio && !item.hasArabicAudio) return false;
+      if (hasArabicSubtitles && !item.hasArabicSubtitles) return false;
+      if (activeYear !== "all") {
+        const year = Number(item.year || 0);
+        if (activeYear === "2025+" && year < 2025) return false;
+        if (activeYear === "2020-2024" && (year < 2020 || year > 2024)) return false;
+        if (activeYear === "2010-2019" && (year < 2010 || year > 2019)) return false;
+        if (activeYear === "2000-2009" && (year < 2000 || year > 2009)) return false;
+        if (activeYear === "classic" && year >= 2000) return false;
+      }
+
       return true;
     });
-  }, [items, searchQuery, selectedHub, activeOrigin, activeGenre]);
+  }, [items, searchQuery, selectedHub, activeOrigin, activeGenre, activeType, activeQuality, activeYear, activeRating, hasArabicAudio, hasArabicSubtitles]);
+
+  const sortedItems = useMemo(() => [...filteredItems].sort((a, b) => {
+    const titleA = (a.titleAr || a.titleEn || "").toLocaleLowerCase(); const titleB = (b.titleAr || b.titleEn || "").toLocaleLowerCase();
+    if (activeSort === "oldest") return (a.id || 0) - (b.id || 0);
+    if (activeSort === "rating_low") return (a.rating || 0) - (b.rating || 0);
+    if (activeSort === "year_old") return (a.year || 0) - (b.year || 0);
+    if (activeSort === "title_desc") return titleB.localeCompare(titleA, "ar");
+    if (activeSort === "files") return (b.fileCount || 0) - (a.fileCount || 0);
+    if (activeSort === "runtime") return (b.runtimeMinutes || 0) - (a.runtimeMinutes || 0);
+    if (activeSort === "title") return titleA.localeCompare(titleB, "ar");
+    return 0;
+  }), [filteredItems, activeSort]);
 
   // Fallback content while the database-backed showcase is loading.
   const heroItems = useMemo(() => {
@@ -329,6 +362,12 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
         onSelectOrigin={setActiveOrigin}
         activeGenre={activeGenre}
         onSelectGenre={setActiveGenre}
+        activeType={activeType} onSelectType={setActiveType}
+        activeQuality={activeQuality} onSelectQuality={setActiveQuality}
+        activeYear={activeYear} onSelectYear={setActiveYear}
+        activeRating={activeRating} onSelectRating={setActiveRating}
+        hasArabicAudio={hasArabicAudio} onToggleArabicAudio={setHasArabicAudio}
+        hasArabicSubtitles={hasArabicSubtitles} onToggleArabicSubtitles={setHasArabicSubtitles}
         activeSort={activeSort}
         onSelectSort={setActiveSort}
         searchQuery={searchQuery}
@@ -338,6 +377,7 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
         onResetFilters={() => {
           setActiveOrigin("all");
           setActiveGenre("all");
+          setActiveType("all"); setActiveQuality("all"); setActiveYear("all"); setActiveRating("all"); setHasArabicAudio(false); setHasArabicSubtitles(false);
           setSearchQuery("");
         }}
       />
@@ -360,7 +400,7 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
             </p>
           </div>
         ) : (
-          <MediaCollection items={filteredItems} onOpen={onOpenMedia} />
+            <MediaCollection items={sortedItems} onOpen={onOpenMedia} />
         )}
       </div>
     </div>

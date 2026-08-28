@@ -43,6 +43,8 @@ type Result struct {
 	CachedPosterPath string   `json:"cachedPosterPath,omitempty"`
 	CachedBannerPath string   `json:"cachedBannerPath,omitempty"`
 	Genres           []string `json:"genres,omitempty"`
+	GenreIDs         []int    `json:"genreIds,omitempty"`
+	ContentRating    string   `json:"contentRating,omitempty"`
 	Warnings         []string `json:"warnings,omitempty"`
 	// RawPayload is stored server-side as a short-lived provider snapshot. It
 	// is intentionally never returned to browser clients or logged.

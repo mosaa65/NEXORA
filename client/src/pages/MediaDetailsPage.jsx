@@ -264,12 +264,12 @@ export default function MediaDetailsPage({
         )}
       </div>
 
-      <section className="relative overflow-hidden rounded-[28px] border border-white/10 bg-[#0d0b18] shadow-[0_30px_80px_rgba(17,12,30,0.85)]">
+      <section className="luminous-hero relative overflow-hidden rounded-[28px] bg-[#0d0b18] shadow-[0_30px_80px_rgba(17,12,30,0.85)]">
         <div className="absolute inset-0 bg-cover bg-center opacity-40" style={{ backgroundImage: `url('${bannerURL}')` }} />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(236,72,153,0.18),transparent_32%),linear-gradient(90deg,rgba(13,11,24,0.94),rgba(13,11,24,0.73),rgba(13,11,24,0.88))]" />
 
         <div className="relative z-10 grid gap-6 p-4 sm:p-6 lg:grid-cols-[220px_1fr] lg:p-8">
-          <div className="mx-auto w-[180px] shrink-0 overflow-hidden rounded-[22px] border border-white/10 bg-black/20 shadow-[0_30px_50px_rgba(168,85,247,0.3)] sm:w-[200px] lg:mx-0">
+          <div className="luminous-card mx-auto w-[180px] shrink-0 overflow-hidden rounded-[22px] bg-black/20 shadow-[0_30px_50px_rgba(168,85,247,0.3)] sm:w-[200px] lg:mx-0">
             <img
               src={posterURL}
               alt={englishTitle}

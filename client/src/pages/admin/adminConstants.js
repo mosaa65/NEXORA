@@ -61,6 +61,21 @@ export const RATINGS_LIST = [
   { id: "7", label: "★ 7.0 فما فوق (جيد)" },
 ];
 
+export const CONTENT_RATINGS_LIST = [
+  { id: "all", label: "كافة التصنيفات العمرية" },
+  { id: "G", label: "G (لجميع الأعمار)" },
+  { id: "PG", label: "PG (إرشاد عائلي)" },
+  { id: "PG-13", label: "PG-13 (فوق 13 سنة)" },
+  { id: "R", label: "R (للبالغين +17)" },
+  { id: "NC-17", label: "NC-17 (للبالغين فقط)" },
+  { id: "TV-Y", label: "TV-Y (للأطفال)" },
+  { id: "TV-Y7", label: "TV-Y7 (أطفال +7)" },
+  { id: "TV-G", label: "TV-G (عام تلفزيوني)" },
+  { id: "TV-PG", label: "TV-PG (توجيه عائلي)" },
+  { id: "TV-14", label: "TV-14 (فوق 14 سنة)" },
+  { id: "TV-MA", label: "TV-MA (للبالغين فقط)" },
+];
+
 /**
  * Formats byte values to human-readable string.
  */

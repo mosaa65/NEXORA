@@ -1,4 +1,5 @@
 import React from "react";
+import Icon from "../Icon.jsx";
 
 /**
  * Unified Modal component for dialogs, confirmations, and forms.
@@ -36,16 +37,15 @@ export default function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-[var(--bg-overlay)] p-3 sm:p-6 backdrop-blur-md overflow-y-auto animate-fadeIn"
+      className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center overflow-hidden bg-[var(--bg-overlay)] p-0 backdrop-blur-md animate-fadeIn sm:p-4"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose?.();
       }}
     >
       <div
         className={`
-          relative w-full rounded-3xl border bg-[var(--bg-card)]
-          p-6 sm:p-8 shadow-2xl space-y-5
-          max-h-[92vh] overflow-y-auto
+          relative flex max-h-[100dvh] w-full flex-col overflow-hidden rounded-none border bg-[var(--bg-card)]
+          shadow-2xl sm:max-h-[calc(100dvh-2rem)] sm:rounded-3xl
           ${SIZE_CLASSES[size] || SIZE_CLASSES.md}
           ${VARIANT_BORDER[variant] || VARIANT_BORDER.default}
           ${className}
@@ -54,7 +54,7 @@ export default function Modal({
       >
         {/* Header */}
         {(title || onClose) && (
-          <div className="flex items-center justify-between border-b border-[var(--border-default)] pb-3">
+          <div className="flex shrink-0 items-start justify-between gap-4 border-b border-[var(--border-default)] bg-[var(--bg-card)] px-5 py-4 sm:px-7">
             <div>
               {title && (
                 <h3 className="text-xl font-bold text-[var(--text-primary)]">
@@ -71,20 +71,22 @@ export default function Modal({
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-xl border border-[var(--border-default)] p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition"
+                aria-label="إغلاق النافذة"
+                title="إغلاق"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--text-muted)] transition hover:border-[var(--color-accent)] hover:bg-[var(--color-accent-light)] hover:text-[var(--text-primary)]"
               >
-                ✕
+                <Icon name="close" className="h-4 w-4" />
               </button>
             )}
           </div>
         )}
 
         {/* Content */}
-        <div>{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-7 sm:py-6">{children}</div>
 
         {/* Footer Actions */}
         {actions && (
-          <div className="flex items-center justify-end gap-3 border-t border-[var(--border-default)] pt-4">
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-[var(--border-default)] bg-[var(--bg-card)] px-5 py-4 sm:gap-3 sm:px-7 [&>button]:rounded-full [&>button]:max-sm:flex-1">
             {actions}
           </div>
         )}

@@ -116,6 +116,40 @@ body::after {
   z-index: 1;
 }
 
+/* === NEXORA Clean Crisp Border System === */
+.luminous-container {
+  border: 1.5px solid rgba(255, 255, 255, 0.28) !important;
+}
+
+[data-theme="light"] .luminous-container {
+  border: 1.5px solid rgba(15, 23, 42, 0.22) !important;
+}
+
+.luminous-hero {
+  border: 1.5px solid rgba(255, 255, 255, 0.35) !important;
+}
+
+[data-theme="light"] .luminous-hero {
+  border: 1.5px solid rgba(15, 23, 42, 0.25) !important;
+}
+
+.luminous-card {
+  border: 1.5px solid rgba(255, 255, 255, 0.25) !important;
+  transition: border-color 0.2s ease, transform 0.2s ease !important;
+}
+
+.luminous-card:hover {
+  border-color: rgba(255, 255, 255, 0.65) !important;
+}
+
+[data-theme="light"] .luminous-card {
+  border: 1.5px solid rgba(15, 23, 42, 0.20) !important;
+}
+
+[data-theme="light"] .luminous-card:hover {
+  border-color: rgba(15, 23, 42, 0.50) !important;
+}
+
 .line-clamp-3 {
   display: -webkit-box;
   -webkit-line-clamp: 3;

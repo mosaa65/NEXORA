@@ -17,10 +17,13 @@
   --bg-card: #FFFFFF;
   --bg-input: #F1F5F9;
 
-  /* === Borders (حدود ناعمة وواضحة) === */
-  --border-default: #E2E8F0;
-  --border-subtle: #F1F5F9;
-  --border-glass: rgba(0, 0, 0, 0.08);
+  /* === Borders (حدود نظيفة بتباين ممتاز) === */
+  --border-default: rgba(15, 23, 42, 0.18);
+  --border-subtle: rgba(15, 23, 42, 0.10);
+  --border-focus: var(--color-accent);
+  --border-glass: rgba(15, 23, 42, 0.22);
+  --border-luminous: rgba(15, 23, 42, 0.22);
+  --border-luminous-hover: rgba(15, 23, 42, 0.50);
 
   /* === Text (تباين عالي ومريح للعين) === */
   --text-primary: #0F172A;
@@ -97,4 +100,22 @@
 /* Ambient glow in CustomerCinemaLayout */
 [data-theme="light"] .theme-aware-shell .pointer-events-none .rounded-full {
   opacity: 0.25;
+}
+[data-theme="light"] .admin-form-modal [class*="text-white"] {
+  color: var(--text-primary);
+}
+[data-theme="light"] .admin-form-modal [class*="text-white/"] {
+  color: var(--text-secondary);
+}
+[data-theme="light"] .admin-form-modal [class*="border-white"] {
+  border-color: var(--border-default);
+}
+[data-theme="light"] .admin-form-modal [class*="bg-white/"] {
+  background-color: var(--bg-surface);
+}
+[data-theme="light"] .admin-form-modal [class*="bg-black/"] {
+  background-color: var(--bg-input);
+}
+[data-theme="light"] .admin-form-modal [class*="bg-[#100e1b]"] {
+  background-color: var(--bg-card);
 }

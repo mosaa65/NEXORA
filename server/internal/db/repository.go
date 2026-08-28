@@ -190,18 +190,20 @@ type MediaItemDetail struct {
 	TitleAR      string         `json:"title_ar,omitempty"`
 	TitleEN      string         `json:"title_en"`
 	Type         string         `json:"type"`
-	PlotAR       string         `json:"plot_ar,omitempty"`
-	PlotEN       string         `json:"plot_en,omitempty"`
-	ReleaseYear  int            `json:"release_year,omitempty"`
-	Rating       float64        `json:"rating,omitempty"`
-	PosterPath   string         `json:"poster_path,omitempty"`
-	BannerPath   string         `json:"banner_path,omitempty"`
-	Genres       []string       `json:"genres,omitempty"`
-	Status       string         `json:"status,omitempty"`
-	CreatedAt    time.Time      `json:"created_at"`
-	FileCount    int            `json:"file_count"`
-	Seasons      []SeasonDetail `json:"seasons,omitempty"`
-	Files        []VideoFile    `json:"files,omitempty"`
+	PlotAR        string         `json:"plot_ar,omitempty"`
+	PlotEN        string         `json:"plot_en,omitempty"`
+	ReleaseYear   int            `json:"release_year,omitempty"`
+	Rating        float64        `json:"rating,omitempty"`
+	PosterPath    string         `json:"poster_path,omitempty"`
+	BannerPath    string         `json:"banner_path,omitempty"`
+	Genres        []string       `json:"genres,omitempty"`
+	GenreIDs      []int          `json:"genre_ids,omitempty"`
+	ContentRating string         `json:"content_rating,omitempty"`
+	Status        string         `json:"status,omitempty"`
+	CreatedAt     time.Time      `json:"created_at"`
+	FileCount     int            `json:"file_count"`
+	Seasons       []SeasonDetail `json:"seasons,omitempty"`
+	Files         []VideoFile    `json:"files,omitempty"`
 }
 
 // mediaCardSummary is deliberately returned with every catalogue/search item.
@@ -367,6 +369,7 @@ type Collection struct {
 	Priority           int             `json:"priority"`
 	IsActive           bool            `json:"is_active"`
 	ItemCount          int             `json:"item_count"`
+	ItemIDs            []int64         `json:"item_ids,omitempty"`
 }
 
 type CollectionRequest struct {
@@ -382,6 +385,7 @@ type CollectionRequest struct {
 	TargetFilters      json.RawMessage `json:"target_filters"`
 	Priority           int             `json:"priority"`
 	IsActive           bool            `json:"is_active"`
+	ItemIDs            []int64         `json:"item_ids,omitempty"`
 }
 
 type HubRule struct {
@@ -501,6 +505,7 @@ func (r *Repository) ListSearchDocuments(ctx context.Context, limit int) ([]sear
 			mi.poster_path,
 			mi.banner_path,
 			COALESCE(array_to_json(mi.genres), '[]'::json)::text AS genres,
+			COALESCE(mi.content_rating, mi.metadata_facets->>'content_rating', '') AS content_rating,
 			c.slug,
 			c.name_ar,
 			c.name_en,
@@ -523,7 +528,7 @@ func (r *Repository) ListSearchDocuments(ctx context.Context, limit int) ([]sear
 	documents := make([]search.MediaDocument, 0)
 	for rows.Next() {
 		var doc search.MediaDocument
-		var titleAR, plotAR, plotEN, posterPath, bannerPath, categorySlug, categoryAR, categoryEN sql.NullString
+		var titleAR, plotAR, plotEN, posterPath, bannerPath, categorySlug, categoryAR, categoryEN, contentRating sql.NullString
 		var releaseYear sql.NullInt64
 		var rating sql.NullFloat64
 		var genresText string
@@ -542,6 +547,7 @@ func (r *Repository) ListSearchDocuments(ctx context.Context, limit int) ([]sear
 			&posterPath,
 			&bannerPath,
 			&genresText,
+			&contentRating,
 			&categorySlug,
 			&categoryAR,
 			&categoryEN,
@@ -556,6 +562,7 @@ func (r *Repository) ListSearchDocuments(ctx context.Context, limit int) ([]sear
 		doc.PlotEN = nullableString(plotEN)
 		doc.PosterPath = nullableString(posterPath)
 		doc.BannerPath = nullableString(bannerPath)
+		doc.ContentRating = nullableString(contentRating)
 		doc.CategorySlug = nullableString(categorySlug)
 		doc.CategoryAR = nullableString(categoryAR)
 		doc.CategoryEN = nullableString(categoryEN)
@@ -956,7 +963,7 @@ func (r *Repository) DeleteCategory(ctx context.Context, id int64) error {
 }
 
 func (r *Repository) ListCollections(ctx context.Context) ([]Collection, error) {
-	rows, err := r.db.QueryContext(ctx, `SELECT c.id,c.slug,COALESCE(c.title_ar,''),c.title_en,COALESCE(c.description_ar,''),COALESCE(c.description_en,''),COALESCE(c.artwork_path,''),c.artwork_position,c.accent,COALESCE(c.target_category_slug,''),c.target_filters::text,c.priority,c.is_active,COUNT(ci.media_item_id)::int FROM collections c LEFT JOIN collection_items ci ON ci.collection_id=c.id GROUP BY c.id ORDER BY c.priority DESC,c.id DESC`)
+	rows, err := r.db.QueryContext(ctx, `SELECT c.id,c.slug,COALESCE(c.title_ar,''),c.title_en,COALESCE(c.description_ar,''),COALESCE(c.description_en,''),COALESCE(c.artwork_path,''),c.artwork_position,c.accent,COALESCE(c.target_category_slug,''),c.target_filters::text,c.priority,c.is_active,COUNT(ci.media_item_id)::int,COALESCE(array_agg(ci.media_item_id ORDER BY ci.sort_order,ci.media_item_id) FILTER (WHERE ci.media_item_id IS NOT NULL),'{}') FROM collections c LEFT JOIN collection_items ci ON ci.collection_id=c.id GROUP BY c.id ORDER BY c.priority DESC,c.id DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("list collections: %w", err)
 	}
@@ -965,7 +972,7 @@ func (r *Repository) ListCollections(ctx context.Context) ([]Collection, error) 
 	for rows.Next() {
 		var item Collection
 		var filters string
-		if err := rows.Scan(&item.ID, &item.Slug, &item.TitleAR, &item.TitleEN, &item.DescriptionAR, &item.DescriptionEN, &item.ArtworkPath, &item.ArtworkPosition, &item.Accent, &item.TargetCategorySlug, &filters, &item.Priority, &item.IsActive, &item.ItemCount); err != nil {
+		if err := rows.Scan(&item.ID, &item.Slug, &item.TitleAR, &item.TitleEN, &item.DescriptionAR, &item.DescriptionEN, &item.ArtworkPath, &item.ArtworkPosition, &item.Accent, &item.TargetCategorySlug, &filters, &item.Priority, &item.IsActive, &item.ItemCount, pq.Array(&item.ItemIDs)); err != nil {
 			return nil, err
 		}
 		item.TargetFilters = json.RawMessage(filters)
@@ -999,6 +1006,18 @@ func (r *Repository) SaveCollection(ctx context.Context, id int64, req Collectio
 		return nil, err
 	}
 	saved.TargetFilters = json.RawMessage(filters)
+	if _, err := r.db.ExecContext(ctx, `DELETE FROM collection_items WHERE collection_id=$1`, saved.ID); err != nil {
+		return nil, fmt.Errorf("clear collection items: %w", err)
+	}
+	for index, mediaID := range req.ItemIDs {
+		if mediaID <= 0 {
+			continue
+		}
+		if _, err := r.db.ExecContext(ctx, `INSERT INTO collection_items (collection_id,media_item_id,sort_order) VALUES ($1,$2,$3) ON CONFLICT (collection_id,media_item_id) DO UPDATE SET sort_order=EXCLUDED.sort_order`, saved.ID, mediaID, index); err != nil {
+			return nil, fmt.Errorf("save collection item: %w", err)
+		}
+	}
+	saved.ItemIDs = req.ItemIDs
 	return &saved, nil
 }
 
@@ -1449,7 +1468,7 @@ func containsArabic(input string) bool {
 
 func (r *Repository) GetMediaItem(ctx context.Context, id int64) (*MediaItemDetail, error) {
 	var item MediaItemDetail
-	var titleAR, plotAR, plotEN, posterPath, bannerPath, categorySlug, categoryAR, categoryEN sql.NullString
+	var titleAR, plotAR, plotEN, posterPath, bannerPath, categorySlug, categoryAR, categoryEN, contentRating sql.NullString
 	var releaseYear sql.NullInt64
 	var rating sql.NullFloat64
 	var genresText string
@@ -1469,6 +1488,7 @@ func (r *Repository) GetMediaItem(ctx context.Context, id int64) (*MediaItemDeta
 			mi.poster_path,
 			mi.banner_path,
 			COALESCE(array_to_json(mi.genres), '[]'::json)::text AS genres,
+			COALESCE(mi.content_rating, mi.metadata_facets->>'content_rating', '') AS content_rating,
 			mi.status,
 			mi.created_at,
 			c.slug,
@@ -1490,6 +1510,7 @@ func (r *Repository) GetMediaItem(ctx context.Context, id int64) (*MediaItemDeta
 		&posterPath,
 		&bannerPath,
 		&genresText,
+		&contentRating,
 		&item.Status,
 		&item.CreatedAt,
 		&categorySlug,
@@ -1511,6 +1532,7 @@ func (r *Repository) GetMediaItem(ctx context.Context, id int64) (*MediaItemDeta
 	item.PlotEN = nullableString(plotEN)
 	item.PosterPath = nullableString(posterPath)
 	item.BannerPath = nullableString(bannerPath)
+	item.ContentRating = nullableString(contentRating)
 	item.CategorySlug = nullableString(categorySlug)
 	item.CategoryAR = nullableString(categoryAR)
 	item.CategoryEN = nullableString(categoryEN)
@@ -1676,6 +1698,7 @@ func (r *Repository) ListMediaItems(ctx context.Context, opts ListMediaOptions) 
 			mi.poster_path,
 			mi.banner_path,
 			COALESCE(array_to_json(mi.genres), '[]'::json)::text AS genres,
+			COALESCE(mi.content_rating, mi.metadata_facets->>'content_rating', '') AS content_rating,
 			c.slug,
 			c.name_ar,
 			c.name_en,
@@ -1703,7 +1726,7 @@ func (r *Repository) ListMediaItems(ctx context.Context, opts ListMediaOptions) 
 	items := make([]search.MediaDocument, 0)
 	for rows.Next() {
 		var doc search.MediaDocument
-		var titleAR, plotAR, plotEN, posterPath, bannerPath, categorySlug, categoryAR, categoryEN sql.NullString
+		var titleAR, plotAR, plotEN, posterPath, bannerPath, categorySlug, categoryAR, categoryEN, contentRating sql.NullString
 		var releaseYear sql.NullInt64
 		var rating sql.NullFloat64
 		var genresText string
@@ -1722,6 +1745,7 @@ func (r *Repository) ListMediaItems(ctx context.Context, opts ListMediaOptions) 
 			&posterPath,
 			&bannerPath,
 			&genresText,
+			&contentRating,
 			&categorySlug,
 			&categoryAR,
 			&categoryEN,
@@ -1736,6 +1760,7 @@ func (r *Repository) ListMediaItems(ctx context.Context, opts ListMediaOptions) 
 		doc.PlotEN = nullableString(plotEN)
 		doc.PosterPath = nullableString(posterPath)
 		doc.BannerPath = nullableString(bannerPath)
+		doc.ContentRating = nullableString(contentRating)
 		doc.CategorySlug = nullableString(categorySlug)
 		doc.CategoryAR = nullableString(categoryAR)
 		doc.CategoryEN = nullableString(categoryEN)
@@ -1870,10 +1895,11 @@ func (r *Repository) UpdateMediaMetadata(ctx context.Context, id int64, meta met
 			metadata_external_id = COALESCE(NULLIF($11, ''), metadata_external_id),
 			metadata_facets = COALESCE($12::jsonb, metadata_facets),
 			status = COALESCE(NULLIF($13, ''), status),
+			content_rating = COALESCE(NULLIF($14, ''), content_rating),
 			metadata_fetched_at = CASE WHEN NULLIF($10, '') IS NULL THEN metadata_fetched_at ELSE CURRENT_TIMESTAMP END,
 			metadata_expires_at = CASE WHEN NULLIF($10, '') IS NULL THEN metadata_expires_at ELSE CURRENT_TIMESTAMP + INTERVAL '30 days' END
-		WHERE id = $14;
-	`, titleAR, titleEN, plotAR, plotEN, meta.ReleaseYear, meta.Rating, poster, banner, genresArray, meta.Provider, meta.ExternalID, metadataFacets, status, id)
+		WHERE id = $15;
+	`, titleAR, titleEN, plotAR, plotEN, meta.ReleaseYear, meta.Rating, poster, banner, genresArray, meta.Provider, meta.ExternalID, metadataFacets, status, meta.ContentRating, id)
 	if err != nil {
 		return nil, fmt.Errorf("update media metadata: %w", err)
 	}
@@ -2547,6 +2573,8 @@ func metadataFacetsJSON(meta metadata.Result) any {
 		"release_date":          raw["release_date"],
 		"runtime":               raw["runtime"],
 		"status":                raw["status"],
+		"content_rating":        meta.ContentRating,
+		"genre_ids":             meta.GenreIDs,
 		"number_of_seasons":     raw["number_of_seasons"],
 		"number_of_episodes":    raw["number_of_episodes"],
 		"episode_run_time":      raw["episode_run_time"],
@@ -3213,4 +3241,144 @@ func (r *Repository) GetTMDBUsageHistory(ctx context.Context, days int) ([]metad
 		history = append(history, item)
 	}
 	return history, rows.Err()
+}
+
+// CleanAndSyncAllGenres is a library-wide maintenance job that cleans duplicate
+// tags from the genres array and populates content_rating from metadata_snapshots.
+func (r *Repository) CleanAndSyncAllGenres(ctx context.Context) (int, error) {
+	// 1. First run SQL cleanup for all items
+	_, err := r.db.ExecContext(ctx, `
+		UPDATE media_items
+		SET genres = (
+			SELECT array_agg(DISTINCT cleaned_tag)
+			FROM (
+				SELECT CASE
+					WHEN tag ILIKE 'animation' THEN 'أنمي'
+					WHEN tag ILIKE 'action' THEN 'أكشن'
+					WHEN tag ILIKE 'adventure' THEN 'مغامرة'
+					WHEN tag ILIKE 'comedy' THEN 'كوميديا'
+					WHEN tag ILIKE 'drama' THEN 'دراما'
+					WHEN tag ILIKE 'crime' THEN 'جريمة'
+					WHEN tag ILIKE 'documentary' THEN 'وثائقي'
+					WHEN tag ILIKE 'fantasy' THEN 'فانتازيا'
+					WHEN tag ILIKE 'family' THEN 'عائلي'
+					WHEN tag ILIKE 'horror' THEN 'رعب'
+					WHEN tag ILIKE 'history' THEN 'تاريخي'
+					WHEN tag ILIKE 'mystery' THEN 'غموض'
+					WHEN tag ILIKE 'romance' THEN 'رومانسي'
+					WHEN tag ILIKE 'science fiction' OR tag ILIKE 'sci-fi' THEN 'خيال علمي'
+					WHEN tag ILIKE 'thriller' THEN 'إثارة'
+					WHEN tag ILIKE 'war' THEN 'حرب'
+					WHEN tag ILIKE 'music' THEN 'موسيقى'
+					WHEN tag ILIKE 'western' THEN 'ويسترن'
+					WHEN tag ILIKE 'kids' THEN 'أطفال'
+					ELSE tag
+				END AS cleaned_tag
+				FROM unnest(genres) AS tag
+				WHERE tag IS NOT NULL AND tag != ''
+			) cleaned_sub
+			WHERE cleaned_tag IS NOT NULL AND cleaned_tag != ''
+		)
+		WHERE genres IS NOT NULL AND array_length(genres, 1) > 0;
+	`)
+	if err != nil {
+		return 0, fmt.Errorf("cleanup genres SQL: %w", err)
+	}
+
+	// 2. Extract content_rating and genres from snapshots
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT ms.media_item_id, mi.type, ms.raw_payload::text
+		FROM metadata_snapshots ms
+		JOIN media_items mi ON mi.id = ms.media_item_id
+		WHERE ms.locale = 'en-US' OR ms.locale = 'ar-SA'
+		ORDER BY ms.media_item_id ASC, CASE WHEN ms.locale = 'en-US' THEN 1 ELSE 2 END ASC;
+	`)
+	if err != nil {
+		return 0, fmt.Errorf("query snapshots for sync: %w", err)
+	}
+	defer rows.Close()
+
+	type itemPayload struct {
+		MediaID   int64
+		MediaType string
+		Payload   []byte
+	}
+	seenMap := make(map[int64]bool)
+	var toProcess []itemPayload
+	for rows.Next() {
+		var p itemPayload
+		var payloadStr string
+		if err := rows.Scan(&p.MediaID, &p.MediaType, &payloadStr); err == nil {
+			if !seenMap[p.MediaID] {
+				seenMap[p.MediaID] = true
+				p.Payload = []byte(payloadStr)
+				toProcess = append(toProcess, p)
+			}
+		}
+	}
+
+	updatedCount := 0
+	for _, item := range toProcess {
+		var doc struct {
+			Genres []struct {
+				ID   int    `json:"id"`
+				Name string `json:"name"`
+			} `json:"genres"`
+			ReleaseDates struct {
+				Results []struct {
+					ISO31661     string `json:"iso_3166_1"`
+					ReleaseDates []struct {
+						Certification string `json:"certification"`
+					} `json:"release_dates"`
+				} `json:"results"`
+			} `json:"release_dates"`
+			ContentRatings struct {
+				Results []struct {
+					ISO31661 string `json:"iso_3166_1"`
+					Rating   string `json:"rating"`
+				} `json:"results"`
+			} `json:"content_ratings"`
+		}
+		if json.Unmarshal(item.Payload, &doc) != nil {
+			continue
+		}
+
+		contentRating := ""
+		if item.MediaType == "movie" {
+			for _, c := range doc.ReleaseDates.Results {
+				if strings.EqualFold(c.ISO31661, "US") {
+					for _, rd := range c.ReleaseDates {
+						if cert := strings.TrimSpace(rd.Certification); cert != "" {
+							contentRating = cert
+							break
+						}
+					}
+				}
+				if contentRating != "" {
+					break
+				}
+			}
+		} else {
+			for _, c := range doc.ContentRatings.Results {
+				if strings.EqualFold(c.ISO31661, "US") {
+					if rating := strings.TrimSpace(c.Rating); rating != "" {
+						contentRating = rating
+						break
+					}
+				}
+			}
+		}
+
+		if contentRating != "" {
+			_, _ = r.db.ExecContext(ctx, `
+				UPDATE media_items
+				SET content_rating = $1,
+				    metadata_facets = jsonb_set(COALESCE(metadata_facets, '{}'::jsonb), '{content_rating}', to_jsonb($1::text))
+				WHERE id = $2;
+			`, contentRating, item.MediaID)
+			updatedCount++
+		}
+	}
+
+	return len(seenMap), nil
 }

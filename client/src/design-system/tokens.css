@@ -51,11 +51,13 @@
   --bg-card: #0E0C1A;
   --bg-input: rgba(0, 0, 0, 0.40);
 
-  /* === Borders (حدود) === */
-  --border-default: rgba(255, 255, 255, 0.10);
-  --border-subtle: rgba(255, 255, 255, 0.05);
+  /* === Borders (حدود بيضاء ناصعة وواضحة) === */
+  --border-default: rgba(255, 255, 255, 0.20);
+  --border-subtle: rgba(255, 255, 255, 0.12);
   --border-focus: var(--color-accent);
-  --border-glass: rgba(255, 255, 255, 0.08);
+  --border-glass: rgba(255, 255, 255, 0.28);
+  --border-luminous: rgba(255, 255, 255, 0.28);
+  --border-luminous-hover: rgba(255, 255, 255, 0.60);
 
   /* === Text (نصوص) === */
   --text-primary: #F8FAFC;

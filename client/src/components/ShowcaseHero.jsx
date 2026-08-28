@@ -88,7 +88,7 @@ export default function ShowcaseHero({ context = "home", category, fallbackItems
 
   return (
     <section
-      className="relative isolate min-h-[360px] overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] shadow-2xl shadow-black/10 sm:min-h-[420px] lg:min-h-[480px]"
+      className="luminous-hero relative isolate min-h-[360px] overflow-hidden rounded-2xl bg-[#0E0C1A] sm:min-h-[420px] lg:min-h-[480px]"
       dir="rtl"
       aria-label="العرض المميز"
       onMouseEnter={() => setPaused(true)}

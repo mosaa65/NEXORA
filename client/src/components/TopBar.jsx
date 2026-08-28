@@ -37,7 +37,7 @@ export default function TopBar({
   };
 
   return (
-    <header className="sticky top-0 z-40 mb-6 flex items-center justify-between gap-3 sm:gap-4 rounded-2xl sm:rounded-full border border-[var(--border-default)] bg-[var(--bg-card)]/90 px-3 sm:px-6 py-2.5 shadow-[var(--shadow-lg)] backdrop-blur-2xl transition-all">
+    <header className="luminous-container sticky top-0 z-40 mb-6 flex items-center justify-between gap-3 sm:gap-4 rounded-2xl sm:rounded-full bg-[var(--bg-card)]/95 px-3 sm:px-6 py-2.5 backdrop-blur-2xl transition-all">
       {/* Actions (Left Side in RTL): Sidebar Toggle & Theme Toggle */}
       <div className="flex items-center gap-2 shrink-0">
         {/* Sidebar Toggle (Mobile Drawer & Desktop Icon/Full Collapsed Mode) */}
@@ -70,7 +70,7 @@ export default function TopBar({
 
       {/* Main Search Input & Live Results */}
       <div ref={searchContainerRef} className="relative flex-1 max-w-xl mx-2 sm:mx-4">
-        <div className="flex w-full items-center gap-3 rounded-full border border-[var(--border-default)] bg-[var(--bg-input)] px-4 py-2 text-[var(--text-primary)] shadow-inner transition focus-within:border-[var(--color-accent)] focus-within:bg-[var(--bg-input)] focus-within:ring-2 focus-within:ring-[var(--color-accent-light)]">
+        <div className="flex w-full items-center gap-3 rounded-full border-[1.5px] border-[var(--border-luminous)] bg-[var(--bg-input)] px-4 py-2 text-[var(--text-primary)] shadow-[var(--shadow-luminous)] transition focus-within:border-[var(--color-accent)] focus-within:ring-2 focus-within:ring-[var(--color-accent-light)]">
           <Icon name="search" className="h-4 w-4 text-fuchsia-400 shrink-0" />
           <input
             type="text"

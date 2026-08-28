@@ -292,6 +292,7 @@ func (s *Server) routes() {
 	// System Directory Tree Explorer & Admin Auth Endpoints
 	s.mux.HandleFunc("GET /api/system/drives", s.handleSystemDrives)
 	s.mux.HandleFunc("GET /api/system/browse", s.handleSystemBrowse)
+	s.mux.HandleFunc("POST /api/admin/maintenance/clean-genres", s.handleCleanGenres)
 	s.mux.HandleFunc("POST /api/admin/login", s.handleAdminLogin)
 	s.mux.HandleFunc("GET /api/admin/session", s.handleAdminSession)
 	s.mux.HandleFunc("POST /api/admin/logout", s.handleAdminLogout)
@@ -2484,3 +2485,17 @@ func (s *Server) handleAdminSession(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleAdminLogout(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "message": "تم تسجيل الخروج بنجاح"})
 }
+
+func (s *Server) handleCleanGenres(w http.ResponseWriter, r *http.Request) {
+	updated, err := s.repository.CleanAndSyncAllGenres(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":      true,
+		"updated": updated,
+		"message": fmt.Sprintf("تم تنظيف وتوحيد التصنيفات واستخراج التصنيف العمري لـ %d عملاً بنجاح", updated),
+	})
+}
+

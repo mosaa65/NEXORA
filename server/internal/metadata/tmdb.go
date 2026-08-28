@@ -577,12 +577,11 @@ func (c *TMDBClient) fetchDetailsWithSettings(ctx context.Context, mediaKind str
 		posterSize = "w500"
 	}
 	backdropSize := settings.BackdropSize
-	if backdropSize == "" {
-		backdropSize = "original"
-	}
-
 	rawPosterURL := c.imageURL(posterSize, item.PosterPath)
 	rawBackdropURL := c.imageURL(backdropSize, item.BackdropPath)
+
+	cleanGenres, genreIDs := normalizeGenres(details.Genres)
+	contentRating := extractContentRating(rawPayload, mediaKind)
 
 	result := Result{
 		Provider:      "tmdb",
@@ -596,7 +595,9 @@ func (c *TMDBClient) fetchDetailsWithSettings(ctx context.Context, mediaKind str
 		PosterPath:    rawPosterURL,
 		BannerPath:    rawBackdropURL,
 		RawPayload:    rawPayload,
-		Genres:        mergeTags(normalizeGenres(details.Genres), normalizeOriginTags(details)),
+		Genres:        mergeTags(cleanGenres, normalizeOriginTags(details)),
+		GenreIDs:      genreIDs,
+		ContentRating: contentRating,
 		Warnings:      supplementalWarnings,
 	}
 
@@ -831,12 +832,44 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
+var tmdbGenreIDToNameAR = map[int]string{
+	28:    "أكشن",
+	12:    "مغامرة",
+	16:    "أنمي",
+	35:    "كوميديا",
+	80:    "جريمة",
+	99:    "وثائقي",
+	18:    "دراما",
+	10751: "عائلي",
+	14:    "فانتازيا",
+	36:    "تاريخي",
+	27:    "رعب",
+	10402: "موسيقى",
+	9648:  "غموض",
+	10749: "رومانسي",
+	878:   "خيال علمي",
+	10770: "فيلم تلفزيوني",
+	53:    "إثارة",
+	10752: "حرب",
+	37:    "ويسترن",
+	10759: "أكشن", // Action & Adventure (TV)
+	10762: "أطفال",
+	10763: "أخبار",
+	10764: "تلفزيون الواقع",
+	10765: "خيال علمي",
+	10766: "دراما",
+	10767: "برامج حوارية",
+	10768: "حرب",
+}
+
 func normalizeGenres(genres []struct {
 	ID   int    `json:"id"`
 	Name string `json:"name"`
-}) []string {
+}) ([]string, []int) {
 	seen := make(map[string]bool)
 	var result []string
+	var genreIDs []int
+
 	add := func(g string) {
 		g = strings.TrimSpace(g)
 		if g != "" && !seen[g] {
@@ -846,19 +879,27 @@ func normalizeGenres(genres []struct {
 	}
 
 	for _, item := range genres {
+		if item.ID > 0 {
+			genreIDs = append(genreIDs, item.ID)
+		}
+		// 1. Match by official TMDB Genre ID
+		if arName, exists := tmdbGenreIDToNameAR[item.ID]; exists {
+			add(arName)
+			continue
+		}
+
 		name := strings.TrimSpace(item.Name)
 		if name == "" {
 			continue
 		}
-		add(name)
 		lower := strings.ToLower(name)
 		switch {
-		case strings.Contains(lower, "action") || strings.Contains(lower, "adventure") || strings.Contains(lower, "حركة") || strings.Contains(lower, "مغامرة"):
+		case strings.Contains(lower, "action") || strings.Contains(lower, "حركة") || strings.Contains(lower, "أكشن"):
 			add("أكشن")
+		case strings.Contains(lower, "adventure") || strings.Contains(lower, "مغامرة"):
 			add("مغامرة")
-		case strings.Contains(lower, "anim") || strings.Contains(lower, "رسوم"):
+		case strings.Contains(lower, "anim") || strings.Contains(lower, "رسوم") || strings.Contains(lower, "أنمي") || strings.Contains(lower, "كرتون"):
 			add("أنمي")
-			add("كرتون")
 		case strings.Contains(lower, "drama") || strings.Contains(lower, "دراما"):
 			add("دراما")
 		case strings.Contains(lower, "comedy") || strings.Contains(lower, "كوميد"):
@@ -877,15 +918,106 @@ func normalizeGenres(genres []struct {
 			add("رومانسي")
 		case strings.Contains(lower, "document") || strings.Contains(lower, "وثائق"):
 			add("وثائقي")
-		case strings.Contains(lower, "family") || strings.Contains(lower, "kids") || strings.Contains(lower, "عائل") || strings.Contains(lower, "أطفال"):
+		case strings.Contains(lower, "family") || strings.Contains(lower, "عائل"):
 			add("عائلي")
+		case strings.Contains(lower, "kids") || strings.Contains(lower, "أطفال"):
+			add("أطفال")
 		case strings.Contains(lower, "war") || strings.Contains(lower, "حرب"):
 			add("حرب")
 		case strings.Contains(lower, "history") || strings.Contains(lower, "تاريخ"):
 			add("تاريخي")
+		case strings.Contains(lower, "music") || strings.Contains(lower, "موسيق"):
+			add("موسيقى")
+		case strings.Contains(lower, "thriller") || strings.Contains(lower, "إثارة") || strings.Contains(lower, "تشويق"):
+			add("إثارة")
+		case strings.Contains(lower, "western") || strings.Contains(lower, "ويسترن"):
+			add("ويسترن")
+		default:
+			// Only add if it's already an Arabic string to avoid polluting with raw English tokens
+			if isArabicGenreString(name) {
+				add(name)
+			}
 		}
 	}
-	return result
+	return result, genreIDs
+}
+
+func isArabicGenreString(s string) bool {
+	for _, r := range s {
+		if r >= 0x0600 && r <= 0x06FF {
+			return true
+		}
+	}
+	return false
+}
+
+func extractContentRating(rawPayload json.RawMessage, mediaKind string) string {
+	if len(rawPayload) == 0 {
+		return ""
+	}
+	if mediaKind == "movie" {
+		var payload struct {
+			ReleaseDates struct {
+				Results []struct {
+					ISO31661     string `json:"iso_3166_1"`
+					ReleaseDates []struct {
+						Certification string `json:"certification"`
+					} `json:"release_dates"`
+				} `json:"results"`
+			} `json:"release_dates"`
+		}
+		if err := json.Unmarshal(rawPayload, &payload); err == nil {
+			for _, country := range payload.ReleaseDates.Results {
+				if strings.EqualFold(country.ISO31661, "US") {
+					for _, rd := range country.ReleaseDates {
+						if cert := strings.TrimSpace(rd.Certification); cert != "" {
+							return cert
+						}
+					}
+				}
+			}
+			for _, country := range payload.ReleaseDates.Results {
+				if strings.EqualFold(country.ISO31661, "GB") || strings.EqualFold(country.ISO31661, "CA") {
+					for _, rd := range country.ReleaseDates {
+						if cert := strings.TrimSpace(rd.Certification); cert != "" {
+							return cert
+						}
+					}
+				}
+			}
+			for _, country := range payload.ReleaseDates.Results {
+				for _, rd := range country.ReleaseDates {
+					if cert := strings.TrimSpace(rd.Certification); cert != "" {
+						return cert
+					}
+				}
+			}
+		}
+	} else {
+		var payload struct {
+			ContentRatings struct {
+				Results []struct {
+					ISO31661 string `json:"iso_3166_1"`
+					Rating   string `json:"rating"`
+				} `json:"results"`
+			} `json:"content_ratings"`
+		}
+		if err := json.Unmarshal(rawPayload, &payload); err == nil {
+			for _, country := range payload.ContentRatings.Results {
+				if strings.EqualFold(country.ISO31661, "US") {
+					if rating := strings.TrimSpace(country.Rating); rating != "" {
+						return rating
+					}
+				}
+			}
+			for _, country := range payload.ContentRatings.Results {
+				if rating := strings.TrimSpace(country.Rating); rating != "" {
+					return rating
+				}
+			}
+		}
+	}
+	return ""
 }
 
 func normalizeOriginTags(details tmdbDetails) []string {

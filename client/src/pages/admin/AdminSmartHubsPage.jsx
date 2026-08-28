@@ -186,9 +186,10 @@ export default function AdminSmartHubsPage() {
         <Button
           variant="primary"
           onClick={handleOpenAdd}
+          icon={<Icon name="plus" className="h-4 w-4" />}
           className="rounded-2xl shrink-0 shadow-neon"
         >
-          <span>➕ إضافة محور ذكي جديد</span>
+          <span>إضافة محور ذكي جديد</span>
         </Button>
       </div>
 
@@ -339,9 +340,10 @@ export default function AdminSmartHubsPage() {
         <Modal
           isOpen={Boolean(editModal)}
           onClose={() => setEditModal(null)}
-          title={editModal.isNew ? "➕ إنشاء محور ذكي جديد" : `✏️ تعديل محور: ${editModal.title_ar}`}
+          title={editModal.isNew ? "إنشاء محور ذكي جديد" : `تعديل محور: ${editModal.title_ar}`}
           subtitle="تحديد قواعد المطابقة، النطاق، وهوية العرض التلقائي"
           size="xl"
+          className="admin-form-modal sm:max-w-5xl"
           actions={
             <>
               <Button variant="ghost" onClick={() => setEditModal(null)}>
@@ -358,11 +360,11 @@ export default function AdminSmartHubsPage() {
             </>
           }
         >
-          <div className="space-y-6 max-h-[75vh] overflow-y-auto pr-1 pl-1">
+          <div className="space-y-6">
             {/* Section 1: Basic Identity */}
             <div className="space-y-3">
               <h4 className="text-xs font-black text-fuchsia-400 uppercase tracking-wider flex items-center gap-1.5">
-                <span>1. هوية المحور الأساسية</span>
+                <Icon name="info" className="h-4 w-4" /><span>1. هوية المحور الأساسية</span>
               </h4>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Input
@@ -402,7 +404,7 @@ export default function AdminSmartHubsPage() {
             {/* Section 2: Artwork & Image (With Dual Upload + Path Support) */}
             <div className="space-y-3 pt-2 border-t border-white/10">
               <h4 className="text-xs font-black text-fuchsia-400 uppercase tracking-wider flex items-center gap-1.5">
-                <span>2. صورة وغلاف المحور (Artwork)</span>
+                <Icon name="image" className="h-4 w-4" /><span>2. صورة وغلاف المحور (Artwork)</span>
               </h4>
               <div className="grid gap-4 sm:grid-cols-2 items-start">
                 <ImagePickerInput
@@ -460,7 +462,7 @@ export default function AdminSmartHubsPage() {
             {/* Section 4: Smart Matching Rules */}
             <div className="space-y-3 pt-2 border-t border-white/10">
               <h4 className="text-xs font-black text-fuchsia-400 uppercase tracking-wider flex items-center gap-1.5">
-                <span>3. قواعد التجميع والتصنيف التلقائي</span>
+                <Icon name="database" className="h-4 w-4" /><span>3. قواعد التجميع والتصنيف التلقائي</span>
               </h4>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Input

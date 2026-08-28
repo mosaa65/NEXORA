@@ -18,7 +18,7 @@ export default function HubBannerCard({
       whileHover={{ scale: 1.02, y: -4 }}
       transition={{ duration: 0.25 }}
       onClick={onClick}
-      className={`relative h-44 w-full overflow-hidden rounded-2xl border ${borderColor} bg-[#0F0E1A] text-right shadow-xl group sm:h-52`}
+      className="luminous-card relative h-44 w-full overflow-hidden rounded-2xl bg-[#0F0E1A] text-right group sm:h-52"
       dir="rtl"
     >
       {/* Background Image / Collage */}
