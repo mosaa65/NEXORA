@@ -162,6 +162,7 @@ export default function AdminMediaPage() {
       plot_en: item.plot_en || "",
       release_year: item.release_year || 2024,
       rating: item.rating || 8.0,
+      content_rating: item.content_rating || item.contentRating || "",
       poster_path: item.poster_path || "",
       banner_path: item.banner_path || "",
       genres: item.genres || [],
@@ -186,6 +187,7 @@ export default function AdminMediaPage() {
       plot_en: "",
       release_year: 2024,
       rating: 8.5,
+      content_rating: "",
       poster_path: "",
       banner_path: "",
       genres: [],
@@ -216,7 +218,7 @@ export default function AdminMediaPage() {
       const metadata = Array.isArray(res.metadata) ? res.metadata : [res.metadata].filter(Boolean);
       const arabic = metadata.find((item) => String(item.locale || "").toLowerCase().startsWith("ar"));
       const english = metadata.find((item) => String(item.locale || "").toLowerCase().startsWith("en")) || metadata[0];
-      if (english || arabic) setModalForm((prev) => ({ ...prev, title_ar: arabic?.title || prev.title_ar, title_en: english?.title || prev.title_en, plot_ar: arabic?.overview || prev.plot_ar, plot_en: english?.overview || prev.plot_en, release_year: english?.releaseYear || prev.release_year, rating: english?.rating || prev.rating, poster_path: english?.cachedPosterPath || english?.posterPath || prev.poster_path, banner_path: english?.cachedBannerPath || english?.bannerPath || prev.banner_path, genres: english?.genres?.length ? english.genres : prev.genres }));
+      if (english || arabic) setModalForm((prev) => ({ ...prev, title_ar: arabic?.title || prev.title_ar, title_en: english?.title || prev.title_en, plot_ar: arabic?.overview || prev.plot_ar, plot_en: english?.overview || prev.plot_en, release_year: english?.releaseYear || prev.release_year, rating: english?.rating || prev.rating, content_rating: english?.contentRating || arabic?.contentRating || prev.content_rating, poster_path: english?.cachedPosterPath || english?.posterPath || prev.poster_path, banner_path: english?.cachedBannerPath || english?.bannerPath || prev.banner_path, genres: english?.genres?.length ? english.genres : prev.genres }));
     } catch (err) {
       alert("تعذر اعتماد النتيجة: " + (err?.message || ""));
     } finally {
@@ -266,6 +268,7 @@ export default function AdminMediaPage() {
           plot_en: english?.overview || prev.plot_en,
           release_year: english?.releaseYear || arabic?.releaseYear || prev.release_year,
           rating: english?.rating || arabic?.rating || prev.rating,
+          content_rating: english?.contentRating || arabic?.contentRating || prev.content_rating,
           poster_path: english?.cachedPosterPath || english?.posterPath || arabic?.cachedPosterPath || prev.poster_path,
           banner_path: english?.cachedBannerPath || english?.bannerPath || arabic?.cachedBannerPath || prev.banner_path,
           genres: english?.genres?.length > 0 ? english.genres : prev.genres,
@@ -714,6 +717,13 @@ export default function AdminMediaPage() {
                   onChange={(e) =>
                     setModalForm({ ...modalForm, rating: parseFloat(e.target.value) || 0 })
                   }
+                />
+                <Input
+                  label="التصنيف العمري (Content Rating)"
+                  value={modalForm.content_rating || ""}
+                  onChange={(e) => setModalForm({ ...modalForm, content_rating: e.target.value })}
+                  placeholder="مثال: PG-13 أو R أو TV-MA أو G"
+                  dir="ltr"
                 />
               </div>
             </div>

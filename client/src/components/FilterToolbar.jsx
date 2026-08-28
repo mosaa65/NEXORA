@@ -73,6 +73,13 @@ export const ratingOptions = [
   { id: "5", label: "5 فأعلى" },
 ];
 
+export const contentRatingOptions = [
+  { id: "all", label: "كل الفئات العمرية" },
+  { id: "family", label: "مناسب للعائلة (G / PG)" },
+  { id: "teen", label: "إشراف عائلي (+13 / PG-13 / TV-14)" },
+  { id: "mature", label: "للبالغين (+18 / R / TV-MA)" },
+];
+
 export default function FilterToolbar({
   activeOrigin = "all",
   onSelectOrigin,
@@ -86,6 +93,8 @@ export default function FilterToolbar({
   onSelectYear,
   activeRating = "all",
   onSelectRating,
+  activeContentRating = "all",
+  onSelectContentRating,
   hasArabicAudio = false,
   onToggleArabicAudio,
   hasArabicSubtitles = false,
@@ -137,6 +146,7 @@ export default function FilterToolbar({
     (activeQuality && activeQuality !== "all") ||
     (activeYear && activeYear !== "all") ||
     (activeRating && activeRating !== "all") ||
+    (activeContentRating && activeContentRating !== "all") ||
     hasArabicAudio || hasArabicSubtitles ||
     Boolean(searchQuery && searchQuery.trim());
 
@@ -150,6 +160,7 @@ export default function FilterToolbar({
       if (onSelectQuality) onSelectQuality("all");
       if (onSelectYear) onSelectYear("all");
       if (onSelectRating) onSelectRating("all");
+      if (onSelectContentRating) onSelectContentRating("all");
       if (onToggleArabicAudio && hasArabicAudio) onToggleArabicAudio(false);
       if (onToggleArabicSubtitles && hasArabicSubtitles) onToggleArabicSubtitles(false);
       if (onSearchChange) onSearchChange("");
@@ -162,13 +173,15 @@ export default function FilterToolbar({
   const selectedQuality = qualityOptions.find((item) => item.id === activeQuality);
   const selectedYear = yearOptions.find((item) => item.id === activeYear);
   const selectedRating = ratingOptions.find((item) => item.id === activeRating);
+  const selectedContentRating = contentRatingOptions.find((item) => item.id === activeContentRating);
   const selectedSort = sorts.find((item) => item.id === activeSort);
-  const hasFilterOptions = showOriginFilter || showGenreFilter || onSelectType || onSelectQuality || onSelectYear || onSelectRating || onToggleArabicAudio || onToggleArabicSubtitles;
+  const hasFilterOptions = showOriginFilter || showGenreFilter || onSelectType || onSelectQuality || onSelectYear || onSelectRating || onSelectContentRating || onToggleArabicAudio || onToggleArabicSubtitles;
 
   const fieldClassName = "mt-1.5 h-11 w-full rounded-xl border border-[var(--border-default)] bg-[var(--bg-input)] px-3 text-sm font-bold text-[var(--text-primary)] outline-none transition focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent-light)]";
   const filterFields = <>
     {showOriginFilter && <label className="block text-xs font-bold text-[var(--text-secondary)]">المنشأ<select value={activeOrigin} onChange={(event) => onSelectOrigin && onSelectOrigin(event.target.value)} className={fieldClassName}>{origins.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>}
     {showGenreFilter && <label className="block text-xs font-bold text-[var(--text-secondary)]">التصنيف<select value={activeGenre} onChange={(event) => onSelectGenre && onSelectGenre(event.target.value)} className={fieldClassName}>{genres.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>}
+    {onSelectContentRating && <label className="block text-xs font-bold text-[var(--text-secondary)]">الفئة العمرية (Content Rating)<select value={activeContentRating} onChange={(event) => onSelectContentRating(event.target.value)} className={fieldClassName}>{contentRatingOptions.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>}
     {onSelectType && <label className="block text-xs font-bold text-[var(--text-secondary)]">نوع العمل<select value={activeType} onChange={(event) => onSelectType(event.target.value)} className={fieldClassName}>{typeOptions.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>}
     {onSelectQuality && <label className="block text-xs font-bold text-[var(--text-secondary)]">الجودة<select value={activeQuality} onChange={(event) => onSelectQuality(event.target.value)} className={fieldClassName}>{qualityOptions.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>}
     {onSelectYear && <label className="block text-xs font-bold text-[var(--text-secondary)]">سنة الإنتاج<select value={activeYear} onChange={(event) => onSelectYear(event.target.value)} className={fieldClassName}>{yearOptions.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>}

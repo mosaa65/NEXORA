@@ -1,6 +1,68 @@
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 
+// Catalogue data changes far less often than users navigate between pages. Keep
+// successful GET responses briefly in memory and session storage so back/forward
+// navigation (and an accidental page refresh) does not repeatedly hit the API.
+const READ_CACHE_TTL = 2 * 60 * 1000;
+const HEALTH_CACHE_TTL = 15 * 1000;
+const CACHE_PREFIX = "nexora:api-cache:";
+const responseCache = new Map();
+const pendingRequests = new Map();
+
+function cacheTTL(path) {
+  return path.startsWith("/api/health") ? HEALTH_CACHE_TTL : READ_CACHE_TTL;
+}
+
+function isCacheableRequest(path, options) {
+  return (!options.method || options.method.toUpperCase() === "GET")
+    && !path.startsWith("/api/admin/")
+    && !path.startsWith("/api/stream/");
+}
+
+function readCachedResponse(key) {
+  const now = Date.now();
+  const memory = responseCache.get(key);
+  if (memory && memory.expiresAt > now) return memory.data;
+  if (memory) responseCache.delete(key);
+
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(`${CACHE_PREFIX}${key}`));
+    if (saved?.expiresAt > now) {
+      responseCache.set(key, saved);
+      return saved.data;
+    }
+    sessionStorage.removeItem(`${CACHE_PREFIX}${key}`);
+  } catch {}
+  return undefined;
+}
+
+function saveCachedResponse(key, data, ttl) {
+  const entry = { data, expiresAt: Date.now() + ttl };
+  responseCache.set(key, entry);
+  try { sessionStorage.setItem(`${CACHE_PREFIX}${key}`, JSON.stringify(entry)); } catch {}
+}
+
+// Exported for admin save/delete workflows and future live-refresh events.
+export function invalidateAPICache() {
+  responseCache.clear();
+  try {
+    Object.keys(sessionStorage)
+      .filter((key) => key.startsWith(CACHE_PREFIX))
+      .forEach((key) => sessionStorage.removeItem(key));
+  } catch {}
+}
+
 async function requestJSON(path, options = {}) {
+  const cacheable = isCacheableRequest(path, options);
+  const cacheKey = `${API_BASE}${path}`;
+  if (cacheable) {
+    const cached = readCachedResponse(cacheKey);
+    if (cached !== undefined) return cached;
+    const pending = pendingRequests.get(cacheKey);
+    if (pending) return pending;
+  }
+
+  const performRequest = async () => {
   const response = await fetch(`${API_BASE}${path}`, {
     headers: {
       "Content-Type": "application/json",
@@ -26,7 +88,19 @@ async function requestJSON(path, options = {}) {
     throw error;
   }
 
+  if (cacheable) {
+    saveCachedResponse(cacheKey, data, cacheTTL(path));
+  } else if ((options.method || "GET").toUpperCase() !== "GET") {
+    // Any successful write can affect catalogue summaries, counts and details.
+    invalidateAPICache();
+  }
   return data;
+  };
+
+  if (!cacheable) return performRequest();
+  const pending = performRequest().finally(() => pendingRequests.delete(cacheKey));
+  pendingRequests.set(cacheKey, pending);
+  return pending;
 }
 
 export async function getHealth() {

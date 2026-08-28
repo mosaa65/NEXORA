@@ -21,6 +21,28 @@ const statusStyles = {
 };
 const statusDotStyles = { completed: "bg-emerald-300", ongoing: "bg-fuchsia-300", upcoming: "bg-sky-300", cancelled: "bg-slate-300" };
 
+const contentRatingStyles = {
+  G: "border-emerald-400/35 bg-emerald-950/80 text-emerald-200",
+  PG: "border-sky-400/35 bg-sky-950/80 text-sky-200",
+  "PG-13": "border-amber-400/35 bg-amber-950/80 text-amber-200",
+  R: "border-rose-500/40 bg-rose-950/85 text-rose-200",
+  "NC-17": "border-rose-600/50 bg-rose-950 text-rose-300",
+  "TV-Y": "border-emerald-400/35 bg-emerald-950/80 text-emerald-200",
+  "TV-Y7": "border-sky-400/35 bg-sky-950/80 text-sky-200",
+  "TV-G": "border-emerald-400/35 bg-emerald-950/80 text-emerald-200",
+  "TV-PG": "border-sky-400/35 bg-sky-950/80 text-sky-200",
+  "TV-14": "border-amber-400/35 bg-amber-950/80 text-amber-200",
+  "TV-MA": "border-rose-500/40 bg-rose-950/85 text-rose-200",
+  "18+": "border-rose-500/40 bg-rose-950/85 text-rose-200",
+  "16+": "border-amber-400/35 bg-amber-950/80 text-amber-200",
+};
+
+function getContentRatingStyle(rating) {
+  if (!rating) return "";
+  const key = String(rating).trim().toUpperCase();
+  return contentRatingStyles[key] || "border-white/20 bg-black/65 text-white/90";
+}
+
 function formatSize(bytes) {
   const value = Number(bytes || 0);
   if (!Number.isFinite(value) || value <= 0) return "";
@@ -61,6 +83,7 @@ export default function UnifiedMediaCard({ media, onOpen, variant = "standard", 
   const item = {
     titleAr: media.titleAr ?? media.title_ar ?? "", titleEn: media.titleEn ?? media.title_en ?? "", type: media.type,
     year: media.year ?? media.releaseYear ?? media.release_year, rating: Number(media.rating || 0), posterPath: media.posterPath ?? media.poster_path,
+    contentRating: media.contentRating ?? media.content_rating ?? "",
     status: media.status, seasonCount: Number(media.seasonCount ?? media.season_count ?? 0), seasonNumber: Number(media.seasonNumber ?? media.season_number ?? 0),
     tmdbSeasonCount: Number(media.tmdbSeasonCount ?? media.tmdb_season_count ?? 0), tmdbEpisodeCount: Number(media.tmdbEpisodeCount ?? media.tmdb_episode_count ?? 0),
     fileCount: Number(media.fileCount ?? media.file_count ?? 0), totalSize: media.totalSize ?? media.total_size, bestResolution: media.bestResolution ?? media.best_resolution,
@@ -84,7 +107,7 @@ export default function UnifiedMediaCard({ media, onOpen, variant = "standard", 
         className="group flex w-full items-stretch overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] text-right shadow-[var(--shadow-sm)] transition-[border-color,box-shadow] hover:border-fuchsia-400/55 hover:shadow-[var(--shadow-md)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]" dir="rtl" aria-label={`فتح تفاصيل ${title}`}>
         <div className="relative w-24 shrink-0 overflow-hidden bg-black sm:w-32"><img src={posterURL} alt="" loading="lazy" onError={(event) => { event.currentTarget.src = "/nexora-poster-placeholder.PNG"; }} className="h-full min-h-[132px] w-full object-cover transition-transform duration-500 group-hover:scale-105" /><div className="absolute inset-0 bg-gradient-to-l from-black/35 to-transparent" />{item.bestResolution && <span className="absolute bottom-2 right-2 rounded-md border border-cyan-300/30 bg-cyan-950/75 px-1.5 py-0.5 text-[9px] font-black text-cyan-100 backdrop-blur">{item.bestResolution}</span>}</div>
         <div className="flex min-w-0 flex-1 flex-col justify-center p-3.5 sm:p-4">
-          <div className="flex items-center justify-between gap-3"><div className="flex flex-wrap items-center gap-1.5"><span className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[9px] font-extrabold ${typeStyles[mediaKind] || "border-white/15 bg-black/55 text-white"}`}><Icon name={typeIcons[mediaKind] || "film"} className="h-3 w-3" />{typeLabels[mediaKind] || "مكتبة"}</span>{status && <span className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[9px] font-extrabold ${statusStyle}`}><i className={`h-1.5 w-1.5 rounded-full ${statusDotStyle}`} />{status}</span>}</div>{item.rating > 0 && <span className="inline-flex items-center gap-1 text-[11px] font-black tabular-nums text-amber-500"><Icon name="star" className="h-3.5 w-3.5 fill-current stroke-0" />{item.rating.toFixed(1)}</span>}</div>
+          <div className="flex items-center justify-between gap-3"><div className="flex flex-wrap items-center gap-1.5"><span className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[9px] font-extrabold ${typeStyles[mediaKind] || "border-white/15 bg-black/55 text-white"}`}><Icon name={typeIcons[mediaKind] || "film"} className="h-3 w-3" />{typeLabels[mediaKind] || "مكتبة"}</span>{item.contentRating && <span className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[9px] font-black tracking-wider ${getContentRatingStyle(item.contentRating)}`}>{item.contentRating}</span>}{status && <span className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[9px] font-extrabold ${statusStyle}`}><i className={`h-1.5 w-1.5 rounded-full ${statusDotStyle}`} />{status}</span>}</div>{item.rating > 0 && <span className="inline-flex items-center gap-1 text-[11px] font-black tabular-nums text-amber-500"><Icon name="star" className="h-3.5 w-3.5 fill-current stroke-0" />{item.rating.toFixed(1)}</span>}</div>
           <h3 dir={titleIsArabic ? "rtl" : "ltr"} className={`mt-2 truncate text-sm font-extrabold text-[var(--text-primary)] ${titleIsArabic ? "text-right" : "text-left"}`}>{title}</h3>{englishTitle && <p dir="ltr" className="mt-0.5 truncate text-left text-[11px] text-[var(--text-muted)]">{englishTitle}</p>}
           <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] font-semibold text-[var(--text-secondary)]">{facts.map((fact) => <span key={fact} className="rounded-md bg-[var(--bg-surface)] px-1.5 py-0.5">{fact}</span>)}{item.hasArabicAudio && <span className="rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[var(--color-success)] font-bold">صوت عربي</span>}{!item.hasArabicAudio && item.hasArabicSubtitles && <span className="rounded-md bg-cyan-500/10 px-1.5 py-0.5 text-[var(--color-info)] font-bold">ترجمة عربية</span>}</div>
         </div>
@@ -103,6 +126,7 @@ export default function UnifiedMediaCard({ media, onOpen, variant = "standard", 
         <div className="absolute inset-x-2 top-2 flex items-start justify-between gap-1">
           <div className="flex min-w-0 flex-nowrap items-center justify-end gap-1 whitespace-nowrap">
             <span className={`inline-flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-1 text-[9px] font-extrabold shadow-sm backdrop-blur-md sm:px-2 sm:text-[10px] ${typeStyles[mediaKind] || "border-white/15 bg-black/55 text-white/95"}`}><Icon name={typeIcons[mediaKind] || "film"} className="h-2.5 w-2.5 shrink-0 sm:h-3 sm:w-3" />{typeLabels[mediaKind] || "مكتبة"}</span>
+            {item.contentRating && <span className={`inline-flex shrink-0 items-center rounded-md border px-1.5 py-1 text-[9px] font-black tracking-wider shadow-sm backdrop-blur-md sm:px-2 sm:text-[10px] ${getContentRatingStyle(item.contentRating)}`}>{item.contentRating}</span>}
             {status && <span className={`inline-flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-1 text-[9px] font-extrabold backdrop-blur-md sm:px-2 sm:text-[10px] ${statusStyle}`}><i className={`h-1.5 w-1.5 rounded-full ${statusDotStyle} ${item.status === "ongoing" ? "animate-pulse" : ""}`} />{status}</span>}
           </div>
           {item.rating > 0 && <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-amber-300/25 bg-black/55 px-1.5 py-1 text-[9px] font-black tabular-nums text-amber-100 shadow-sm backdrop-blur-md sm:px-2 sm:text-[10px]"><Icon name="star" className="h-2.5 w-2.5 fill-current stroke-0 text-amber-300 sm:h-3 sm:w-3" />{item.rating.toFixed(1)}</span>}

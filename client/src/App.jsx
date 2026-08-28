@@ -107,16 +107,23 @@ export default function App() {
       return;
     }
 
-    setIsSearching(true);
-    // Catalogue search deliberately goes through PostgreSQL-backed /api/media.
-    // Meilisearch remains available for administration, but card data must have
-    // the same local offline-first contract as every other catalogue surface.
-    getMediaList({ q: deferredQuery, limit: 30 })
-      .then((payload) => {
-        setSearchResults(payload?.items || []);
-      })
-      .catch(() => setSearchResults([]))
-      .finally(() => setIsSearching(false));
+    // Debounce typing: a single search request is made after the user pauses,
+    // rather than once for every character entered.
+    const query = deferredQuery.trim();
+    const timer = window.setTimeout(() => {
+      setIsSearching(true);
+      // Catalogue search deliberately goes through PostgreSQL-backed /api/media.
+      // Meilisearch remains available for administration, but card data must have
+      // the same local offline-first contract as every other catalogue surface.
+      getMediaList({ q: query, limit: 30 })
+        .then((payload) => {
+          setSearchResults(payload?.items || []);
+        })
+        .catch(() => setSearchResults([]))
+        .finally(() => setIsSearching(false));
+    }, 300);
+
+    return () => window.clearTimeout(timer);
   }, [deferredQuery]);
 
   async function handleSyncIndex() {

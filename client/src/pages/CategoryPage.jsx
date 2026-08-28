@@ -132,6 +132,7 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
   const [activeQuality, setActiveQuality] = useState("all");
   const [activeYear, setActiveYear] = useState("all");
   const [activeRating, setActiveRating] = useState("all");
+  const [activeContentRating, setActiveContentRating] = useState("all");
   const [hasArabicAudio, setHasArabicAudio] = useState(false);
   const [hasArabicSubtitles, setHasArabicSubtitles] = useState(false);
   const [activeSort, setActiveSort] = useState("newest");
@@ -144,10 +145,9 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
     // Reset filters on category switch
     setActiveOrigin("all");
     setActiveGenre("all");
-    setActiveType("all"); setActiveQuality("all"); setActiveYear("all"); setActiveRating("all"); setHasArabicAudio(false); setHasArabicSubtitles(false);
+    setActiveType("all"); setActiveQuality("all"); setActiveYear("all"); setActiveRating("all"); setActiveContentRating("all"); setHasArabicAudio(false); setHasArabicSubtitles(false);
     setSearchQuery("");
     setSelectedHub(null);
-    loadCategoryItems();
   }, [selectedCategory]);
 
   useEffect(() => {
@@ -171,6 +171,7 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
         plot: item.plot_ar || item.plot_en || "",
         year: item.release_year,
         rating: item.rating,
+        contentRating: item.content_rating || item.contentRating || "",
         posterPath: item.poster_path,
         bannerPath: item.banner_path,
         categorySlug: item.category_slug || selectedCategory,
@@ -246,9 +247,20 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
         if (activeYear === "classic" && year >= 2000) return false;
       }
 
+      if (activeContentRating !== "all") {
+        const cr = String(item.contentRating || "").toUpperCase().trim();
+        if (activeContentRating === "family") {
+          if (!["G", "PG", "TV-G", "TV-Y", "TV-Y7", "ALL"].includes(cr)) return false;
+        } else if (activeContentRating === "teen") {
+          if (!["PG-13", "TV-14", "13+", "12"].includes(cr)) return false;
+        } else if (activeContentRating === "mature") {
+          if (!["R", "NC-17", "TV-MA", "18+", "18", "MA"].includes(cr)) return false;
+        }
+      }
+
       return true;
     });
-  }, [items, searchQuery, selectedHub, activeOrigin, activeGenre, activeType, activeQuality, activeYear, activeRating, hasArabicAudio, hasArabicSubtitles]);
+  }, [items, searchQuery, selectedHub, activeOrigin, activeGenre, activeType, activeQuality, activeYear, activeRating, activeContentRating, hasArabicAudio, hasArabicSubtitles]);
 
   const sortedItems = useMemo(() => [...filteredItems].sort((a, b) => {
     const titleA = (a.titleAr || a.titleEn || "").toLocaleLowerCase(); const titleB = (b.titleAr || b.titleEn || "").toLocaleLowerCase();
@@ -366,6 +378,7 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
         activeQuality={activeQuality} onSelectQuality={setActiveQuality}
         activeYear={activeYear} onSelectYear={setActiveYear}
         activeRating={activeRating} onSelectRating={setActiveRating}
+        activeContentRating={activeContentRating} onSelectContentRating={setActiveContentRating}
         hasArabicAudio={hasArabicAudio} onToggleArabicAudio={setHasArabicAudio}
         hasArabicSubtitles={hasArabicSubtitles} onToggleArabicSubtitles={setHasArabicSubtitles}
         activeSort={activeSort}
@@ -377,7 +390,7 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
         onResetFilters={() => {
           setActiveOrigin("all");
           setActiveGenre("all");
-          setActiveType("all"); setActiveQuality("all"); setActiveYear("all"); setActiveRating("all"); setHasArabicAudio(false); setHasArabicSubtitles(false);
+          setActiveType("all"); setActiveQuality("all"); setActiveYear("all"); setActiveRating("all"); setActiveContentRating("all"); setHasArabicAudio(false); setHasArabicSubtitles(false);
           setSearchQuery("");
         }}
       />

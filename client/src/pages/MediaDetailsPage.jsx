@@ -5,6 +5,44 @@ import { horizontalWheel } from "../lib/horizontalScroll.js";
 
 const hasArabicText = (value) => /[\u0600-\u06FF]/.test(value || "");
 
+function getContentRatingInfo(rating) {
+  if (!rating) return null;
+  const key = String(rating).trim().toUpperCase();
+  if (["G", "TV-G", "TV-Y", "ALL"].includes(key)) {
+    return {
+      label: key,
+      desc: "مناسب لجميع الأعمار (عائلي)",
+      badgeClass: "border-emerald-400/40 bg-emerald-950/70 text-emerald-200",
+    };
+  }
+  if (["PG", "TV-PG", "TV-Y7"].includes(key)) {
+    return {
+      label: key,
+      desc: "إشراف عائلي موصى به",
+      badgeClass: "border-sky-400/40 bg-sky-950/70 text-sky-200",
+    };
+  }
+  if (["PG-13", "TV-14", "13+", "12"].includes(key)) {
+    return {
+      label: key,
+      desc: "غير مناسب لمن هم دون 13 عاماً",
+      badgeClass: "border-amber-400/40 bg-amber-950/70 text-amber-200",
+    };
+  }
+  if (["R", "TV-MA", "NC-17", "18+", "18", "MA"].includes(key)) {
+    return {
+      label: key,
+      desc: "للبالغين فقط (+18)",
+      badgeClass: "border-rose-500/40 bg-rose-950/80 text-rose-200",
+    };
+  }
+  return {
+    label: key,
+    desc: `تصنيف عمري: ${key}`,
+    badgeClass: "border-white/20 bg-white/10 text-white/90",
+  };
+}
+
 export default function MediaDetailsPage({
   media,
   searchQuery = "",
@@ -38,6 +76,7 @@ export default function MediaDetailsPage({
               type: data.type || media.type || "movie",
               year: data.release_year || media.year || 2024,
               rating: data.rating || media.rating || 0,
+              contentRating: data.content_rating || data.contentRating || media.contentRating || media.content_rating || "",
               plot: hasArabicText(data.plot_ar) ? data.plot_ar : (data.plot_en || media.plot || "عمل سينمائي متاح في مكتبة NEXORA المحلية."),
               posterPath: data.poster_path || media.posterPath,
               bannerPath: data.banner_path || media.bannerPath,
@@ -226,6 +265,8 @@ export default function MediaDetailsPage({
     ["العنوان الأصلي", tmdb?.original_title || tmdb?.original_name || tmdbEnglish?.original_title || tmdbEnglish?.original_name], ["الشعار", tmdb?.tagline || tmdbEnglish?.tagline], ["الحالة", tmdb?.status || tmdbEnglish?.status], ["اللغة الأصلية", tmdb?.original_language || tmdbEnglish?.original_language],
     ["تاريخ الإصدار", tmdb?.release_date || tmdbEnglish?.release_date || tmdb?.first_air_date || tmdbEnglish?.first_air_date], ["مدة الفيلم", (tmdb?.runtime || tmdbEnglish?.runtime) ? `${tmdb?.runtime || tmdbEnglish?.runtime} دقيقة` : null], ["الميزانية", (tmdb?.budget || tmdbEnglish?.budget) ? `$${Number(tmdb?.budget || tmdbEnglish?.budget).toLocaleString("en-US")}` : null], ["الإيرادات", (tmdb?.revenue || tmdbEnglish?.revenue) ? `$${Number(tmdb?.revenue || tmdbEnglish?.revenue).toLocaleString("en-US")}` : null], ["الشعبية", tmdb?.popularity || tmdbEnglish?.popularity], ["عدد الأصوات", tmdb?.vote_count || tmdbEnglish?.vote_count], ["الموقع الرسمي", tmdb?.homepage || tmdbEnglish?.homepage]
   ].filter(([, value]) => value);
+  const contentRating = current.contentRating || current.content_rating || tmdb?.content_rating || "";
+  const ratingInfo = getContentRatingInfo(contentRating);
   const posterURL = resolveAPIURL(current.posterPath) || "/nexora-poster-placeholder.PNG";
   const bannerURL = resolveAPIURL(current.bannerPath) || "/nexora-library-backdrop.PNG";
   const englishTitle = current.titleEn || current.titleAr || "Untitled";
@@ -294,6 +335,15 @@ export default function MediaDetailsPage({
 
               <div className="flex flex-wrap items-center gap-2 text-[11px] font-bold text-white">
                 <span className="rounded-full bg-white/15 px-2.5 py-1 text-white">{current.year || 2023}</span>
+                {ratingInfo && (
+                  <span
+                    className={`rounded-full border px-3 py-1 text-[11px] font-black tracking-wider shadow-sm ${ratingInfo.badgeClass}`}
+                    title={ratingInfo.desc}
+                  >
+                    {ratingInfo.label}
+                    <span className="mr-1.5 text-[10px] font-medium opacity-85 hidden sm:inline">({ratingInfo.desc})</span>
+                  </span>
+                )}
                 <span className="rounded-full bg-white/15 px-2.5 py-1 text-white">HD</span>
                 {(current.highlights || []).slice(0, 4).map((h) => (
                   <span key={h} className="rounded-full border border-fuchsia-400/30 bg-fuchsia-500/20 px-2.5 py-1 text-fuchsia-100 font-bold">
