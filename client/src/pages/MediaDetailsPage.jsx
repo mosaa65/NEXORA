@@ -385,21 +385,23 @@ export default function MediaDetailsPage({
       </section>
 
       {/* ========================================================================= */}
-      {/* 2. Priority 1: المقاطع الدعائية (Trailers) */}
+      {/* 2. Priority 1: المقاطع الدعائية الرسمية (Official Trailers & Teasers) */}
       {/* ========================================================================= */}
       {trailers.length > 0 && (
-        <section className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5 sm:p-6 shadow-[var(--shadow-sm)]">
+        <section className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4 sm:p-6 shadow-[var(--shadow-sm)]">
           <div className="mb-4 flex items-center justify-between gap-3 border-b border-[var(--border-subtle)] pb-3">
-            <h2 className="text-base sm:text-lg font-black text-[var(--text-primary)] flex items-center gap-2">
-              <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-red-500/20 text-red-400">▶</span>
+            <h2 className="text-base sm:text-lg font-black text-[var(--text-primary)] flex items-center gap-2.5">
+              <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-red-500/20 text-red-400 text-xs">▶</span>
               المقاطع الدعائية الرسمية (Trailers)
             </h2>
-            <span className="rounded-full bg-red-500/10 px-2.5 py-0.5 text-[10px] text-red-400 font-bold border border-red-500/20">YouTube</span>
+            <span className="rounded-full bg-red-500/10 px-3 py-1 text-[11px] text-red-400 font-black border border-red-500/20">
+              YouTube • {trailers.length} مقاطع
+            </span>
           </div>
 
-          <div onWheel={horizontalWheel} className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
-            {trailers.slice(0, 4).map((video) => (
-              <article key={video.id || video.key} className="w-[260px] sm:w-[300px] shrink-0 overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)] shadow-sm">
+          <div onWheel={horizontalWheel} className="flex gap-3.5 overflow-x-auto pb-2 scrollbar-thin">
+            {trailers.slice(0, 5).map((video) => (
+              <article key={video.id || video.key} className="w-[260px] sm:w-[320px] shrink-0 overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)] shadow-sm">
                 <div className="aspect-video bg-black">
                   <iframe
                     className="h-full w-full"
@@ -410,7 +412,10 @@ export default function MediaDetailsPage({
                     allowFullScreen
                   />
                 </div>
-                <p className="truncate px-3 py-2 text-[11px] font-bold text-[var(--text-primary)]">{video.name || "المقطع الدعائي"}</p>
+                <div className="p-2.5">
+                  <p className="truncate text-xs font-bold text-[var(--text-primary)]">{video.name || "المقطع الدعائي"}</p>
+                  <p className="mt-0.5 text-[10px] text-[var(--text-muted)]">{video.type || "Trailer"} • جودة عالية</p>
+                </div>
               </article>
             ))}
           </div>
@@ -422,16 +427,17 @@ export default function MediaDetailsPage({
       {/* ========================================================================= */}
       {/* Local Video Files / Seasons */}
       {seasonsList.length > 0 && (
-        <section className="space-y-4 rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5 sm:p-6 shadow-[var(--shadow-sm)]">
-          <div className="flex items-center justify-between border-b border-[var(--border-subtle)] pb-3">
+        <section className="space-y-4 rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4 sm:p-6 shadow-[var(--shadow-sm)]">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border-subtle)] pb-3">
             <div>
-              <h2 className="text-base sm:text-lg font-black text-[var(--text-primary)]">
-                المواسم وحلقات التشغيل المحلية
+              <h2 className="text-base sm:text-lg font-black text-[var(--text-primary)] flex items-center gap-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-fuchsia-500/20 text-fuchsia-400 text-xs">📺</span>
+                المواسم وحلقات التشغيل المتاحة
               </h2>
-              <p className="mt-0.5 text-xs text-[var(--text-muted)]">حلقات الفيديو الجاهزة للدفق المباشر عبر الشبكة المحلية.</p>
+              <p className="mt-0.5 text-xs text-[var(--text-muted)]">حلقات الفيديو المحلية الجاهزة للدفق المباشر بأعلى جودة.</p>
             </div>
-            <span className="rounded-full bg-fuchsia-500/10 px-3 py-1 text-xs font-black text-fuchsia-300 border border-fuchsia-500/20">
-              {seasonsList.length} مواسم
+            <span className="rounded-full bg-fuchsia-500/10 px-3.5 py-1 text-xs font-black text-fuchsia-300 border border-fuchsia-500/20">
+              {seasonsList.length} مواسم متوفرة
             </span>
           </div>
 
@@ -444,36 +450,36 @@ export default function MediaDetailsPage({
                 onClick={() => setSelectedSeasonIdx(idx)}
                 className={`rounded-2xl px-4 py-2 text-xs font-bold transition flex items-center gap-2 ${
                   selectedSeasonIdx === idx
-                    ? "bg-gradient-to-r from-fuchsia-600 to-purple-600 text-white shadow-md shadow-fuchsia-900/40"
+                    ? "bg-gradient-to-r from-fuchsia-600 to-purple-600 text-white shadow-md shadow-fuchsia-900/40 scale-[1.02]"
                     : "border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:border-fuchsia-500/50 hover:text-[var(--text-primary)]"
                 }`}
               >
                 <span>{season.title_ar || season.title_en || `الموسم ${season.season_number || idx + 1}`}</span>
-                <span className="rounded-full bg-black/25 px-2 py-0.5 text-[10px] font-bold">
+                <span className="rounded-full bg-black/30 px-2 py-0.5 text-[10px] font-black">
                   {season.episodes?.length || 0} حلقة
                 </span>
               </button>
             ))}
           </div>
 
-          {/* Compact, Beautiful Episodes Grid */}
-          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 pt-2">
+          {/* Compact, Beautiful Episodes Grid (Refined size, prominent episode badge) */}
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 pt-2">
             {activeEpisodes.map((ep, epIdx) => (
               <button
                 key={ep.id || epIdx}
                 type="button"
                 onClick={() => onQuickPlay(current, ep)}
-                className="group flex items-center gap-3 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)] p-2.5 text-right transition hover:border-fuchsia-500/60 hover:bg-[var(--bg-card)] hover:shadow-md"
+                className="group flex items-center gap-3 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)] p-2.5 text-right transition hover:border-fuchsia-500/60 hover:bg-[var(--bg-card)] hover:shadow-md active:scale-95"
               >
-                {/* Compact Episode Image / Thumbnail */}
-                <div className="relative h-16 w-24 shrink-0 overflow-hidden rounded-xl bg-black/40 border border-white/10">
+                {/* Compact Episode Thumbnail */}
+                <div className="relative h-14 w-20 shrink-0 overflow-hidden rounded-xl bg-black/40 border border-white/10">
                   <img
                     src={posterURL}
                     alt=""
                     className="h-full w-full object-cover opacity-75 group-hover:scale-105 transition duration-300"
                   />
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/10 transition">
-                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-fuchsia-600 text-white shadow text-xs">
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/35 group-hover:bg-black/10 transition">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-tr from-fuchsia-600 to-purple-600 text-white shadow text-[10px] font-black">
                       ▶
                     </span>
                   </div>
@@ -481,10 +487,10 @@ export default function MediaDetailsPage({
 
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5 mb-1">
-                    <span className="rounded-lg bg-fuchsia-500/20 px-2 py-0.5 text-[11px] font-black text-fuchsia-300 border border-fuchsia-500/30 shrink-0">
+                    <span className="rounded-md bg-gradient-to-r from-fuchsia-600 to-purple-600 px-2 py-0.5 text-[10px] font-black text-white shadow-sm shrink-0">
                       حلقة {ep.episode_number || epIdx + 1}
                     </span>
-                    <span className="text-[10px] text-[var(--text-muted)] truncate">
+                    <span className="rounded bg-white/10 px-1.5 py-0.2 text-[9px] font-bold text-[var(--text-muted)] truncate">
                       {ep.resolution || "1080p"}
                     </span>
                   </div>
@@ -503,9 +509,12 @@ export default function MediaDetailsPage({
 
       {/* Direct Video Files list if no seasons */}
       {seasonsList.length === 0 && current.files && current.files.length > 0 && (
-        <section className="space-y-4 rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5 sm:p-6 shadow-[var(--shadow-sm)]">
+        <section className="space-y-4 rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4 sm:p-6 shadow-[var(--shadow-sm)]">
           <div className="border-b border-[var(--border-subtle)] pb-3">
-            <h2 className="text-base sm:text-lg font-black text-[var(--text-primary)]">ملفات الفيديو المتاحة للتشغيل</h2>
+            <h2 className="text-base sm:text-lg font-black text-[var(--text-primary)] flex items-center gap-2">
+              <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-fuchsia-500/20 text-fuchsia-400 text-xs">🎬</span>
+              ملفات الفيديو المتاحة للتشغيل
+            </h2>
           </div>
           <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
             {current.files.map((file, idx) => (
@@ -513,9 +522,9 @@ export default function MediaDetailsPage({
                 key={file.id || idx}
                 type="button"
                 onClick={() => onQuickPlay(current, file)}
-                className="group flex items-center gap-3 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)] p-3 text-right transition hover:border-fuchsia-500/60 hover:bg-[var(--bg-card)] shadow-sm"
+                className="group flex items-center gap-3 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)] p-3 text-right transition hover:border-fuchsia-500/60 hover:bg-[var(--bg-card)] shadow-sm active:scale-95"
               >
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-fuchsia-500/15 text-fuchsia-400 group-hover:bg-fuchsia-600 group-hover:text-white transition">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-fuchsia-600 to-purple-600 text-white font-black text-xs group-hover:scale-105 transition shadow">
                   ▶
                 </div>
                 <div className="min-w-0 flex-1">
@@ -532,14 +541,20 @@ export default function MediaDetailsPage({
         </section>
       )}
 
-      {/* TMDB Rich Descriptive Seasons & Episodes (Metadata view) */}
+      {/* TMDB Rich Descriptive Seasons & Episodes (Metadata view with dual Arabic/English/Original support) */}
       {localizedSeasons.length > 0 && (
-        <section className="space-y-4 rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5 sm:p-6 shadow-[var(--shadow-sm)]">
-          <div className="border-b border-[var(--border-subtle)] pb-3">
-            <h2 className="text-base sm:text-lg font-black text-[var(--text-primary)]">
-              أدلة ومواسم TMDB التفصيلية
-            </h2>
-            <p className="mt-0.5 text-xs text-[var(--text-muted)]">دليل وصفي متكامل للقصص والمواسم وتواريخ الحلقات.</p>
+        <section className="space-y-4 rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4 sm:p-6 shadow-[var(--shadow-sm)]">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border-subtle)] pb-3">
+            <div>
+              <h2 className="text-base sm:text-lg font-black text-[var(--text-primary)] flex items-center gap-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-amber-500/20 text-amber-400 text-xs">✨</span>
+                أدلة ومواسم TMDB التفصيلية
+              </h2>
+              <p className="mt-0.5 text-xs text-[var(--text-muted)]">دليل وصفي متكامل للقصص والحلقات مع الترجمة العربية والإنجليزية والأصلية.</p>
+            </div>
+            <span className="rounded-full bg-amber-500/10 px-3.5 py-1 text-xs font-black text-amber-300 border border-amber-500/20">
+              {localizedSeasons.length} مواسم في الدليل
+            </span>
           </div>
 
           <div onWheel={horizontalWheel} className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
@@ -547,21 +562,23 @@ export default function MediaDetailsPage({
               const englishSeason = englishSeasonsByNumber.get(season.season_number);
               const seasonPoster = tmdbImageURL(season.poster_path || englishSeason?.poster_path) || "/nexora-poster-placeholder.PNG";
               const isSelected = selectedRemoteSeason?.season_number === season.season_number;
+              const sTitleEN = englishSeason?.name || `Season ${season.season_number}`;
+              const sTitleAR = hasArabicText(season.name) ? season.name : "دليل الموسم";
               return (
                 <button
                   type="button"
                   key={season.season_number}
                   onClick={() => setSelectedMetadataSeason(index)}
-                  className={`w-36 sm:w-40 shrink-0 overflow-hidden rounded-2xl border text-right transition ${
+                  className={`w-32 sm:w-36 shrink-0 overflow-hidden rounded-2xl border text-right transition ${
                     isSelected
-                      ? "border-fuchsia-500 bg-fuchsia-950/40 shadow-lg ring-1 ring-fuchsia-500"
+                      ? "border-fuchsia-500 bg-fuchsia-950/40 shadow-lg ring-1 ring-fuchsia-500 scale-[1.02]"
                       : "border-[var(--border-default)] bg-[var(--bg-elevated)] hover:border-fuchsia-500/50"
                   }`}
                 >
                   <div className="aspect-[2/3] bg-[var(--bg-surface)]">
                     <img
                       src={seasonPoster}
-                      alt={englishSeason?.name || season.name}
+                      alt={sTitleEN}
                       className="h-full w-full object-cover"
                       loading="lazy"
                       onError={(e) => {
@@ -569,14 +586,14 @@ export default function MediaDetailsPage({
                       }}
                     />
                   </div>
-                  <div className="p-3">
+                  <div className="p-2.5">
                     <p dir="ltr" className="truncate text-left text-xs font-bold text-[var(--text-primary)]">
-                      {englishSeason?.name || season.name || `Season ${season.season_number}`}
+                      {sTitleEN}
                     </p>
-                    <p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">
-                      {hasArabicText(season.name) ? season.name : "دليل الموسم"}
+                    <p className="mt-0.5 truncate text-[10px] text-[var(--text-muted)]">
+                      {sTitleAR}
                     </p>
-                    <p className="mt-1.5 text-[10px] text-fuchsia-400 font-bold">
+                    <p className="mt-1 text-[10px] text-fuchsia-400 font-black">
                       {season.episode_count || season.episodes?.length || 0} حلقة
                     </p>
                   </div>
@@ -587,30 +604,50 @@ export default function MediaDetailsPage({
 
           {selectedRemoteSeason && (
             <div className="pt-2">
-              <h3 className="text-xs sm:text-sm font-black text-[var(--text-primary)] mb-3">
-                حلقات: {hasArabicText(selectedRemoteSeason.name) ? selectedRemoteSeason.name : englishSelectedRemoteSeason?.name || selectedRemoteSeason.name}
+              <h3 className="text-xs sm:text-sm font-black text-[var(--text-primary)] mb-3 flex items-center gap-2">
+                <span>حلقات:</span>
+                <span className="text-fuchsia-400">{hasArabicText(selectedRemoteSeason.name) ? selectedRemoteSeason.name : (englishSelectedRemoteSeason?.name || selectedRemoteSeason.name)}</span>
+                {englishSelectedRemoteSeason?.name && hasArabicText(selectedRemoteSeason.name) && (
+                  <span className="text-xs text-[var(--text-muted)] font-normal" dir="ltr">({englishSelectedRemoteSeason.name})</span>
+                )}
               </h3>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {remoteEpisodes.map((episode) => {
                   const englishEpisode = englishEpisodesByNumber.get(episode.episode_number);
                   const titleEN = englishEpisode?.name || episode.name || `Episode ${episode.episode_number}`;
-                  const titleAR = hasArabicText(episode.name) ? episode.name : "لا تتوفر ترجمة عربية";
+                  const titleAR = hasArabicText(episode.name) ? episode.name : null;
+                  const originalName = episode.original_name || null;
                   const still = tmdbImageURL(episode.still_path || englishEpisode?.still_path, "w342") || "/nexora-episode-placeholder.PNG";
+                  const overviewAR = hasArabicText(episode.overview) ? episode.overview : null;
+                  const overviewEN = englishEpisode?.overview || episode.overview || "";
+                  
                   return (
-                    <article key={episode.id || episode.episode_number} className="overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)] flex flex-col justify-between">
-                      <div className="aspect-video bg-[var(--bg-surface)] overflow-hidden">
+                    <article key={episode.id || episode.episode_number} className="overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)] flex flex-col justify-between hover:border-fuchsia-500/40 transition">
+                      <div className="aspect-video bg-[var(--bg-surface)] overflow-hidden relative">
                         <img src={still} alt={titleEN} className="h-full w-full object-cover" loading="lazy" onError={(e) => { e.currentTarget.src = "/nexora-episode-placeholder.PNG"; }} />
+                        <span className="absolute top-2 right-2 rounded-md bg-black/70 backdrop-blur-md px-2 py-0.5 text-[10px] font-black text-amber-300 border border-white/10">
+                          حلقة {episode.episode_number}
+                        </span>
                       </div>
-                      <div className="p-3">
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <span className="rounded-lg bg-fuchsia-500/20 px-2 py-0.5 text-[10px] font-black text-fuchsia-300 border border-fuchsia-500/30">
-                            الحلقة {episode.episode_number}
-                          </span>
-                          <span className="text-[10px] text-[var(--text-muted)]">{episode.air_date || ""} {episode.runtime ? `• ${episode.runtime} د` : ""}</span>
+                      <div className="p-2.5 flex-1 flex flex-col justify-between">
+                        <div>
+                          {/* Dual / Multi-lingual Title Display */}
+                          <p dir="ltr" className="truncate text-left text-xs font-black text-[var(--text-primary)]">{titleEN}</p>
+                          {titleAR ? (
+                            <p className="mt-0.5 truncate text-[11px] font-bold text-fuchsia-300">{titleAR}</p>
+                          ) : originalName && originalName !== titleEN ? (
+                            <p dir="ltr" className="mt-0.5 truncate text-left text-[10px] text-[var(--text-muted)] italic font-semibold">{originalName}</p>
+                          ) : (
+                            <p className="mt-0.5 truncate text-[10px] text-[var(--text-muted)]">لا تتوفر ترجمة عربية لعنوان الحلقة</p>
+                          )}
+                          <p className="mt-1 line-clamp-2 text-[10px] leading-4 text-[var(--text-muted)]">
+                            {overviewAR || overviewEN || "لا يتوفر وصف نصي لهذه الحلقة."}
+                          </p>
                         </div>
-                        <p dir="ltr" className="truncate text-left text-xs font-bold text-[var(--text-primary)]">{titleEN}</p>
-                        <p className="mt-0.5 truncate text-[11px] text-[var(--text-secondary)]">{titleAR}</p>
-                        <p className="mt-1.5 line-clamp-2 text-[10px] leading-4 text-[var(--text-muted)]">{hasArabicText(episode.overview) ? episode.overview : (englishEpisode?.overview || episode.overview || "")}</p>
+                        <div className="mt-2 flex items-center justify-between pt-2 border-t border-[var(--border-subtle)] text-[10px] text-[var(--text-muted)]">
+                          <span>{episode.air_date || "تاريخ العرض"}</span>
+                          <span>{episode.runtime ? `${episode.runtime} د` : "المدة قياسية"}</span>
+                        </div>
                       </div>
                     </article>
                   );
@@ -627,25 +664,26 @@ export default function MediaDetailsPage({
       {tmdb && (
         <section className="grid gap-4 lg:grid-cols-3">
           {/* Main Info Card (2 columns on large screens) */}
-          <div className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5 sm:p-6 shadow-[var(--shadow-sm)] lg:col-span-2 space-y-5">
+          <div className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4 sm:p-6 shadow-[var(--shadow-sm)] lg:col-span-2 space-y-5">
             <div className="flex items-center justify-between border-b border-[var(--border-subtle)] pb-3">
-              <h2 className="text-base sm:text-lg font-black text-[var(--text-primary)]">
+              <h2 className="text-base sm:text-lg font-black text-[var(--text-primary)] flex items-center gap-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-purple-500/20 text-purple-400 text-xs">ℹ️</span>
                 معلومات وبيانات العمل الفني
               </h2>
-              <span className="rounded-full bg-[var(--bg-elevated)] px-3 py-1 text-[10px] text-[var(--text-muted)] font-bold border border-[var(--border-subtle)]">
+              <span className="rounded-full bg-[var(--bg-elevated)] px-3 py-1 text-[10px] text-[var(--text-muted)] font-black border border-[var(--border-subtle)]">
                 بيانات معتمدة
               </span>
             </div>
 
-            {/* Languages & Audio Banner */}
+            {/* Languages & Audio Dual Banner */}
             <div className="grid gap-2.5 sm:grid-cols-2">
               <div className="flex items-center gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-950/30 p-3 text-emerald-200">
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/20 text-lg">
                   🎙️
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="text-[11px] font-bold">مسارات الصوت والدبلجة</p>
-                  <p className="text-xs font-bold text-white truncate">
+                  <p className="text-[11px] font-bold text-emerald-300">مسارات الصوت والدبلجة</p>
+                  <p className="text-xs font-black text-white truncate">
                     {hasArAudio ? "صوت ودبلجة عربية متوفرة" : "اللغة الأصلية + الإنجليزية"}
                   </p>
                 </div>
@@ -656,42 +694,42 @@ export default function MediaDetailsPage({
                   📝
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="text-[11px] font-bold">الترجمة والنصوص</p>
-                  <p className="text-xs font-bold text-white truncate">
+                  <p className="text-[11px] font-bold text-sky-300">الترجمة والنصوص (Subtitles)</p>
+                  <p className="text-xs font-black text-white truncate">
                     {hasArSubs ? "ترجمة عربية معتمدة + English" : "الإنجليزية والأصلية"}
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* Structured Specifications Grid */}
+            {/* Responsive Specifications Grid (Mobile, Tablet, Laptop) */}
             <div className="grid gap-2.5 grid-cols-2 sm:grid-cols-3">
               {[
-                ["الحالة", tmdb.status || "مكتمل"],
-                ["اللغة الأصلية", tmdb.original_language || "en"],
+                ["الحالة الفنية", tmdb.status || "مكتمل"],
+                ["اللغة الأصلية", (tmdb.original_language || "en").toUpperCase()],
                 ["مدة العمل", tmdb.runtime ? `${tmdb.runtime} دقيقة` : (tmdb.episode_run_time?.[0] ? `${tmdb.episode_run_time[0]} دقيقة` : "غير محدد")],
                 ["تاريخ الإصدار", tmdb.release_date || tmdb.first_air_date || current.year],
                 ["الميزانية", tmdb.budget ? `$${Number(tmdb.budget).toLocaleString("en-US")}` : "غير معلنة"],
                 ["الإيرادات", tmdb.revenue ? `$${Number(tmdb.revenue).toLocaleString("en-US")}` : "غير معلنة"],
-                ["عدد المصوتين", tmdb.vote_count ? `${Number(tmdb.vote_count).toLocaleString("en-US")} صوت` : null],
+                ["عدد المقيمين", tmdb.vote_count ? `${Number(tmdb.vote_count).toLocaleString("en-US")} تقييم` : null],
                 ["بلد الإنتاج", productionCountries?.[0]?.name || "عالمي"],
                 ["لغات الحوار", spokenLanguages?.map((l) => l.name || l.english_name).slice(0, 2).join("، ") || "متعددة"],
               ]
                 .filter(([, val]) => val)
                 .map(([label, value]) => (
-                  <div key={label} className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] p-3">
+                  <div key={label} className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] p-3 transition hover:border-[var(--color-accent)]/40">
                     <p className="text-[10px] font-bold text-[var(--text-muted)]">{label}</p>
-                    <p className="mt-1 text-xs sm:text-sm font-bold text-[var(--text-primary)] truncate">{value}</p>
+                    <p className="mt-1 text-xs sm:text-sm font-black text-[var(--text-primary)] truncate">{value}</p>
                   </div>
                 ))}
             </div>
 
-            {/* Keywords */}
+            {/* Keywords & Tags */}
             {keywords.length > 0 && (
               <div className="pt-2">
                 <p className="mb-2 text-xs font-bold text-[var(--text-muted)]">الكلمات المفتاحية والوسوم</p>
                 <div className="flex flex-wrap gap-1.5">
-                  {keywords.slice(0, 12).map((keyword) => (
+                  {keywords.slice(0, 14).map((keyword) => (
                     <span key={keyword.id || keyword.name} className="rounded-xl bg-fuchsia-500/10 border border-fuchsia-500/20 px-2.5 py-1 text-[11px] font-bold text-fuchsia-300">
                       #{keyword.name}
                     </span>
@@ -701,73 +739,79 @@ export default function MediaDetailsPage({
             )}
           </div>
 
-          {/* Companies & Production Studios Card */}
-          <div className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5 sm:p-6 shadow-[var(--shadow-sm)] space-y-4">
-            <div className="border-b border-[var(--border-subtle)] pb-3">
-              <h2 className="text-base sm:text-lg font-black text-[var(--text-primary)]">
-                الشركات والاستوديوهات المنتجة
-              </h2>
-              <p className="mt-0.5 text-xs text-[var(--text-muted)]">استوديوهات وشركات صناعة هذا العمل.</p>
-            </div>
-
-            {productionCompanies.length > 0 ? (
-              <div className="space-y-2.5">
-                {productionCompanies.map((company) => {
-                  const logoURL = company.logo_path ? tmdbImageURL(company.logo_path, "w185") : null;
-                  return (
-                    <div
-                      key={company.id}
-                      className="flex items-center gap-3 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] p-3 transition hover:border-fuchsia-500/40"
-                    >
-                      {logoURL ? (
-                        <div className="flex h-10 w-16 shrink-0 items-center justify-center rounded-xl bg-white p-1 border border-white/20">
-                          <img
-                            src={logoURL}
-                            alt={company.name}
-                            className="max-h-full max-w-full object-contain"
-                            loading="lazy"
-                          />
-                        </div>
-                      ) : (
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-fuchsia-500/10 text-fuchsia-300 font-black text-sm">
-                          🏢
-                        </div>
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs font-bold text-[var(--text-primary)]">{company.name}</p>
-                        {company.origin_country && (
-                          <p className="text-[10px] text-[var(--text-muted)] font-semibold">الدولة: {company.origin_country}</p>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
+          {/* Companies & Production Studios Card (With Logo Image Display) */}
+          <div className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4 sm:p-6 shadow-[var(--shadow-sm)] space-y-4 flex flex-col justify-between">
+            <div>
+              <div className="border-b border-[var(--border-subtle)] pb-3 mb-4">
+                <h2 className="text-base sm:text-lg font-black text-[var(--text-primary)] flex items-center gap-2">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-indigo-500/20 text-indigo-400 text-xs">🏢</span>
+                  الشركات والاستوديوهات المنتجة
+                </h2>
+                <p className="mt-0.5 text-xs text-[var(--text-muted)]">استوديوهات وشركات صناعة هذا العمل (مع شعاراتها الرسمية).</p>
               </div>
-            ) : (
-              <p className="text-xs text-[var(--text-muted)]">لا توجد بيانات استوديوهات مسجلة.</p>
-            )}
+
+              {productionCompanies.length > 0 ? (
+                <div className="space-y-2.5">
+                  {productionCompanies.map((company) => {
+                    const logoURL = company.logo_path ? tmdbImageURL(company.logo_path, "w185") : null;
+                    return (
+                      <div
+                        key={company.id}
+                        className="flex items-center gap-3 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] p-3 transition hover:border-fuchsia-500/40"
+                      >
+                        {logoURL ? (
+                          <div className="flex h-11 w-20 shrink-0 items-center justify-center rounded-xl bg-white/95 p-1.5 border border-white/20 shadow-sm">
+                            <img
+                              src={logoURL}
+                              alt={company.name}
+                              className="max-h-full max-w-full object-contain"
+                              loading="lazy"
+                            />
+                          </div>
+                        ) : (
+                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-300 font-black text-sm border border-indigo-500/20">
+                            🏢
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs font-black text-[var(--text-primary)]">{company.name}</p>
+                          {company.origin_country && (
+                            <p className="text-[10px] text-[var(--text-muted)] font-bold mt-0.5">الدولة: {company.origin_country}</p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-xs text-[var(--text-muted)] py-6 text-center">لا توجد بيانات استوديوهات مسجلة.</p>
+              )}
+            </div>
           </div>
         </section>
       )}
 
       {/* ========================================================================= */}
-      {/* 5. Priority 4: طاقم التمثيل وصناع العمل (Cast & Crew) */}
+      {/* 5. Priority 4: طاقم التمثيل وصناع العمل (Cast & Production Crew) */}
       {/* ========================================================================= */}
       {cast.length > 0 && (
-        <section className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5 sm:p-6 shadow-[var(--shadow-sm)]">
+        <section className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4 sm:p-6 shadow-[var(--shadow-sm)]">
           <div className="flex items-center justify-between border-b border-[var(--border-subtle)] pb-3 mb-4">
-            <h2 className="text-base sm:text-lg font-black text-[var(--text-primary)]">
+            <h2 className="text-base sm:text-lg font-black text-[var(--text-primary)] flex items-center gap-2">
+              <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-teal-500/20 text-teal-400 text-xs">🎭</span>
               طاقم التمثيل ونجوم العمل
             </h2>
-            <span className="text-xs text-[var(--text-muted)] font-bold">{cast.length} ممثل</span>
+            <span className="rounded-full bg-teal-500/10 px-3 py-1 text-xs text-teal-300 font-black border border-teal-500/20">
+              {cast.length} ممثل
+            </span>
           </div>
 
           <div onWheel={horizontalWheel} className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
-            {cast.slice(0, 20).map((person) => {
+            {cast.slice(0, 24).map((person) => {
               const englishPerson = englishCastByID.get(person.id);
               const profileURL = resolveAPIURL(englishPerson?.local_profile_path || person.local_profile_path) || tmdbImageURL(person.profile_path || englishPerson?.profile_path, "w185");
               return (
-                <article key={person.id} className="w-28 sm:w-32 shrink-0 overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] shadow-sm">
+                <article key={person.id} className="w-28 sm:w-32 shrink-0 overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] shadow-sm hover:border-[var(--color-accent)]/50 transition">
                   <div className="relative aspect-[4/5] bg-gradient-to-br from-cyan-950/40 via-purple-950/20 to-fuchsia-950/30 overflow-hidden">
                     {profileURL ? (
                       <img
@@ -788,7 +832,7 @@ export default function MediaDetailsPage({
                     </div>
                   </div>
                   <div className="p-2 sm:p-2.5">
-                    <p className="truncate text-xs font-bold text-[var(--text-primary)]">{person.name}</p>
+                    <p className="truncate text-xs font-black text-[var(--text-primary)]">{person.name}</p>
                     <p className="mt-0.5 truncate text-[10px] text-[var(--text-muted)]">{person.character || person.roles?.[0]?.character || "طاقم التمثيل"}</p>
                   </div>
                 </article>
@@ -800,19 +844,22 @@ export default function MediaDetailsPage({
 
       {/* Production Crew */}
       {crew.length > 0 && (
-        <section className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5 sm:p-6 shadow-[var(--shadow-sm)]">
+        <section className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4 sm:p-6 shadow-[var(--shadow-sm)]">
           <div className="flex items-center justify-between border-b border-[var(--border-subtle)] pb-3 mb-4">
-            <h2 className="text-base sm:text-lg font-black text-[var(--text-primary)]">
+            <h2 className="text-base sm:text-lg font-black text-[var(--text-primary)] flex items-center gap-2">
+              <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-orange-500/20 text-orange-400 text-xs">🎬</span>
               فريق الإخراج والإنتاج
             </h2>
-            <span className="text-xs text-[var(--text-muted)] font-bold">{crew.length} مخرج وفني</span>
+            <span className="rounded-full bg-orange-500/10 px-3 py-1 text-xs text-orange-300 font-black border border-orange-500/20">
+              {crew.length} مخرج وفني
+            </span>
           </div>
 
           <div onWheel={horizontalWheel} className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
             {crew.slice(0, 24).map((person, index) => (
-              <article key={`${person.credit_id || person.id}-${index}`} className="w-36 shrink-0 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] p-3">
-                <p className="truncate text-xs font-bold text-[var(--text-primary)]">{person.name}</p>
-                <p className="mt-1 line-clamp-2 text-[11px] text-[var(--color-accent)] font-semibold">{person.job || person.jobs?.[0]?.job || person.department || "فريق الإنتاج"}</p>
+              <article key={`${person.credit_id || person.id}-${index}`} className="w-36 shrink-0 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] p-3 hover:border-orange-500/40 transition">
+                <p className="truncate text-xs font-black text-[var(--text-primary)]">{person.name}</p>
+                <p className="mt-1 line-clamp-2 text-[11px] text-[var(--color-accent)] font-bold">{person.job || person.jobs?.[0]?.job || person.department || "فريق الإنتاج"}</p>
               </article>
             ))}
           </div>
@@ -823,17 +870,22 @@ export default function MediaDetailsPage({
       {/* 6. Priority 5: معرض الصور والسلاسل والأعمال المشابهة */}
       {/* ========================================================================= */}
       {imageGallery.length > 0 && (
-        <section className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5 sm:p-6 shadow-[var(--shadow-sm)]">
-          <h2 className="text-base sm:text-lg font-black text-[var(--text-primary)] mb-3">معرض الصور والبوسترات</h2>
+        <section className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4 sm:p-6 shadow-[var(--shadow-sm)]">
+          <h2 className="text-base sm:text-lg font-black text-[var(--text-primary)] mb-3 flex items-center gap-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-sky-500/20 text-sky-400 text-xs">🖼️</span>
+            معرض الصور والبوسترات والشعارات
+          </h2>
           <div onWheel={horizontalWheel} className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
             {imageGallery.map((image, index) => {
               const imageURL = resolveAPIURL(image.localPath) || tmdbImageURL(image.file_path, image.kind === "poster" ? "w342" : "w780");
               return (
-                <figure key={`${image.file_path}-${index}`} className={`shrink-0 overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] ${image.kind === "poster" ? "w-28" : image.kind === "logo" ? "w-48" : "w-64"}`}>
+                <figure key={`${image.file_path}-${index}`} className={`shrink-0 overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] ${image.kind === "poster" ? "w-28 sm:w-32" : image.kind === "logo" ? "w-44 sm:w-48" : "w-60 sm:w-64"}`}>
                   <div className={image.kind === "poster" ? "aspect-[2/3]" : "aspect-video"}>
                     {imageURL ? <img src={imageURL} alt="" className="h-full w-full object-cover" loading="lazy" /> : null}
                   </div>
-                  <figcaption className="px-2 py-1.5 text-[10px] text-[var(--text-muted)] text-center">{image.kind === "poster" ? "بوستر" : image.kind === "logo" ? "شعار" : "خلفية"}</figcaption>
+                  <figcaption className="px-2 py-1.5 text-[10px] font-bold text-[var(--text-muted)] text-center bg-[var(--bg-card)]/50">
+                    {image.kind === "poster" ? "بوستر رسمي" : image.kind === "logo" ? "شعار العمل" : "خلفية سينمائية"}
+                  </figcaption>
                 </figure>
               );
             })}
@@ -846,21 +898,27 @@ export default function MediaDetailsPage({
         <section className="grid gap-4 lg:grid-cols-3">
           {collection && (
             <div className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5 shadow-[var(--shadow-sm)]">
-              <h2 className="text-base sm:text-lg font-black text-[var(--text-primary)] mb-3">السلسلة السينمائية</h2>
-              <div className="flex items-center gap-3 p-2 rounded-2xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)]">
+              <h2 className="text-base sm:text-lg font-black text-[var(--text-primary)] mb-3 flex items-center gap-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-amber-500/20 text-amber-400 text-xs">🍿</span>
+                السلسلة السينمائية
+              </h2>
+              <div className="flex items-center gap-3 p-2.5 rounded-2xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)]">
                 {collection.poster_path && (
                   <div className="h-16 w-12 shrink-0 overflow-hidden rounded-xl bg-black/20">
                     <img src={tmdbImageURL(collection.poster_path)} alt={collection.name} className="h-full w-full object-cover" loading="lazy" />
                   </div>
                 )}
-                <p className="text-xs sm:text-sm font-bold text-[var(--text-primary)]">{collection.name}</p>
+                <p className="text-xs sm:text-sm font-black text-[var(--text-primary)]">{collection.name}</p>
               </div>
             </div>
           )}
 
           {related.length > 0 && (
             <div className={`rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5 shadow-[var(--shadow-sm)] ${collection ? "lg:col-span-2" : "lg:col-span-3"}`}>
-              <h2 className="text-base sm:text-lg font-black text-[var(--text-primary)] mb-3">أعمال مقترحة ذات صلة</h2>
+              <h2 className="text-base sm:text-lg font-black text-[var(--text-primary)] mb-3 flex items-center gap-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-fuchsia-500/20 text-fuchsia-400 text-xs">✨</span>
+                أعمال مقترحة ذات صلة
+              </h2>
               <div onWheel={horizontalWheel} className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
                 {related.slice(0, 10).map((item) => {
                   const englishItem = englishRelatedByID.get(item.id);
@@ -868,12 +926,12 @@ export default function MediaDetailsPage({
                   const titleAR = hasArabicText(item.title || item.name) ? item.title || item.name : "لا تتوفر ترجمة عربية";
                   const relatedPoster = resolveAPIURL(englishItem?.local_poster_path || item.local_poster_path) || tmdbImageURL(item.poster_path || englishItem?.poster_path);
                   return (
-                    <article key={item.id} className="w-36 shrink-0 overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)]">
+                    <article key={item.id} className="w-32 sm:w-36 shrink-0 overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] hover:border-fuchsia-500/50 transition">
                       <div className="aspect-[2/3] bg-[var(--bg-surface)]">
                         {relatedPoster ? <img src={relatedPoster} alt={titleEN} className="h-full w-full object-cover" loading="lazy" /> : <div className="flex h-full items-center justify-center text-xs text-[var(--text-muted)]">لا توجد صورة</div>}
                       </div>
                       <div className="p-2.5">
-                        <p dir="ltr" className="truncate text-left text-xs font-bold text-[var(--text-primary)]">{titleEN}</p>
+                        <p dir="ltr" className="truncate text-left text-xs font-black text-[var(--text-primary)]">{titleEN}</p>
                         <p className="mt-0.5 truncate text-[10px] text-[var(--text-secondary)]">{titleAR}</p>
                         <p className="mt-1 text-[11px] text-amber-400 font-black">★ {Number(item.vote_average || englishItem?.vote_average || 0).toFixed(1)}</p>
                       </div>

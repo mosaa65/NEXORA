@@ -69,8 +69,8 @@ export default function TopBar({
       </div>
 
       {/* Main Search Input & Live Results (Expands to fill all available space) */}
-      <div ref={searchContainerRef} className="relative flex-1 min-w-0 mx-1 sm:mx-3">
-        <div className="flex w-full items-center gap-2.5 sm:gap-3 rounded-full border border-[var(--border-default)] bg-[var(--bg-input)] px-3.5 sm:px-4 py-2 text-[var(--text-primary)] shadow-inner transition focus-within:border-[var(--color-accent)] focus-within:ring-2 focus-within:ring-[var(--color-accent-light)]">
+      <div ref={searchContainerRef} className="relative flex-1 min-w-0 mx-1.5 sm:mx-3">
+        <div className="flex w-full items-center gap-2 sm:gap-3 rounded-full border border-[var(--border-default)] bg-[var(--bg-input)] px-3.5 sm:px-4 py-2 text-[var(--text-primary)] shadow-inner transition focus-within:border-[var(--color-accent)] focus-within:ring-2 focus-within:ring-[var(--color-accent-light)]">
           <Icon name="search" className="h-4 w-4 text-fuchsia-400 shrink-0" />
           <input
             type="text"
@@ -180,6 +180,17 @@ export default function TopBar({
             )}
           </div>
         )}
+      </div>
+
+      {/* Official Brand Logo */}
+      <div className="flex items-center gap-2 shrink-0">
+        <img
+          src="/nexora-brand-logo.PNG"
+          alt="NEXORA"
+          className="h-7 sm:h-9 md:h-10 w-auto object-contain cursor-pointer transition-transform duration-200 hover:scale-105 select-none"
+          onClick={() => { window.location.hash = "#/"; }}
+          title="NEXORA الرئيسية"
+        />
       </div>
     </header>
   );

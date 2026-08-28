@@ -102,17 +102,33 @@ export default function AdminPortalLayout({ health, onSyncIndex }) {
         </SideNavigation>
 
         <div className="flex min-w-0 flex-1 flex-col gap-4 sm:gap-6 lg:pr-[18.5rem] xl:pr-[19rem]">
-          <header className="sticky top-3 z-30 flex min-h-14 items-center justify-between gap-3 rounded-[var(--radius-xl)] border border-[var(--border-default)] bg-[var(--glass-bg)] px-3 py-2.5 shadow-[var(--shadow-md)] backdrop-blur-xl sm:px-4">
-            <button className="navigation-icon-button lg:hidden" type="button" aria-label="فتح قائمة الإدارة" onClick={() => setIsSidebarOpen(true)}><Icon name="menu" className="h-5 w-5" /></button>
-            <div className="min-w-0">
-              <p className="text-[10px] font-bold text-[var(--text-muted)]">بوابة الإدارة</p>
-              <h1 className="truncate text-sm font-black text-[var(--text-primary)] sm:text-base">{activeItem?.label || "لوحة التحكم"}</h1>
+          <header className="sticky top-3 z-30 flex min-h-14 items-center justify-between gap-3 rounded-full border border-[var(--border-default)] bg-[var(--bg-card)]/95 px-4 py-2 sm:px-6 shadow-[var(--shadow-md)] backdrop-blur-2xl transition-all" dir="rtl">
+            <div className="flex items-center gap-3 min-w-0">
+              <button className="flex h-10 w-10 lg:hidden shrink-0 items-center justify-center rounded-full border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition" type="button" aria-label="فتح قائمة الإدارة" onClick={() => setIsSidebarOpen(true)}>
+                <Icon name="menu" className="h-5 w-5" />
+              </button>
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold text-[var(--text-muted)]">بوابة الإدارة المركزية</p>
+                <h1 className="truncate text-xs sm:text-sm font-black text-[var(--text-primary)]">{activeItem?.label || "لوحة التحكم"}</h1>
+              </div>
             </div>
-            <div className="mr-auto flex items-center gap-2">
-              <span className={`hidden items-center gap-2 rounded-[var(--radius-md)] border px-3 py-2 text-xs font-bold sm:flex ${isOnline ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400" : "border-rose-500/30 bg-rose-500/10 text-rose-400"}`}>
+
+            <div className="mr-auto flex items-center gap-2.5 shrink-0">
+              <span className={`hidden items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold sm:flex ${isOnline ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400" : "border-rose-500/30 bg-rose-500/10 text-rose-400"}`}>
                 <span className={`h-2 w-2 rounded-full ${isOnline ? "bg-emerald-400" : "bg-rose-400"}`} />{isOnline ? "الخادم متصل" : "الخادم غير متصل"}
               </span>
-              <button onClick={onSyncIndex} className="navigation-theme-button whitespace-nowrap" type="button"><Icon name="spark" className="h-4 w-4" /><span className="hidden sm:inline">مزامنة الفهرس</span><span className="sm:hidden">مزامنة</span></button>
+              <button onClick={onSyncIndex} className="inline-flex items-center gap-2 rounded-full border border-[var(--border-default)] bg-[var(--bg-elevated)] px-3.5 py-1.5 text-xs font-bold text-[var(--text-primary)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] transition" type="button">
+                <Icon name="spark" className="h-4 w-4 text-fuchsia-400" />
+                <span className="hidden sm:inline">مزامنة الفهرس</span>
+                <span className="sm:hidden">مزامنة</span>
+              </button>
+              <img
+                src="/nexora-brand-logo.PNG"
+                alt="NEXORA"
+                className="h-7 sm:h-8 w-auto object-contain cursor-pointer transition-transform duration-200 hover:scale-105 select-none"
+                onClick={() => { navigate("/"); }}
+                title="NEXORA الرئيسية"
+              />
             </div>
           </header>
           <main className="min-w-0 flex-1"><Outlet /></main>
