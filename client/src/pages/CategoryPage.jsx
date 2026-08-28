@@ -1,7 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import ShowcaseHero from "../components/ShowcaseHero.jsx";
-import HubBannerCard from "../components/HubBannerCard.jsx";
 import FilterToolbar from "../components/FilterToolbar.jsx";
 import MediaCollection from "../components/MediaCollection.jsx";
 import SmartHubRail from "../components/SmartHubRail.jsx";
@@ -36,7 +34,6 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
   const [hasArabicSubtitles, setHasArabicSubtitles] = useState(false);
   const [activeSort, setActiveSort] = useState("newest");
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedHub, setSelectedHub] = useState(null);
 
   // Category Configuration
   const categoryConfig = useMemo(() => getCategoryConfig(selectedCategory), [selectedCategory]);
@@ -64,7 +61,6 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
     setHasArabicAudio(false);
     setHasArabicSubtitles(false);
     setSearchQuery("");
-    setSelectedHub(null);
   }, [selectedCategory]);
 
   useEffect(() => {
@@ -86,8 +82,17 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
         limit: 1000,
       };
 
-      // If category is "family", fetch all media items to index family-safe titles across all types
-      if (selectedCategory !== "family") {
+      // Multi-Indexing Strategy:
+      // Movies: fetch all movies (live action + cartoons)
+      // Series: fetch all series (live drama + cartoons)
+      // Kids / Family / Anime: fetch full library so client categorizes and isolates with 100% precision
+      if (selectedCategory === "movies") {
+        fetchParams.type = "movie";
+      } else if (selectedCategory === "series") {
+        fetchParams.type = "series";
+      } else if (["family", "kids", "anime"].includes(selectedCategory)) {
+        // Full cross-category indexing
+      } else {
         fetchParams.category = selectedCategory;
       }
 
@@ -135,15 +140,32 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
       const genresStr = (item.genres || []).join(" ").toLowerCase();
       const cr = String(item.contentRating || "").toUpperCase().trim();
 
-      // 0. Strict Self-Containment Isolation & Family Aggregation Rules
+      // 0. Multi-Indexing & Isolation Rules
       if (selectedCategory === "movies") {
-        // ONLY EXCLUDE ANIME - Cartoons/Animation (Disney/Pixar/Dreamworks) ARE KEPT in Movies!
+        // ONLY EXCLUDE ANIME - Cartoons/Animation (Disney/Pixar/Dreamworks) ARE FULLY INCLUDED in Movies!
         if (itemCat === "anime" || genresStr.includes("أنمي") || genresStr.includes("anime")) return false;
+        if (item.type && item.type !== "movie") return false;
       } else if (selectedCategory === "series") {
         // ONLY EXCLUDE ANIME SERIES
         if (itemCat === "anime" || genresStr.includes("أنمي") || genresStr.includes("anime")) return false;
+        if (item.type && item.type !== "series") return false;
+      } else if (selectedCategory === "kids") {
+        // Kids & Cartoons: animation, cartoons, family, spacetoon, disney, pixar, dreamworks
+        const isKids =
+          itemCat === "kids" ||
+          genresStr.includes("كرتون") ||
+          genresStr.includes("رسوم متحركة") ||
+          genresStr.includes("أطفال") ||
+          genresStr.includes("ديزني") ||
+          genresStr.includes("بيكسار") ||
+          genresStr.includes("سبيستون") ||
+          genresStr.includes("دريم وركس") ||
+          genresStr.includes("animation");
+        if (!isKids) return false;
+        // Exclude mature content from kids
+        if (["R", "NC-17", "TV-MA", "18+", "18"].includes(cr)) return false;
       } else if (selectedCategory === "family") {
-        // Family Cinema: Index any movie/series that is suitable for families
+        // Family Cinema: any family-safe movie or series across all genres
         const isAdult = ["R", "NC-17", "TV-MA", "18+", "18", "MA"].includes(cr);
         if (isAdult) return false;
         const isFamilySafe =
@@ -151,9 +173,15 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
           genresStr.includes("عائلي") ||
           genresStr.includes("أطفال") ||
           genresStr.includes("كرتون") ||
+          genresStr.includes("ديزني") ||
+          genresStr.includes("بيكسار") ||
           genresStr.includes("family") ||
           genresStr.includes("animation");
         if (!isFamilySafe) return false;
+      } else if (selectedCategory === "anime") {
+        // Anime: anime movies, series, OVAs
+        const isAnime = itemCat === "anime" || genresStr.includes("أنمي") || genresStr.includes("anime");
+        if (!isAnime) return false;
       }
 
       // 1. Search Query
@@ -167,44 +195,19 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
         if (!matchesTitle) return false;
       }
 
-      // 2. Hub Filter
-      if (selectedHub) {
-        if (selectedHub.originTerm && !item.genres.some((g) => g.includes(selectedHub.originTerm))) {
-          return false;
-        }
-        if (selectedHub.genreTerm && !item.genres.some((g) => g.includes(selectedHub.genreTerm))) {
-          return false;
-        }
-        if (selectedHub.id === "cartoons_world" && !genresStr.includes("كرتون") && !genresStr.includes("رسوم") && itemCat !== "kids") {
-          return false;
-        }
-        if (selectedHub.id === "toddlers" && !genresStr.includes("تعليم") && !genresStr.includes("أطفال") && !["TV-Y", "G"].includes(cr)) {
-          return false;
-        }
-        if (selectedHub.id === "disney_pixar" && !genresStr.includes("ديزني") && !genresStr.includes("بيكسار") && !genresStr.includes("disney") && !genresStr.includes("pixar")) {
-          return false;
-        }
-        if (selectedHub.id === "dreamworks" && !genresStr.includes("دريم وركس") && !genresStr.includes("dreamworks") && !genresStr.includes("إلومينيشن") && !genresStr.includes("illumination")) {
-          return false;
-        }
-        if (selectedHub.id === "spacetoon_golden" && !genresStr.includes("سبيستون") && !genresStr.includes("الزهرة") && !genresStr.includes("spacetoon")) {
-          return false;
-        }
-      }
-
-      // 3. Origin Filter
+      // 2. Origin Filter
       if (activeOrigin !== "all") {
         const hasOrigin = item.genres.some((g) => g.includes(activeOrigin));
         if (!hasOrigin) return false;
       }
 
-      // 4. Genre Filter
+      // 3. Genre Filter
       if (activeGenre !== "all") {
         const hasGenre = item.genres.some((g) => g.includes(activeGenre));
         if (!hasGenre) return false;
       }
 
-      // 5. Type / Format Filter
+      // 4. Type / Format Filter
       if (activeType !== "all" && item.type !== activeType) return false;
 
       if (activeFormat !== "all") {
@@ -213,14 +216,14 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
         if (activeFormat === "ova" && !genresStr.includes("ova") && !genresStr.includes("أوفا") && !genresStr.includes("خاص")) return false;
       }
 
-      // 6. Status Filter
+      // 5. Status Filter
       if (activeStatus !== "all") {
         const s = (item.status || "completed").toLowerCase();
         if (activeStatus === "completed" && s !== "completed") return false;
         if (activeStatus === "ongoing" && s !== "ongoing" && s !== "returning series") return false;
       }
 
-      // 7. Seasons Count Filter
+      // 6. Seasons Count Filter
       if (activeSeasons !== "all") {
         const sc = item.seasonCount || item.tmdbSeasonCount || 1;
         if (activeSeasons === "mini" && sc > 1) return false;
@@ -228,7 +231,7 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
         if (activeSeasons === "long" && sc < 4) return false;
       }
 
-      // 8. Studio Filter (Kids / Cartoons)
+      // 7. Studio Filter (Kids / Cartoons)
       if (activeStudio !== "all") {
         const studioKeywords = {
           disney: ["ديزني", "disney"],
@@ -251,7 +254,7 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
         if (!matchesStudio) return false;
       }
 
-      // 9. Topic Filter (Documentaries)
+      // 8. Topic Filter (Documentaries)
       if (activeTopic !== "all") {
         const topicKeywords = {
           nature: ["طبيعة", "حيوان", "nature", "wildlife", "earth", "bbc", "natgeo"],
@@ -273,7 +276,7 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
         if (!matchesTopic) return false;
       }
 
-      // 10. Promotion Filter (Wrestling / Sports)
+      // 9. Promotion Filter (Wrestling / Sports)
       if (activePromotion !== "all") {
         const promoKeywords = {
           wwe: ["wwe", "raw", "smackdown", "wrestlemania", "royal rumble", "مصارعة"],
@@ -291,7 +294,7 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
         if (!matchesPromo) return false;
       }
 
-      // 11. Season Year (Ramadan)
+      // 10. Season Year (Ramadan)
       if (activeSeasonYear !== "all") {
         const year = Number(item.year || 0);
         if (activeSeasonYear === "2025" && year !== 2025) return false;
@@ -301,7 +304,7 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
         if (activeSeasonYear === "classic" && year >= 2020) return false;
       }
 
-      // 12. Era Filter (Plays)
+      // 11. Era Filter (Plays)
       if (activeEra !== "all") {
         const year = Number(item.year || 0);
         if (activeEra === "golden" && year > 1989) return false;
@@ -309,7 +312,7 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
         if (activeEra === "modern" && year < 2010) return false;
       }
 
-      // 13. Duration Filter (Movies)
+      // 12. Duration Filter (Movies)
       if (activeDuration !== "all") {
         const rt = Number(item.runtimeMinutes || 0);
         if (rt > 0) {
@@ -319,7 +322,7 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
         }
       }
 
-      // 14. Audio Dubs Filter
+      // 13. Audio Dubs Filter
       if (activeAudioDub !== "all") {
         if (activeAudioDub === "arabic_classic" && !genresStr.includes("سبيستون") && !genresStr.includes("الزهرة") && !item.hasArabicAudio) return false;
         if (activeAudioDub === "arabic_modern" && !item.hasArabicAudio) return false;
@@ -328,7 +331,7 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
         if (activeAudioDub === "msa" && !item.hasArabicAudio) return false;
       }
 
-      // 15. Content Rating
+      // 14. Content Rating
       if (activeContentRating !== "all") {
         if (activeContentRating === "family") {
           if (!["G", "PG", "TV-G", "TV-Y", "TV-Y7", "ALL"].includes(cr)) return false;
@@ -341,7 +344,7 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
         }
       }
 
-      // 16. Quality & Year & Rating
+      // 15. Quality & Year & Rating
       if (activeQuality !== "all" && item.bestResolution !== activeQuality) return false;
       if (activeRating !== "all" && (item.rating || 0) < Number(activeRating)) return false;
       if (hasArabicAudio && !item.hasArabicAudio) return false;
@@ -363,7 +366,6 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
     items,
     selectedCategory,
     searchQuery,
-    selectedHub,
     activeOrigin,
     activeGenre,
     activeType,
@@ -405,13 +407,10 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
   // Fallback showcase items
   const heroItems = useMemo(() => items.slice(0, 5), [items]);
 
-  // Hubs defined for the active category (e.g. Kids, Family, Movies, etc.)
-  const categoryHubs = categoryConfig.hubs || [];
-
   return (
     <div className="space-y-8 pb-16 text-right" dir="rtl">
       {/* 1. Unified database-backed showcase */}
-      {!selectedHub && heroItems.length > 0 && (
+      {heroItems.length > 0 && (
         <ShowcaseHero
           context="category"
           category={selectedCategory}
@@ -425,85 +424,16 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
         />
       )}
 
-      {/* 2. Sub-Hub Banner Header (When navigating into a specific sub-hub) */}
-      {selectedHub && (
-        <div
-          className="relative min-h-[220px] rounded-3xl overflow-hidden border border-fuchsia-500/30 p-6 sm:p-8 flex flex-col justify-end text-right shadow-2xl bg-[#0E0D1B]"
-          style={{
-            backgroundImage: `url('${selectedHub.backdrop || "/nexora-library-backdrop.PNG"}')`,
-            backgroundSize: "cover",
-            backgroundPosition: "center",
-          }}
-        >
-          <div className="absolute inset-0 bg-gradient-to-t from-[#090812] via-[#090812]/85 to-transparent" />
-          <div className="relative z-10 space-y-2">
-            <button
-              onClick={() => setSelectedHub(null)}
-              className="px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white font-bold text-xs backdrop-blur-md border border-white/20 transition flex items-center gap-1.5 w-fit"
-            >
-              <span>‹ العودة لجميع تصنيفات {categoryConfig.titleAr}</span>
-            </button>
-            <h1 className="text-2xl sm:text-4xl font-black text-white">{selectedHub.title}</h1>
-            <p className="text-xs sm:text-sm text-gray-300 max-w-xl">{selectedHub.subtitle || categoryConfig.description}</p>
-          </div>
-        </div>
-      )}
+      {/* 2. Unified Official Database Smart Hubs Rail (SmartHubCard with artwork & badges) */}
+      <SmartHubRail
+        scope={selectedCategory}
+        title={`مجموعات ومحاور ${categoryConfig.titleAr}`}
+        description="تصنيفات ذكية ومحاور حقيقية مبنية تلقائيًا ومربوطة بلوحة التحكم."
+        onViewAll={() => (window.location.hash = "#/directory/hubs")}
+        onOpen={(hub) => (window.location.hash = `#/hub/${hub.slug}`)}
+      />
 
-      {/* 3. Category Specialized Hubs Quick Bar (Kids, Family, Anime, Series, Movies) */}
-      {!selectedHub && categoryHubs.length > 0 && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-fuchsia-500 shadow-[0_0_10px_#e879f9]" />
-              محاور واستكشاف {categoryConfig.titleAr}
-            </h2>
-            <span className="text-[11px] font-mono font-bold text-gray-400 bg-white/5 px-3 py-1 rounded-full border border-white/10">
-              {filteredItems.length} {categoryConfig.label}
-            </span>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-            {categoryHubs.map((hub) => {
-              const isSelected = selectedHub?.id === hub.id;
-              return (
-                <button
-                  key={hub.id}
-                  type="button"
-                  onClick={() => setSelectedHub(isSelected ? null : hub)}
-                  className={`group relative overflow-hidden rounded-2xl border p-4 text-right transition-all duration-300 ${
-                    isSelected
-                      ? "border-fuchsia-500 bg-fuchsia-950/40 shadow-[0_0_20px_rgba(217,70,239,0.3)] ring-1 ring-fuchsia-500"
-                      : "border-white/10 bg-white/[0.03] hover:border-fuchsia-500/50 hover:bg-white/[0.07]"
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-2 mb-2">
-                    <span className="rounded-full bg-fuchsia-500/20 px-2 py-0.5 text-[10px] font-black text-fuchsia-300 border border-fuchsia-500/30">
-                      {hub.tag || "محور خاص"}
-                    </span>
-                    <span className="text-xs text-gray-400 group-hover:text-white transition">‹</span>
-                  </div>
-                  <h3 className="text-xs sm:text-sm font-bold text-white group-hover:text-fuchsia-300 transition line-clamp-1">
-                    {hub.title}
-                  </h3>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* 4. Grand Origin Hubs / Collections Rail */}
-      {!selectedHub && (
-        <SmartHubRail
-          scope={selectedCategory === "movies" ? "movies" : selectedCategory}
-          title={`المجموعات والسلاسل الفنية في ${categoryConfig.titleAr}`}
-          description="تصنيفات ذكية وسلاسل متصلة مبنية تلقائيًا من مكتبتك."
-          onViewAll={() => (window.location.hash = "#/directory/hubs")}
-          onOpen={(hub) => (window.location.hash = `#/hub/${hub.slug}`)}
-        />
-      )}
-
-      {/* 5. Multi-Dimensional Context-Aware Filter Toolbar */}
+      {/* 3. Multi-Dimensional Context-Aware Filter Toolbar */}
       <FilterToolbar
         // State values
         activeOrigin={activeOrigin}
@@ -591,7 +521,7 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
         }}
       />
 
-      {/* 6. Items Grid Section */}
+      {/* 4. Items Grid Section */}
       <div className="space-y-4">
         {loading ? (
           <div className="flex items-center justify-center py-20">
