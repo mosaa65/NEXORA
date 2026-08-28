@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import Icon from "../components/Icon.jsx";
+import SmartHubCard from "../components/SmartHubCard.jsx";
 import { getFranchises, getPeople, getSmartHubs, resolveAPIURL } from "../lib/api.js";
 
 const directoryConfig = {
-  hubs: { title: "كل المحاور الذكية", subtitle: "استكشف جميع المحاور المحفوظة في مكتبتك.", icon: "grid", tone: "fuchsia" },
-  people: { title: "كل الشخصيات", subtitle: "الممثلون وصنّاع الأفلام المرتبطون بأعمال مكتبتك.", icon: "user", tone: "cyan" },
-  franchises: { title: "كل سلاسل الأفلام", subtitle: "السلاسل المرتبطة بالأعمال الموجودة في مكتبتك.", icon: "film", tone: "amber" },
+  hubs: { title: "كل المحاور والمجموعات الذكية", subtitle: "استكشف جميع المحاور الفنية المحفوظة في مكتبتك.", icon: "grid", tone: "fuchsia" },
+  people: { title: "كل الشخصيات وصنّاع السينما", subtitle: "الممثلون والمخرجون وصنّاع الأفلام المرتبطون بأعمال مكتبتك.", icon: "user", tone: "cyan" },
+  franchises: { title: "كل سلاسل الأفلام والعوالم", subtitle: "السلاسل السينمائية المرتبطة بالأعمال الموجودة في مكتبتك.", icon: "film", tone: "amber" },
 };
 
 function DirectoryCard({ kind, item, onOpen }) {
@@ -13,8 +14,7 @@ function DirectoryCard({ kind, item, onOpen }) {
   const [imgError, setImgError] = useState(false);
 
   if (kind === "hubs") {
-    const image = resolveAPIURL(item.artwork_path) || "/nexora-library-backdrop.PNG";
-    return <button type="button" onClick={() => onOpen(item)} className="luminous-card group relative min-h-56 overflow-hidden rounded-2xl bg-[#0E0C1A] text-right" dir="rtl"><img src={image} alt="" className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-105" onError={(event) => { event.currentTarget.src = "/nexora-library-backdrop.PNG"; }} /><span className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/45 to-transparent" /><span className="relative flex min-h-56 flex-col justify-end gap-2 p-5 text-white"><Icon name={item.icon || "spark"} className="h-7 w-7 text-fuchsia-300" /><strong className="text-lg font-black">{item.title_ar || item.title_en}</strong><small className="text-xs text-white/65">{item.item_count || 0} عمل</small></span></button>;
+    return <SmartHubCard hub={item} onOpen={onOpen} />;
   }
 
   const rawImage = isPerson ? item.profile_path : (item.backdrop_path || item.poster_path);
@@ -70,5 +70,45 @@ export default function DirectoryPage({ kind, onOpen }) {
   }, [kind]);
 
   if (!items) return <div className="min-h-72 animate-pulse rounded-2xl bg-[var(--bg-surface)]" />;
-  return <div className="space-y-7 pb-16" dir="rtl"><header className="flex flex-wrap items-end justify-between gap-4 border-b border-[var(--border-subtle)] pb-5"><div><p className="text-xs font-bold text-[var(--color-accent)]">دليل المكتبة</p><h1 className="mt-1 flex items-center gap-2 text-2xl font-black text-[var(--text-primary)]"><Icon name={config.icon} className="h-6 w-6" />{config.title}</h1><p className="mt-2 text-sm text-[var(--text-muted)]">{config.subtitle}</p></div><button type="button" onClick={() => window.history.back()} className="inline-flex items-center gap-2 rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] px-4 py-2.5 text-xs font-bold text-[var(--text-primary)] transition hover:bg-[var(--bg-elevated)]"><Icon name="arrowRight" className="h-4 w-4" />العودة</button></header>{items.length ? <div className={`grid grid-cols-2 gap-3 sm:gap-4 ${kind === "people" ? "sm:grid-cols-3 lg:grid-cols-5" : "sm:grid-cols-2 lg:grid-cols-3"}`}>{items.map((item) => <DirectoryCard key={item.slug || item.id} kind={kind} item={item} onOpen={onOpen} />)}</div> : <div className="rounded-2xl border border-dashed border-[var(--border-default)] p-16 text-center text-sm text-[var(--text-muted)]">لا توجد بيانات متاحة حاليًا.</div>}</div>;
+
+  return (
+    <div className="space-y-7 pb-16 text-right" dir="rtl">
+      <header className="flex flex-wrap items-end justify-between gap-4 border-b border-[var(--border-subtle)] pb-5">
+        <div>
+          <p className="text-xs font-bold text-[var(--color-accent)]">دليل المكتبة الموحد</p>
+          <h1 className="mt-1 flex items-center gap-2 text-2xl font-black text-[var(--text-primary)]">
+            <Icon name={config.icon} className="h-6 w-6 text-[var(--color-accent)]" />
+            {config.title}
+          </h1>
+          <p className="mt-2 text-sm text-[var(--text-muted)]">{config.subtitle}</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => window.history.back()}
+          className="inline-flex items-center gap-2 rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] px-4 py-2.5 text-xs font-bold text-[var(--text-primary)] transition hover:bg-[var(--bg-elevated)]"
+        >
+          <Icon name="arrowRight" className="h-4 w-4" />
+          العودة
+        </button>
+      </header>
+
+      {items.length ? (
+        <div
+          className={`grid grid-cols-2 gap-2.5 sm:gap-4 ${
+            kind === "people"
+              ? "sm:grid-cols-3 lg:grid-cols-5"
+              : "sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+          }`}
+        >
+          {items.map((item) => (
+            <DirectoryCard key={item.slug || item.id} kind={kind} item={item} onOpen={onOpen} />
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-dashed border-[var(--border-default)] p-16 text-center text-sm text-[var(--text-muted)]">
+          لا توجد بيانات متاحة حاليًا.
+        </div>
+      )}
+    </div>
+  );
 }
