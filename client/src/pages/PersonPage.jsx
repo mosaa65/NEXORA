@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Icon from "../components/Icon.jsx";
+import PageBackButton from "../components/PageBackButton.jsx";
 import MediaCollection from "../components/MediaCollection.jsx";
 import { getPersonMedia, resolveAPIURL } from "../lib/api.js";
 
@@ -16,6 +17,7 @@ export default function PersonPage({ slug, onOpenMedia }) {
   return (
     <div className="space-y-7 pb-16" dir="rtl">
       <section className="relative overflow-hidden rounded-2xl border border-[var(--border-default)] bg-gradient-to-l from-cyan-950/40 via-[#12101d] to-fuchsia-950/30 p-6 sm:p-9">
+        <div className="absolute right-4 top-4 sm:right-6 sm:top-6"><PageBackButton fallback="/directory/people" /></div>
         <div className="flex flex-col items-center gap-6 text-center sm:flex-row sm:text-right">
           <div className="relative h-36 w-32 shrink-0 overflow-hidden rounded-2xl border border-[var(--border-default)] bg-gradient-to-br from-cyan-950/40 via-purple-950/20 to-fuchsia-950/30 shadow-xl sm:h-44 sm:w-36">
             {image ? (
