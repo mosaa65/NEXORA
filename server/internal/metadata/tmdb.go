@@ -334,6 +334,29 @@ func (c *TMDBClient) searchCandidates(ctx context.Context, mediaKind string, que
 	if err := json.Unmarshal(responseBytes, &payload); err != nil {
 		return nil, err
 	}
+
+	// Fallback: If year-specific search returned no results, retry search without the year constraint.
+	// This prevents series (like Stranger Things / شباب البومب) whose local files have later season years from failing.
+	if len(payload.Results) == 0 && query.Year > 0 {
+		valuesWithoutYear := url.Values{}
+		valuesWithoutYear.Set("query", query.Title)
+		valuesWithoutYear.Set("include_adult", "false")
+		valuesWithoutYear.Set("page", "1")
+		if query.Language != "" {
+			valuesWithoutYear.Set("language", query.Language)
+		}
+		if c.config.APIKey != "" && c.config.BearerToken == "" {
+			valuesWithoutYear.Set("api_key", c.config.APIKey)
+		}
+		retryEndpoint := fmt.Sprintf("%s/3/search/%s?%s", strings.TrimRight(c.config.BaseURL, "/"), mediaKind, valuesWithoutYear.Encode())
+		if retryBytes, retryCode, retryErr := c.doGet(ctx, retryEndpoint); retryErr == nil && retryCode < 300 {
+			var retryPayload tmdbSearchResponse
+			if err := json.Unmarshal(retryBytes, &retryPayload); err == nil && len(retryPayload.Results) > 0 {
+				return retryPayload.Results, nil
+			}
+		}
+	}
+
 	return payload.Results, nil
 }
 
