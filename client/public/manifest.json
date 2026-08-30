@@ -1,0 +1,33 @@
+{
+  "name": "NEXORA | منصة السينما والوسائط",
+  "short_name": "NEXORA",
+  "description": "منصة سينمائية فاخرة لإدارة وبث مكتبات الوسائط والاستراحات",
+  "start_url": "/",
+  "id": "/",
+  "display": "standalone",
+  "background_color": "#0c0a17",
+  "theme_color": "#0c0a17",
+  "orientation": "any",
+  "lang": "ar",
+  "dir": "rtl",
+  "icons": [
+    {
+      "src": "/nexora-brand-logo.PNG",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/nexora-brand-logo.PNG",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/nexora-brand-logo.PNG",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

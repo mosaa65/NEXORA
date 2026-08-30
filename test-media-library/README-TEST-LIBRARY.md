@@ -1,3 +1,12 @@
-# NEXORA test media library
+﻿# 🌟 NEXORA VIP Lounge Showcase Library (مكتبة استراحة VIP الفاخرة)
 
-Synthetic indexing fixtures. Do not use these files for playback or FFmpeg quality tests; they intentionally are not real video streams.
+مجلد وسائط متكامل وشامل ومُعد هندسياً لعروض وفهرسة نظام NEXORA للعملاء.
+يحتوي على تنظيم احترافي لكافة الأقسام:
+- 🎬 أفلام أجنبية وعربية بدقة 4K و 1080p
+- 🍿 سلاسل سينمائية رسمية (John Wick, The Dark Knight)
+- 📺 مسلسلات عالمية متعددة المواسم (Stranger Things, Breaking Bad, The Last of Us)
+- 🌙 رمضانيات ودراما سعودية وخليجية (شباب البومب، طاش ما طاش، الحشاشين)
+- 🎌 أنمي ياباني بأعلى تصنيف (هجوم العمالقة، ون بيس، قاتل الشياطين)
+- 🧸 أطفال وعائلة وبيكسار وديزني (خلطبيطة بصلصة، Inside Out 2، سبيستون)
+- 🎭 مسرحيات وكوميديا كلاسيكية وحديثة (مدرسة المشاغبين، العيال كبرت، طارق العلي)
+- 🌍 وثائقيات طبيعة 4K (Planet Earth III, Our Planet)
