@@ -172,7 +172,7 @@ func NewServer(
 	}
 	server.routes()
 	go server.runTMDBQueue()
-	return server.withMiddleware(server.mux)
+	return withGzip(server.withMiddleware(server.mux))
 }
 
 func (s *Server) runTMDBQueue() {
@@ -304,7 +304,10 @@ func (s *Server) routes() {
 	if s.config.AssetImageDir != "" {
 		_ = os.MkdirAll(s.config.AssetImageDir, 0o755)
 		fileServer := http.StripPrefix("/assets/images/", http.FileServer(http.Dir(s.config.AssetImageDir)))
-		s.mux.Handle("GET /assets/images/", fileServer)
+		s.mux.Handle("GET /assets/images/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+			fileServer.ServeHTTP(w, r)
+		}))
 	}
 }
 
@@ -584,7 +587,7 @@ func (s *Server) handleIndexPreview(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleStreamImage streams a local image file safely.
+// handleStreamImage streams a local image file safely with ETag & long-term caching.
 func (s *Server) handleStreamImage(w http.ResponseWriter, r *http.Request) {
 	filePath := strings.TrimSpace(r.URL.Query().Get("path"))
 	if filePath == "" {
@@ -602,6 +605,12 @@ func (s *Server) handleStreamImage(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
+	stat, err := file.Stat()
+	if err != nil {
+		http.Error(w, "error reading image stat", http.StatusInternalServerError)
+		return
+	}
+
 	ext := strings.ToLower(filepath.Ext(filePath))
 	contentType := "image/jpeg"
 	switch ext {
@@ -615,10 +624,13 @@ func (s *Server) handleStreamImage(w http.ResponseWriter, r *http.Request) {
 		contentType = "image/gif"
 	case ".bmp":
 		contentType = "image/bmp"
+	case ".svg":
+		contentType = "image/svg+xml"
 	}
 	w.Header().Set("Content-Type", contentType)
-	w.Header().Set("Cache-Control", "public, max-age=86400")
-	_, _ = io.Copy(w, file)
+	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	w.Header().Set("ETag", fmt.Sprintf("\"%x-%x\"", stat.ModTime().Unix(), stat.Size()))
+	http.ServeContent(w, r, stat.Name(), stat.ModTime(), file)
 }
 
 // handleClassifyOrigins repairs country tags from the user's existing folder
