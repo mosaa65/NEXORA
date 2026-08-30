@@ -476,23 +476,8 @@ func (r *Repository) IngestScannedFiles(ctx context.Context, files []scanner.Fil
 	return result, nil
 }
 
-func (r *Repository) ListSearchDocuments(ctx context.Context, limit int) ([]search.MediaDocument, error) {
-	if limit <= 0 || limit > 10000 {
-		limit = 1000
-	}
-
-	rows, err := r.db.QueryContext(ctx, `
-		WITH file_summary AS (
-			SELECT media_item_id, COUNT(*)::int AS file_count, COALESCE(SUM(file_size), 0)::bigint AS total_size,
-				MAX(duration) FILTER (WHERE episode_number IS NULL)::int / 60 AS local_runtime_minutes,
-				CASE MAX(CASE WHEN resolution ~* '(2160|4k)' THEN 4 WHEN resolution ~* '1440' THEN 3 WHEN resolution ~* '1080' THEN 2 WHEN resolution ~* '720' THEN 1 ELSE 0 END)
-					WHEN 4 THEN '4K' WHEN 3 THEN '1440p' WHEN 2 THEN '1080p' WHEN 1 THEN '720p' ELSE '' END AS best_resolution,
-				BOOL_OR(LOWER(COALESCE(audio_tracks::text, '')) LIKE '%"language":"ara"%' OR LOWER(COALESCE(audio_tracks::text, '')) LIKE '%"language":"ar"%') AS has_arabic_audio,
-				BOOL_OR(LOWER(COALESCE(subtitles::text, '')) LIKE '%"language":"ara"%' OR LOWER(COALESCE(subtitles::text, '')) LIKE '%"language":"ar"%') AS has_arabic_subtitles
-			FROM video_files GROUP BY media_item_id
-		), season_summary AS (
-			SELECT media_item_id, COUNT(*)::int AS season_count FROM seasons GROUP BY media_item_id
-		)
+func (r *Repository) GetSearchDocument(ctx context.Context, id int64) (*search.MediaDocument, error) {
+	row := r.db.QueryRowContext(ctx, `
 		SELECT
 			mi.id,
 			mi.title_ar,
@@ -509,14 +494,106 @@ func (r *Repository) ListSearchDocuments(ctx context.Context, limit int) ([]sear
 			c.slug,
 			c.name_ar,
 			c.name_en,
-			COALESCE(fs.file_count, 0), mi.status, COALESCE(ss.season_count, 0),
-			COALESCE(NULLIF(mi.metadata_facets->>'number_of_seasons', '')::int, 0), COALESCE(NULLIF(mi.metadata_facets->>'number_of_episodes', '')::int, 0), COALESCE(fs.total_size, 0),
-			COALESCE(fs.best_resolution, ''), COALESCE(NULLIF(mi.metadata_facets->>'runtime', '')::int, fs.local_runtime_minutes, 0),
-			COALESCE(fs.has_arabic_audio, false), COALESCE(fs.has_arabic_subtitles, false)
+			COALESCE(mi.file_count, 0), mi.status, COALESCE(mi.season_count, 0),
+			COALESCE(NULLIF(mi.metadata_facets->>'number_of_seasons', '')::int, 0), COALESCE(NULLIF(mi.metadata_facets->>'number_of_episodes', '')::int, 0), COALESCE(mi.total_file_size, 0),
+			COALESCE(mi.best_resolution, ''), COALESCE(NULLIF(mi.metadata_facets->>'runtime', '')::int, mi.runtime_minutes, 0),
+			COALESCE(mi.has_arabic_audio, false), COALESCE(mi.has_arabic_subtitles, false)
 		FROM media_items mi
 		LEFT JOIN categories c ON c.id = mi.category_id
-		LEFT JOIN file_summary fs ON fs.media_item_id = mi.id
-		LEFT JOIN season_summary ss ON ss.media_item_id = mi.id
+		WHERE mi.id = $1;
+	`, id)
+
+	var doc search.MediaDocument
+	var titleAR, plotAR, plotEN, posterPath, bannerPath, categorySlug, categoryAR, categoryEN, contentRating sql.NullString
+	var releaseYear sql.NullInt64
+	var rating sql.NullFloat64
+	var genresText string
+	var summary mediaCardSummary
+
+	if err := row.Scan(
+		&doc.ID,
+		&titleAR,
+		&doc.TitleEN,
+		&doc.Type,
+		&plotAR,
+		&plotEN,
+		&releaseYear,
+		&rating,
+		&posterPath,
+		&bannerPath,
+		&genresText,
+		&contentRating,
+		&categorySlug,
+		&categoryAR,
+		&categoryEN,
+		&doc.FileCount, &summary.Status, &summary.SeasonCount, &summary.TMDBSeasonCount, &summary.TMDBEpisodeCount, &summary.TotalSize, &summary.BestResolution,
+		&summary.RuntimeMinutes, &summary.HasArabicAudio, &summary.HasArabicSubtitles,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get search document %d: %w", id, err)
+	}
+
+	doc.TitleAR = nullableString(titleAR)
+	doc.PlotAR = nullableString(plotAR)
+	doc.PlotEN = nullableString(plotEN)
+	doc.PosterPath = nullableString(posterPath)
+	doc.BannerPath = nullableString(bannerPath)
+	doc.ContentRating = nullableString(contentRating)
+	doc.CategorySlug = nullableString(categorySlug)
+	doc.CategoryAR = nullableString(categoryAR)
+	doc.CategoryEN = nullableString(categoryEN)
+	if releaseYear.Valid {
+		doc.ReleaseYear = int(releaseYear.Int64)
+	}
+	if rating.Valid {
+		doc.Rating = rating.Float64
+	}
+	doc.Status = summary.Status
+	doc.SeasonCount = summary.SeasonCount
+	doc.TMDBSeasonCount = summary.TMDBSeasonCount
+	doc.TMDBEpisodeCount = summary.TMDBEpisodeCount
+	doc.TotalSize = summary.TotalSize
+	doc.BestResolution = summary.BestResolution
+	doc.RuntimeMinutes = summary.RuntimeMinutes
+	doc.HasArabicAudio = summary.HasArabicAudio
+	doc.HasArabicSubtitles = summary.HasArabicSubtitles
+	if err := json.Unmarshal([]byte(genresText), &doc.Genres); err != nil {
+		doc.Genres = nil
+	}
+
+	return &doc, nil
+}
+
+func (r *Repository) ListSearchDocuments(ctx context.Context, limit int) ([]search.MediaDocument, error) {
+	if limit <= 0 || limit > 10000 {
+		limit = 1000
+	}
+
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT
+			mi.id,
+			mi.title_ar,
+			mi.title_en,
+			mi.type,
+			mi.plot_ar,
+			mi.plot_en,
+			mi.release_year,
+			mi.rating,
+			mi.poster_path,
+			mi.banner_path,
+			COALESCE(array_to_json(mi.genres), '[]'::json)::text AS genres,
+			COALESCE(mi.content_rating, mi.metadata_facets->>'content_rating', '') AS content_rating,
+			c.slug,
+			c.name_ar,
+			c.name_en,
+			COALESCE(mi.file_count, 0), mi.status, COALESCE(mi.season_count, 0),
+			COALESCE(NULLIF(mi.metadata_facets->>'number_of_seasons', '')::int, 0), COALESCE(NULLIF(mi.metadata_facets->>'number_of_episodes', '')::int, 0), COALESCE(mi.total_file_size, 0),
+			COALESCE(mi.best_resolution, ''), COALESCE(NULLIF(mi.metadata_facets->>'runtime', '')::int, mi.runtime_minutes, 0),
+			COALESCE(mi.has_arabic_audio, false), COALESCE(mi.has_arabic_subtitles, false)
+		FROM media_items mi
+		LEFT JOIN categories c ON c.id = mi.category_id
 		ORDER BY mi.created_at DESC, mi.id DESC
 		LIMIT $1;
 	`, limit)
@@ -1675,17 +1752,6 @@ func (r *Repository) ListMediaItems(ctx context.Context, opts ListMediaOptions) 
 	}
 
 	query := fmt.Sprintf(`
-		WITH file_summary AS (
-			SELECT media_item_id, COUNT(*)::int AS file_count, COALESCE(SUM(file_size), 0)::bigint AS total_size,
-				MAX(duration) FILTER (WHERE episode_number IS NULL)::int / 60 AS local_runtime_minutes,
-				CASE MAX(CASE WHEN resolution ~* '(2160|4k)' THEN 4 WHEN resolution ~* '1440' THEN 3 WHEN resolution ~* '1080' THEN 2 WHEN resolution ~* '720' THEN 1 ELSE 0 END)
-					WHEN 4 THEN '4K' WHEN 3 THEN '1440p' WHEN 2 THEN '1080p' WHEN 1 THEN '720p' ELSE '' END AS best_resolution,
-				BOOL_OR(LOWER(COALESCE(audio_tracks::text, '')) LIKE '%%"language":"ara"%%' OR LOWER(COALESCE(audio_tracks::text, '')) LIKE '%%"language":"ar"%%') AS has_arabic_audio,
-				BOOL_OR(LOWER(COALESCE(subtitles::text, '')) LIKE '%%"language":"ara"%%' OR LOWER(COALESCE(subtitles::text, '')) LIKE '%%"language":"ar"%%') AS has_arabic_subtitles
-			FROM video_files GROUP BY media_item_id
-		), season_summary AS (
-			SELECT media_item_id, COUNT(*)::int AS season_count FROM seasons GROUP BY media_item_id
-		)
 		SELECT
 			mi.id,
 			mi.title_ar,
@@ -1702,14 +1768,12 @@ func (r *Repository) ListMediaItems(ctx context.Context, opts ListMediaOptions) 
 			c.slug,
 			c.name_ar,
 			c.name_en,
-			COALESCE(fs.file_count, 0), mi.status, COALESCE(ss.season_count, 0),
-			COALESCE(NULLIF(mi.metadata_facets->>'number_of_seasons', '')::int, 0), COALESCE(NULLIF(mi.metadata_facets->>'number_of_episodes', '')::int, 0), COALESCE(fs.total_size, 0),
-			COALESCE(fs.best_resolution, ''), COALESCE(NULLIF(mi.metadata_facets->>'runtime', '')::int, fs.local_runtime_minutes, 0),
-			COALESCE(fs.has_arabic_audio, false), COALESCE(fs.has_arabic_subtitles, false)
+			COALESCE(mi.file_count, 0), mi.status, COALESCE(mi.season_count, 0),
+			COALESCE(NULLIF(mi.metadata_facets->>'number_of_seasons', '')::int, 0), COALESCE(NULLIF(mi.metadata_facets->>'number_of_episodes', '')::int, 0), COALESCE(mi.total_file_size, 0),
+			COALESCE(mi.best_resolution, ''), COALESCE(NULLIF(mi.metadata_facets->>'runtime', '')::int, mi.runtime_minutes, 0),
+			COALESCE(mi.has_arabic_audio, false), COALESCE(mi.has_arabic_subtitles, false)
 		FROM media_items mi
 		LEFT JOIN categories c ON c.id = mi.category_id
-		LEFT JOIN file_summary fs ON fs.media_item_id = mi.id
-		LEFT JOIN season_summary ss ON ss.media_item_id = mi.id
 		WHERE %s
 		ORDER BY %s
 		LIMIT $%d OFFSET $%d;
@@ -1932,16 +1996,7 @@ func (r *Repository) UpdateMediaMetadata(ctx context.Context, id int64, meta met
 	}
 
 	// Fetch single document for search reindexing
-	docs, err := r.ListSearchDocuments(ctx, 10000)
-	if err != nil {
-		return nil, err
-	}
-	for _, doc := range docs {
-		if doc.ID == id {
-			return &doc, nil
-		}
-	}
-	return nil, nil
+	return r.GetSearchDocument(ctx, id)
 }
 
 func (r *Repository) syncCollectionFromMetadata(ctx context.Context, mediaID int64, meta metadata.Result) error {
@@ -2866,13 +2921,8 @@ func (r *Repository) CreateMediaItem(ctx context.Context, req CreateMediaRequest
 		return nil, fmt.Errorf("insert media item: %w", err)
 	}
 
-	docs, err := r.ListSearchDocuments(ctx, 10000)
-	if err == nil {
-		for _, doc := range docs {
-			if doc.ID == newID {
-				return &doc, nil
-			}
-		}
+	if doc, err := r.GetSearchDocument(ctx, newID); err == nil && doc != nil {
+		return doc, nil
 	}
 
 	return &search.MediaDocument{
@@ -2929,16 +2979,7 @@ func (r *Repository) UpdateMediaFull(ctx context.Context, id int64, req UpdateMe
 		return nil, sql.ErrNoRows
 	}
 
-	docs, err := r.ListSearchDocuments(ctx, 10000)
-	if err != nil {
-		return nil, err
-	}
-	for _, doc := range docs {
-		if doc.ID == id {
-			return &doc, nil
-		}
-	}
-	return nil, nil
+	return r.GetSearchDocument(ctx, id)
 }
 
 func (r *Repository) DeleteMediaItem(ctx context.Context, id int64) error {
