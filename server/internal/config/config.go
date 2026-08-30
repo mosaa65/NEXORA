@@ -27,6 +27,9 @@ type Config struct {
 	FFprobePath    string
 	ScanWorkers    int
 	WatchRecursive bool
+	RedisAddr      string
+	RedisPassword  string
+	RedisDB        int
 }
 
 func Load() Config {
@@ -51,6 +54,9 @@ func Load() Config {
 		FFprobePath:    envString("NEXORA_FFPROBE_PATH", "ffprobe"),
 		ScanWorkers:    envInt("NEXORA_SCAN_WORKERS", 8),
 		WatchRecursive: envBool("NEXORA_WATCH_RECURSIVE", true),
+		RedisAddr:      envString("NEXORA_REDIS_ADDR", "127.0.0.1:6379"),
+		RedisPassword:  os.Getenv("NEXORA_REDIS_PASSWORD"),
+		RedisDB:        envInt("NEXORA_REDIS_DB", 0),
 	}
 }
 

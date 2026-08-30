@@ -168,7 +168,7 @@ func NewServer(
 		quality:     qualityService,
 		diskManager: disks.NewManager(),
 		mux:         http.NewServeMux(),
-		cache:       newResponseCache(),
+		cache:       newResponseCache(config.RedisAddr, config.RedisPassword, config.RedisDB),
 	}
 	server.routes()
 	go server.runTMDBQueue()
@@ -737,7 +737,15 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "database": health})
+	redisOK, redisStatus := s.cache.RedisStatus(r.Context())
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":       true,
+		"database": health,
+		"cache": map[string]any{
+			"redisOk":     redisOK,
+			"redisStatus": redisStatus,
+		},
+	})
 }
 
 func (s *Server) handleScan(w http.ResponseWriter, r *http.Request) {
@@ -1257,9 +1265,8 @@ func (s *Server) withMiddleware(next http.Handler) http.Handler {
 			return
 		}
 		if r.Method != http.MethodGet {
-			// All catalogue writes invalidate the short-lived server cache. This is
-			// deliberately broad so a newly indexed or edited title is never hidden.
-			s.cache.clear()
+			// All catalogue writes invalidate the server cache across L1 and Redis.
+			s.cache.clear(r.Context())
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -1270,12 +1277,12 @@ func (s *Server) withMiddleware(next http.Handler) http.Handler {
 			return
 		}
 		key := cacheKey(r)
-		if entry, ok := s.cache.get(key); ok {
-			w.Header().Set("Content-Type", entry.contentType)
-			w.Header().Set("Cache-Control", "private, max-age=20, must-revalidate")
-			w.Header().Set("X-NEXORA-Cache", "HIT")
-			w.WriteHeader(entry.status)
-			_, _ = w.Write(entry.body)
+		if entry, source, ok := s.cache.get(r.Context(), key); ok {
+			w.Header().Set("Content-Type", entry.ContentType)
+			w.Header().Set("Cache-Control", "public, max-age=30, must-revalidate")
+			w.Header().Set("X-NEXORA-Cache", "HIT ("+source+")")
+			w.WriteHeader(entry.Status)
+			_, _ = w.Write(entry.Body)
 			return
 		}
 
@@ -1286,12 +1293,17 @@ func (s *Server) withMiddleware(next http.Handler) http.Handler {
 		for header, values := range result.Header {
 			w.Header()[header] = append([]string(nil), values...)
 		}
-		w.Header().Set("Cache-Control", "private, max-age=20, must-revalidate")
+		w.Header().Set("Cache-Control", "public, max-age=30, must-revalidate")
 		w.Header().Set("X-NEXORA-Cache", "MISS")
 		w.WriteHeader(result.StatusCode)
 		_, _ = w.Write(body)
 		if result.StatusCode >= http.StatusOK && result.StatusCode < http.StatusMultipleChoices {
-			s.cache.set(key, cachedResponse{status: result.StatusCode, body: append([]byte(nil), body...), contentType: result.Header.Get("Content-Type"), expiresAt: time.Now().Add(ttl)})
+			s.cache.set(r.Context(), key, cachedResponse{
+				Status:      result.StatusCode,
+				Body:        append([]byte(nil), body...),
+				ContentType: result.Header.Get("Content-Type"),
+				ExpiresAt:   time.Now().Add(ttl),
+			})
 		}
 	})
 }
