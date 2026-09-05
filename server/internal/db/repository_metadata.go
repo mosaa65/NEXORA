@@ -71,12 +71,51 @@ func (r *Repository) ListShowcases(ctx context.Context, opts ShowcaseOptions) (*
 			ID: fmt.Sprintf("media-%d", item.ID), Kind: "featured", MediaID: item.ID,
 			TitleAR: item.TitleAR, TitleEN: item.TitleEN, DescriptionAR: item.PlotAR,
 			DescriptionEN: item.PlotEN, ArtworkPath: artwork, ArtworkPosition: "center center",
-			Accent: "violet", Type: item.Type, Status: item.Status, ReleaseYear: item.ReleaseYear,
+			Accent: mediaShowcaseAccent(item.Type, item.Genres), Type: item.Type, Status: item.Status, ReleaseYear: item.ReleaseYear,
 			Rating: item.Rating, BestResolution: item.BestResolution, Genres: item.Genres,
 		})
 	}
 
 	return result, nil
+}
+
+func mediaShowcaseAccent(mediaType string, genres []string) string {
+	hasGenre := func(wanted ...string) bool {
+		for _, genre := range genres {
+			value := strings.ToLower(strings.TrimSpace(genre))
+			for _, term := range wanted {
+				if strings.Contains(value, strings.ToLower(term)) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+
+	if hasGenre("تركي", "turkish") {
+		return "amber"
+	}
+	if hasGenre("ديزني", "بيكسار", "كرتون", "رسوم متحركة", "family", "animation") {
+		return "cyan"
+	}
+	if hasGenre("أنمي", "anime", "ياباني", "japanese", "كوري", "korean") || strings.EqualFold(strings.TrimSpace(mediaType), "anime") {
+		return "rose"
+	}
+	if hasGenre("عربي", "مصري", "arabic") {
+		return "emerald"
+	}
+	switch strings.ToLower(strings.TrimSpace(mediaType)) {
+	case "documentary":
+		return "cyan"
+	case "play":
+		return "violet"
+	case "series":
+		return "emerald"
+	case "movie":
+		return "violet"
+	default:
+		return "violet"
+	}
 }
 
 func (r *Repository) UpdateMediaMetadata(ctx context.Context, id int64, meta metadata.Result) (*search.MediaDocument, error) {
@@ -576,4 +615,3 @@ func firstNonEmptyLocale(locale string) string {
 	}
 	return locale
 }
-

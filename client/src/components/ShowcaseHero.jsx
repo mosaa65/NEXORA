@@ -39,8 +39,30 @@ function fallbackSlides(items) {
     release_year: item.year,
     rating: item.rating,
     best_resolution: item.bestResolution,
+    genres: item.genres || [],
   }));
   return itemSlides.length ? itemSlides : DEFAULT_FALLBACK_SLIDES;
+}
+
+function accentForSlide(slide) {
+  if (slide.kind === "fallback" || slide.kind === "collection") {
+    return slide.accent || "violet";
+  }
+
+  const genres = (slide.genres || []).join(" ").toLowerCase();
+  if (genres.includes("تركي") || genres.includes("turkish")) return "amber";
+  if (genres.includes("أنمي") || genres.includes("anime") || genres.includes("ياباني") || genres.includes("كوري")) return "rose";
+  if (genres.includes("عربي") || genres.includes("مصري") || genres.includes("arabic")) return "emerald";
+  if (genres.includes("كرتون") || genres.includes("ديزني") || genres.includes("بيكسار") || genres.includes("animation")) return "cyan";
+
+  switch (slide.type) {
+    case "series": return "emerald";
+    case "anime": return "rose";
+    case "documentary": return "cyan";
+    case "play": return "violet";
+    case "movie": return "cyan";
+    default: return slide.accent || "violet";
+  }
 }
 
 function factsFor(slide) {
@@ -76,7 +98,7 @@ export default function ShowcaseHero({ context = "home", category, fallbackItems
 
   useEffect(() => {
     if (slides.length < 2 || paused || reduceMotion) return undefined;
-    const timer = window.setInterval(() => setActive((value) => (value + 1) % slides.length), 4000);
+    const timer = window.setInterval(() => setActive((value) => (value + 1) % slides.length), 6000);
     return () => window.clearInterval(timer);
   }, [slides.length, paused, reduceMotion]);
 
@@ -86,7 +108,7 @@ export default function ShowcaseHero({ context = "home", category, fallbackItems
   const englishOnly = !current.title_ar && current.title_en;
   const description = current.description_ar || current.description_en || "مختارات من مكتبتك المحلية، جاهزة للاستكشاف.";
   const artwork = resolveAPIURL(current.artwork_path) || "/nexora-library-backdrop.PNG";
-  const accent = accents[current.accent] || accents.violet;
+  const accent = accents[accentForSlide(current)] || accents.violet;
   const facts = factsFor(current);
   const isCollection = current.kind === "collection";
 

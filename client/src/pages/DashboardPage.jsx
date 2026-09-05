@@ -225,7 +225,7 @@ export default function DashboardPage({
         <div className="relative">
         <div ref={topRatedRef} className="flex items-stretch gap-4 overflow-x-auto px-12 pb-5 pt-3 scrollbar-none snap-x">
           {topRatedList.map((media) => (
-            <div key={media.id} className="w-[calc((100vw-3.75rem)/2)] shrink-0 snap-start sm:w-56 lg:w-60">
+            <div key={media.id} className="w-[max(168px,calc((100vw-4rem)/2))] shrink-0 snap-start sm:w-56 lg:w-60">
               <UnifiedMediaCard
                 media={media}
                 onOpen={onOpenMedia}
@@ -254,7 +254,7 @@ export default function DashboardPage({
         <div className="relative">
         <div ref={seriesRef} className="flex items-stretch gap-4 overflow-x-auto px-12 pb-5 pt-3 scrollbar-none snap-x">
           {seriesList.map((media) => (
-            <div key={media.id} className="w-[calc((100vw-3.75rem)/2)] shrink-0 snap-start sm:w-56 lg:w-60">
+            <div key={media.id} className="w-[max(168px,calc((100vw-4rem)/2))] shrink-0 snap-start sm:w-56 lg:w-60">
               <UnifiedMediaCard
                 media={media}
                 onOpen={onOpenMedia}
@@ -283,7 +283,7 @@ export default function DashboardPage({
         <div className="relative">
         <div ref={moviesRef} className="flex items-stretch gap-4 overflow-x-auto px-12 pb-5 pt-3 scrollbar-none snap-x">
           {moviesList.map((media) => (
-            <div key={media.id} className="w-[calc((100vw-3.75rem)/2)] shrink-0 snap-start sm:w-56 lg:w-60">
+            <div key={media.id} className="w-[max(168px,calc((100vw-4rem)/2))] shrink-0 snap-start sm:w-56 lg:w-60">
               <UnifiedMediaCard
                 media={media}
                 onOpen={onOpenMedia}
