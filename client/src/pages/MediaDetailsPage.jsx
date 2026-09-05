@@ -5,51 +5,14 @@ import { horizontalWheel } from "../lib/horizontalScroll.js";
 
 const hasArabicText = (value) => /[\u0600-\u06FF]/.test(value || "");
 
-function getContentRatingInfo(rating) {
-  if (!rating) return null;
-  const key = String(rating).trim().toUpperCase();
-  if (["G", "TV-G", "TV-Y", "ALL"].includes(key)) {
-    return {
-      label: key,
-      desc: "مناسب لجميع الأعمار (عائلي)",
-      badgeClass: "border-emerald-400/40 bg-emerald-950/70 text-emerald-200",
-    };
-  }
-  if (["PG", "TV-PG", "TV-Y7"].includes(key)) {
-    return {
-      label: key,
-      desc: "إشراف عائلي موصى به",
-      badgeClass: "border-sky-400/40 bg-sky-950/70 text-sky-200",
-    };
-  }
-  if (["PG-13", "TV-14", "13+", "12"].includes(key)) {
-    return {
-      label: key,
-      desc: "غير مناسب لمن هم دون 13 عاماً",
-      badgeClass: "border-amber-400/40 bg-amber-950/70 text-amber-200",
-    };
-  }
-  if (["R", "TV-MA", "NC-17", "18+", "18", "MA"].includes(key)) {
-    return {
-      label: key,
-      desc: "للبالغين فقط (+18)",
-      badgeClass: "border-rose-500/40 bg-rose-950/80 text-rose-200",
-    };
-  }
-  return {
-    label: key,
-    desc: `تصنيف عمري: ${key}`,
-    badgeClass: "border-white/20 bg-white/10 text-white/90",
-  };
-}
-
 export default function MediaDetailsPage({
   media,
+  searchQuery = "",
+  onSearchChange = () => {},
   onOpenCategory,
-  onQuickPlay,
+  onQuickPlay
 }) {
   const [detail, setDetail] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [selectedSeasonIdx, setSelectedSeasonIdx] = useState(0);
   const [isEnriching, setIsEnriching] = useState(false);
   const [enrichMsg, setEnrichMsg] = useState("");
@@ -59,10 +22,25 @@ export default function MediaDetailsPage({
   const [englishSeasonSnapshots, setEnglishSeasonSnapshots] = useState([]);
   const [selectedMetadataSeason, setSelectedMetadataSeason] = useState(0);
 
+  const current = detail || media || {
+    id: 1,
+    titleAr: "هجوم العمالقة",
+    titleEn: "Attack on Titan",
+    year: 2013,
+    resolution: "1080p",
+    duration: "24 دقيقة",
+    rating: 9.0,
+    views: "2.3M",
+    plot: "منذ مائة عام، ظهرت العمالقة فجأة ودمرت معظم البشرية. يعيش الباقون في عالم محاط بأسوار ضخمة لحمايتهم من العمالقة... عندما يُخترق السور الأول، يبدأ إيرين غيغار رحلة الانتقام والبحث عن الحقيقة.",
+    posterPath: "/nexora-poster-placeholder.PNG",
+    bannerPath: "/nexora-library-backdrop.PNG",
+    highlights: ["خيال مظلم", "دراما", "أكشن"],
+    seasons: []
+  };
+
   useEffect(() => {
     let alive = true;
     if (media?.id) {
-      setLoading(true);
       getMediaDetail(media.id)
         .then((data) => {
           if (!alive) return;
@@ -70,35 +48,24 @@ export default function MediaDetailsPage({
             setDetail({
               id: data.id,
               titleAr: hasArabicText(data.title_ar) ? data.title_ar : (hasArabicText(media.titleAr) ? media.titleAr : ""),
-              titleEn: data.title_en || media.titleEn || "",
-              type: data.type || media.type || "movie",
-              year: data.release_year || media.year || 2024,
-              rating: data.rating || media.rating || 0,
-              contentRating: data.content_rating || data.contentRating || media.contentRating || media.content_rating || "",
-              plot: hasArabicText(data.plot_ar) ? data.plot_ar : (data.plot_en || media.plot || "عمل سينمائي متاح في مكتبة NEXORA المحلية."),
+              titleEn: data.title_en || media.titleEn,
+              type: data.type || media.type,
+              year: data.release_year || media.year || 2023,
+              rating: data.rating || media.rating || 8.5,
+              plot: hasArabicText(data.plot_ar) ? data.plot_ar : (data.plot_en || media.plot || "عمل سينمائي مميز متاح في مكتبة NEXORA المحلية."),
               posterPath: data.poster_path || media.posterPath,
               bannerPath: data.banner_path || media.bannerPath,
-              categorySlug: data.category_slug || media.categorySlug || "movies",
-              highlights: data.genres?.length > 0 ? data.genres : [],
+              categorySlug: data.category_slug || media.categorySlug,
+              highlights: data.genres?.length > 0 ? data.genres : ["دراما", "أكشن", "إثارة"],
               seasons: data.seasons || [],
-              files: data.files || [],
-              hasArabicAudio: data.has_arabic_audio,
-              hasArabicSubtitles: data.has_arabic_subtitles,
+              files: data.files || []
             });
-          } else {
-            setDetail(null);
           }
         })
-        .catch(() => {
-          if (alive) setDetail(null);
-        })
-        .finally(() => {
-          if (alive) setLoading(false);
-        });
-
+        .catch(() => {});
       Promise.allSettled([
         getMediaMetadataSnapshot(media.id, "ar-SA"),
-        getMediaMetadataSnapshot(media.id, "en-US"),
+        getMediaMetadataSnapshot(media.id, "en-US")
       ]).then(([arabicSnapshot, englishSnapshot]) => {
         if (!alive) return;
         const arabicPayload = arabicSnapshot.status === "fulfilled" ? arabicSnapshot.value?.payload : null;
@@ -106,23 +73,20 @@ export default function MediaDetailsPage({
         setTmdb(arabicPayload || englishPayload || null);
         setTmdbEnglish(englishPayload || null);
       });
-
       Promise.allSettled([
         getMediaSeasonMetadata(media.id, "ar-SA"),
-        getMediaSeasonMetadata(media.id, "en-US"),
+        getMediaSeasonMetadata(media.id, "en-US")
       ]).then(([arabicSeasons, englishSeasons]) => {
         if (!alive) return;
         setSeasonSnapshots(arabicSeasons.status === "fulfilled" ? arabicSeasons.value?.items || [] : []);
         setEnglishSeasonSnapshots(englishSeasons.status === "fulfilled" ? englishSeasons.value?.items || [] : []);
       });
-    } else {
-      setLoading(false);
     }
 
     return () => {
       alive = false;
     };
-  }, [media?.id]);
+  }, [media]);
 
   async function handleEnrichMetadata() {
     if (!current?.id) return;
@@ -144,11 +108,11 @@ export default function MediaDetailsPage({
           year: english.releaseYear || prev.year,
           posterPath: english.cachedPosterPath || english.posterPath || prev.posterPath,
           bannerPath: english.cachedBannerPath || english.bannerPath || prev.bannerPath,
-          highlights: arabic?.genres?.length > 0 ? arabic.genres : (english.genres?.length > 0 ? english.genres : prev.highlights),
+          highlights: arabic?.genres?.length > 0 ? arabic.genres : (english.genres?.length > 0 ? english.genres : prev.highlights)
         }));
         Promise.allSettled([
           getMediaMetadataSnapshot(current.id, "ar-SA"),
-          getMediaMetadataSnapshot(current.id, "en-US"),
+          getMediaMetadataSnapshot(current.id, "en-US")
         ]).then(([arabicSnapshot, englishSnapshot]) => {
           const arabicPayload = arabicSnapshot.status === "fulfilled" ? arabicSnapshot.value?.payload : null;
           const englishPayload = englishSnapshot.status === "fulfilled" ? englishSnapshot.value?.payload : null;
@@ -157,7 +121,7 @@ export default function MediaDetailsPage({
         });
         Promise.allSettled([
           getMediaSeasonMetadata(current.id, "ar-SA"),
-          getMediaSeasonMetadata(current.id, "en-US"),
+          getMediaSeasonMetadata(current.id, "en-US")
         ]).then(([arabicSeasons, englishSeasons]) => {
           setSeasonSnapshots(arabicSeasons.status === "fulfilled" ? arabicSeasons.value?.items || [] : []);
           setEnglishSeasonSnapshots(englishSeasons.status === "fulfilled" ? englishSeasons.value?.items || [] : []);
@@ -178,385 +142,199 @@ export default function MediaDetailsPage({
     }
   }
 
-  if (loading) {
-    return (
-      <div className="space-y-6 text-right animate-pulse pb-16" dir="rtl">
-        <div className="flex items-center justify-between gap-4 pb-2">
-          <button
-            type="button"
-            onClick={() => {
-              if (window.history.length > 1) {
-                window.history.back();
-              } else {
-                window.location.hash = "#/";
-              }
-            }}
-            className="group inline-flex items-center gap-2.5 rounded-full border border-[var(--border-default)] bg-[var(--bg-card)] px-5 py-2.5 text-xs font-bold text-[var(--text-primary)] shadow-[var(--shadow-md)] backdrop-blur-xl"
-          >
-            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--bg-elevated)] text-[var(--text-primary)]">‹</span>
-            <span>العودة</span>
-          </button>
-        </div>
-        <div className="h-96 rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] flex items-center justify-center">
-          <div className="text-center space-y-3">
-            <div className="w-10 h-10 border-4 border-fuchsia-500/30 border-t-fuchsia-500 rounded-full animate-spin mx-auto" />
-            <p className="text-xs text-[var(--text-muted)]">جارٍ جلب تفاصيل العمل من المكتبة...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!detail) {
-    return (
-      <div className="space-y-6 text-right pb-16" dir="rtl">
-        <div className="flex items-center justify-between gap-4 pb-2">
-          <button
-            type="button"
-            onClick={() => {
-              if (window.history.length > 1) {
-                window.history.back();
-              } else {
-                window.location.hash = "#/";
-              }
-            }}
-            className="group inline-flex items-center gap-2.5 rounded-full border border-[var(--border-default)] bg-[var(--bg-card)] hover:bg-[var(--bg-elevated)] px-5 py-2.5 text-xs font-bold text-[var(--text-primary)] shadow-[var(--shadow-md)] backdrop-blur-xl transition"
-          >
-            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--bg-elevated)] text-[var(--text-primary)]">‹</span>
-            <span>العودة</span>
-          </button>
-        </div>
-        <div className="p-16 rounded-3xl border border-dashed border-[var(--border-default)] bg-[var(--bg-card)] text-center space-y-3">
-          <span className="text-4xl">🎬</span>
-          <h2 className="text-lg font-bold text-[var(--text-primary)]">لم يتم العثور على العمل المطلوب</h2>
-          <p className="text-xs text-[var(--text-muted)] max-w-sm mx-auto">
-            قد يكون هذا العمل قد تم حذفه أو نقله من مجلدات المكتبة.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  const current = detail;
   const seasonsList = current.seasons && current.seasons.length > 0 ? current.seasons : [];
   const currentSeason = seasonsList[selectedSeasonIdx] || seasonsList[0];
   const activeEpisodes = currentSeason?.episodes || current.files || [];
   const cast = tmdb?.aggregate_credits?.cast || tmdb?.credits?.cast || [];
   const englishCastByID = new Map((tmdbEnglish?.aggregate_credits?.cast || tmdbEnglish?.credits?.cast || []).map((person) => [person.id, person]));
-  const trailers = [...(tmdb?.videos?.results || []), ...(tmdbEnglish?.videos?.results || [])].filter(
-    (video, index, videos) => String(video.site || "").toLowerCase() === "youtube" && video.key && videos.findIndex((item) => item.key === video.key) === index
-  );
+  const trailers = [...(tmdb?.videos?.results || []), ...(tmdbEnglish?.videos?.results || [])]
+    .filter((video, index, videos) => String(video.site || "").toLowerCase() === "youtube" && video.key && videos.findIndex((item) => item.key === video.key) === index);
   const keywords = tmdb?.keywords?.keywords || tmdb?.keywords?.results || [];
   const related = tmdb?.recommendations?.results || tmdb?.similar?.results || [];
   const englishRelatedByID = new Map([...(tmdbEnglish?.recommendations?.results || []), ...(tmdbEnglish?.similar?.results || [])].map((item) => [item.id, item]));
+  const alternativeTitles = tmdb?.alternative_titles?.titles || [];
+  const reviews = tmdb?.reviews?.results || [];
+  const translations = tmdb?.translations?.translations || [];
+  const releaseCountry = (tmdb?.release_dates?.results || []).find((entry) => entry.iso_3166_1 === "SA") || (tmdb?.release_dates?.results || [])[0];
+  const providerResults = tmdb?.watch_providers?.results || {};
+  const providerRegion = providerResults.SA || providerResults.US || Object.values(providerResults)[0];
+  const providers = [
+    ...(providerRegion?.flatrate || []), ...(providerRegion?.free || []), ...(providerRegion?.ads || []), ...(providerRegion?.rent || []), ...(providerRegion?.buy || [])
+  ].filter((provider, index, list) => list.findIndex((item) => item.provider_id === provider.provider_id) === index);
   const crew = tmdb?.credits?.crew || tmdb?.aggregate_credits?.crew || [];
   const imageGallery = [
     ...(tmdbEnglish?.images?.backdrops || tmdb?.images?.backdrops || []).map((image) => ({ ...image, kind: "backdrop", localPath: image.local_backdrop_path })),
     ...(tmdbEnglish?.images?.posters || tmdb?.images?.posters || []).map((image) => ({ ...image, kind: "poster", localPath: image.local_poster_path })),
-    ...(tmdbEnglish?.images?.logos || tmdb?.images?.logos || []).map((image) => ({ ...image, kind: "logo", localPath: image.local_logo_path })),
+    ...(tmdbEnglish?.images?.logos || tmdb?.images?.logos || []).map((image) => ({ ...image, kind: "logo", localPath: image.local_logo_path }))
   ];
   const productionCompanies = tmdb?.production_companies || tmdbEnglish?.production_companies || [];
-  const networks = tmdb?.networks || tmdbEnglish?.networks || [];
-  const createdBy = tmdb?.created_by || tmdbEnglish?.created_by || [];
-  const tagline = tmdb?.tagline || tmdbEnglish?.tagline || "";
-  const originalTitle = tmdb?.original_title || tmdb?.original_name || tmdbEnglish?.original_title || tmdbEnglish?.original_name || "";
-  const imdbId = tmdb?.imdb_id || tmdb?.external_ids?.imdb_id || tmdbEnglish?.imdb_id || tmdbEnglish?.external_ids?.imdb_id || "";
   const productionCountries = tmdb?.production_countries || tmdbEnglish?.production_countries || [];
   const spokenLanguages = tmdb?.spoken_languages || tmdbEnglish?.spoken_languages || [];
   const collection = tmdb?.belongs_to_collection || tmdbEnglish?.belongs_to_collection;
+  const publicLists = tmdb?.lists?.results || tmdbEnglish?.lists?.results || [];
   const localizedSeasons = seasonSnapshots.map((snapshot) => snapshot.payload || {}).filter((season) => season.season_number !== undefined);
   const englishSeasonsByNumber = new Map(englishSeasonSnapshots.map((snapshot) => [snapshot.seasonNumber, snapshot.payload || {}]));
   const selectedRemoteSeason = localizedSeasons[selectedMetadataSeason] || localizedSeasons[0];
   const englishSelectedRemoteSeason = selectedRemoteSeason ? englishSeasonsByNumber.get(selectedRemoteSeason.season_number) : null;
   const remoteEpisodes = selectedRemoteSeason?.episodes || [];
   const englishEpisodesByNumber = new Map((englishSelectedRemoteSeason?.episodes || []).map((episode) => [episode.episode_number, episode]));
-  const contentRating = current.contentRating || current.content_rating || tmdb?.content_rating || "";
-  const ratingInfo = getContentRatingInfo(contentRating);
+  const infoFields = [
+    ["العنوان الأصلي", tmdb?.original_title || tmdb?.original_name || tmdbEnglish?.original_title || tmdbEnglish?.original_name], ["الشعار", tmdb?.tagline || tmdbEnglish?.tagline], ["الحالة", tmdb?.status || tmdbEnglish?.status], ["اللغة الأصلية", tmdb?.original_language || tmdbEnglish?.original_language],
+    ["تاريخ الإصدار", tmdb?.release_date || tmdbEnglish?.release_date || tmdb?.first_air_date || tmdbEnglish?.first_air_date], ["مدة الفيلم", (tmdb?.runtime || tmdbEnglish?.runtime) ? `${tmdb?.runtime || tmdbEnglish?.runtime} دقيقة` : null], ["الميزانية", (tmdb?.budget || tmdbEnglish?.budget) ? `$${Number(tmdb?.budget || tmdbEnglish?.budget).toLocaleString("en-US")}` : null], ["الإيرادات", (tmdb?.revenue || tmdbEnglish?.revenue) ? `$${Number(tmdb?.revenue || tmdbEnglish?.revenue).toLocaleString("en-US")}` : null], ["الشعبية", tmdb?.popularity || tmdbEnglish?.popularity], ["عدد الأصوات", tmdb?.vote_count || tmdbEnglish?.vote_count], ["الموقع الرسمي", tmdb?.homepage || tmdbEnglish?.homepage]
+  ].filter(([, value]) => value);
   const posterURL = resolveAPIURL(current.posterPath) || "/nexora-poster-placeholder.PNG";
   const bannerURL = resolveAPIURL(current.bannerPath) || "/nexora-library-backdrop.PNG";
   const englishTitle = current.titleEn || current.titleAr || "Untitled";
   const arabicTitle = hasArabicText(current.titleAr) ? current.titleAr : "لا تتوفر ترجمة عربية لهذا العنوان";
-  const tmdbImageURL = (path, size = "w342") => (path ? `https://image.tmdb.org/t/p/${size}${path}` : "");
-
-  // Audio / Subtitles flags
-  const hasArAudio = current.hasArabicAudio || (current.highlights || []).some((h) => h.includes("مدبلج") || h.includes("دبلجة") || h.includes("سبيستون") || h.includes("عربي"));
-  const hasArSubs = current.hasArabicSubtitles || true; // NEXORA default subtitle engine
+  const tmdbImageURL = (path, size = "w342") => path ? `https://image.tmdb.org/t/p/${size}${path}` : "";
 
   return (
-    <div className="relative mx-auto max-w-[1500px] space-y-7 pb-16 text-right" dir="rtl">
-      {/* Navigation Top Action */}
-      <div className="flex flex-wrap items-center justify-between gap-3 pb-1">
+    <div className="relative space-y-6 text-right">
+      {/* Top Header Bar */}
+      <div className="flex items-center justify-between gap-4 border-b border-white/10 pb-4">
+        {/* Left: Back Button */}
         <button
           type="button"
-          onClick={() => {
-            if (window.history.length > 1) {
-              window.history.back();
-            } else {
-              window.location.hash = "#/";
-            }
-          }}
-          className="group inline-flex items-center gap-2.5 rounded-full border border-[var(--border-default)] bg-[var(--bg-card)] px-4 py-2 text-xs font-bold text-[var(--text-primary)] shadow-[var(--shadow-sm)] backdrop-blur-xl transition hover:border-[var(--color-accent)] hover:bg-[var(--bg-elevated)]"
+          onClick={() => onOpenCategory(current.categorySlug || "anime")}
+          className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-xs font-bold text-white backdrop-blur-md transition hover:bg-white/20"
         >
-          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--bg-elevated)] text-lg leading-none text-[var(--text-primary)] transition group-hover:bg-[var(--color-accent)] group-hover:text-white">‹</span>
-          <span>العودة</span>
+          العودة ‹
         </button>
 
-        {current.categorySlug && (
-          <button
-            type="button"
-            onClick={() => onOpenCategory && onOpenCategory(current.categorySlug)}
-            className="inline-flex items-center gap-2 rounded-full border border-[var(--border-default)] bg-[var(--bg-card)] px-3.5 py-1.5 text-[11px] font-semibold text-[var(--text-secondary)] shadow-[var(--shadow-sm)] transition hover:border-[var(--color-accent)] hover:text-[var(--text-primary)]"
-          >
-            <span>القسم</span>
-            <span className="font-black text-[var(--color-accent)]">
-              {current.categorySlug === "movies" ? "الأفلام السينمائية" : current.categorySlug === "series" ? "المسلسلات والدراما" : current.categorySlug === "anime" ? "الأنمي والرسوم اليابانية" : current.categorySlug === "kids" ? "الأطفال والكرتون" : current.categorySlug === "family" ? "العائلة والسينما العائلية" : current.categorySlug}
-            </span>
-          </button>
-        )}
-      </div>
-
-      {/* ========================================================================= */}
-      {/* 1. Main Hero Container (Vertically Centered Poster, Single Rating Badge, Full Plot on Mobile, Single-Row Responsive Buttons) */}
-      {/* ========================================================================= */}
-      <section className="luminous-hero relative overflow-hidden rounded-[26px] sm:rounded-[32px] bg-[#0c0a17] shadow-[0_30px_80px_rgba(10,8,22,0.9)] border border-[var(--border-default)]">
-        {/* Bright, Cinematic Clear Backdrop Artwork */}
-        <div
-          className="absolute inset-0 bg-cover bg-center transition-all duration-700 opacity-75 sm:opacity-80 scale-105"
-          style={{ backgroundImage: `url('${bannerURL}')` }}
-        />
-        {/* Balanced Cinematic Gradient */}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#0c0a17] via-[#0c0a17]/75 to-[#0c0a17]/40 sm:bg-[radial-gradient(ellipse_at_top_right,rgba(236,72,153,0.15),transparent_40%),linear-gradient(90deg,rgba(12,10,23,0.96)_0%,rgba(12,10,23,0.72)_50%,rgba(12,10,23,0.88)_100%)]" />
-
-        {/* Unified Responsive 2-Column Grid with Vertical Centering for Mobile & Desktop */}
-        <div className="relative z-10 grid grid-cols-[105px_1fr] sm:grid-cols-[180px_1fr] lg:grid-cols-[220px_1fr] gap-3.5 sm:gap-6 p-4 sm:p-6 lg:p-8 items-center">
-          {/* Vertically Centered Poster Column */}
-          <div className="luminous-card w-full self-center shrink-0 overflow-hidden rounded-[18px] sm:rounded-[24px] bg-black/40 shadow-[0_20px_50px_rgba(0,0,0,0.6)] border border-white/15 ring-1 ring-white/10">
-            <img
-              src={posterURL}
-              alt={englishTitle}
-              className="aspect-[2/3] w-full object-cover shadow-2xl"
-              onError={(e) => {
-                e.target.src = "/nexora-poster-placeholder.PNG";
-              }}
+        {/* Center: Search Input Bar */}
+        <div className="relative flex-1 max-w-sm">
+          <div className="flex w-full items-center gap-2.5 rounded-full border border-white/20 bg-black/40 px-4 py-2 backdrop-blur-sm focus-within:border-fuchsia-500/60">
+            <Icon name="search" className="h-4 w-4 text-white/60 shrink-0" />
+            <input
+              value={searchQuery}
+              onChange={(event) => onSearchChange(event.target.value)}
+              placeholder="ابحث عن أنمي، فيلم، مسلسل..."
+              className="w-full bg-transparent text-xs font-bold text-white outline-none placeholder:text-white/40 text-right"
             />
           </div>
+        </div>
 
-          {/* Details Column */}
-          <div className="flex flex-col justify-center gap-3 sm:gap-4 min-w-0">
-            <div className="space-y-1.5 sm:space-y-2.5">
-              {/* Titles Section */}
-              <div className="min-w-0">
-                <p dir="ltr" className="text-left text-lg font-black tracking-tight text-white sm:text-3xl lg:text-5xl drop-shadow-md truncate">
-                  {englishTitle}
-                </p>
-                <p className="mt-0.5 text-xs font-semibold text-white/95 sm:text-base drop-shadow-sm truncate">
-                  {arabicTitle}
-                </p>
-                {originalTitle && originalTitle !== englishTitle && originalTitle !== arabicTitle && (
-                  <p dir="ltr" className="mt-0.5 text-[10px] font-medium text-white/60 sm:text-xs text-left italic truncate">
-                    العنوان الأصلي: {originalTitle}
-                  </p>
-                )}
-                {tagline && (
-                  <p className="mt-1 text-[11px] sm:text-sm font-medium italic text-fuchsia-300/90">
-                    "{tagline}"
-                  </p>
-                )}
-              </div>
-
-              {/* Badges Row (Single Rating Badge Beside Genres, Year, Content Rating) */}
-              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-[10px] sm:text-[11px] font-bold text-white pt-0.5">
-                <span className="rounded-full bg-white/20 px-2 sm:px-2.5 py-0.5 sm:py-1 text-white shadow-sm">
-                  {current.year || 2024}
-                </span>
-
-                {/* Single Master Rating Badge */}
-                <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/50 bg-amber-500/25 px-2 sm:px-2.5 py-0.5 sm:py-1 font-black text-amber-300 shadow-sm">
-                  ★ {Number(current.rating || tmdb?.vote_average || 8.5).toFixed(1)}
-                </span>
-
-                {ratingInfo && (
-                  <span
-                    className={`rounded-full border px-2 sm:px-3 py-0.5 sm:py-1 text-[10px] sm:text-[11px] font-black tracking-wider shadow-sm ${ratingInfo.badgeClass}`}
-                    title={ratingInfo.desc}
-                  >
-                    {ratingInfo.label}
-                    <span className="mr-1 text-[9px] sm:text-[10px] font-medium opacity-85 hidden md:inline">({ratingInfo.desc})</span>
-                  </span>
-                )}
-
-                <span className="rounded-full bg-white/20 px-2 sm:px-2.5 py-0.5 sm:py-1 text-white shadow-sm">
-                  {current.type === "series" ? "مسلسل" : "فيلم"}
-                </span>
-
-                {(current.highlights || []).slice(0, 5).map((h) => (
-                  <span key={h} className="rounded-full border border-fuchsia-400/40 bg-fuchsia-500/25 px-2 sm:px-2.5 py-0.5 sm:py-1 text-fuchsia-100 font-bold shadow-sm">
-                    {h}
-                  </span>
-                ))}
-              </div>
-
-              {/* Plot Description - Fully visible on mobile and desktop without truncation */}
-              <p className="max-w-3xl text-xs leading-relaxed text-white/95 sm:text-[14px] sm:leading-7 drop-shadow">
-                {current.plot}
-              </p>
-            </div>
-
-            {/* Quick Action Buttons - Guaranteed Single Clean Row on Small Mobile */}
-            <div className="flex flex-nowrap items-center gap-1.5 sm:gap-3 pt-1 overflow-x-auto scrollbar-none">
-              <button
-                type="button"
-                onClick={() => onQuickPlay(current)}
-                className="inline-flex items-center gap-1.5 shrink-0 rounded-xl sm:rounded-2xl bg-gradient-to-r from-fuchsia-600 via-purple-600 to-violet-600 px-3 sm:px-5 py-2 sm:py-3 text-[11px] sm:text-xs font-black text-white shadow-md shadow-fuchsia-900/40 transition hover:brightness-110 active:scale-95 whitespace-nowrap"
-              >
-                <Icon name="play" className="h-3.5 w-3.5 fill-current text-white" />
-                <span>تشغيل الآن</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleEnrichMetadata}
-                disabled={isEnriching}
-                className="inline-flex items-center gap-1 shrink-0 rounded-xl sm:rounded-2xl border border-fuchsia-500/40 bg-fuchsia-950/50 px-2.5 sm:px-3.5 py-2 sm:py-3 text-[11px] sm:text-xs font-bold text-fuchsia-200 transition hover:bg-fuchsia-900/60 disabled:cursor-not-allowed disabled:opacity-60 whitespace-nowrap"
-              >
-                <span>✨</span>
-                <span>تحديث TMDB</span>
-              </button>
-
-              {imdbId && (
-                <a
-                  href={`https://www.imdb.com/title/${imdbId}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 shrink-0 rounded-xl sm:rounded-2xl border border-amber-400/40 bg-amber-950/40 px-2.5 sm:px-3 py-2 sm:py-3 text-[11px] sm:text-xs font-black text-amber-300 hover:bg-amber-900/50 transition whitespace-nowrap"
-                  title="صفحة IMDb"
-                >
-                  <span>IMDb</span>
-                  <span className="text-[9px]">↗</span>
-                </a>
-              )}
-            </div>
-
-            {enrichMsg && <p className="text-xs font-bold text-fuchsia-200">{enrichMsg}</p>}
+        {/* Right: Brand Emblem */}
+        <div className="flex items-center gap-3">
+          <div className="text-right">
+            <h2 className="text-lg font-black text-white">مكتبتي</h2>
+            <p className="text-[10px] font-bold text-white/50">نظام إدارة الوسائط</p>
+          </div>
+          <div className="flex items-center justify-center text-fuchsia-400">
+            <svg className="h-7 w-7 stroke-current" fill="none" viewBox="0 0 24 24" strokeWidth="2.2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 3L2 21h20L12 3z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9l-4 7h8l-4-7z" />
+            </svg>
           </div>
         </div>
-      </section>
+      </div>
 
-      {/* ========================================================================= */}
-      {/* 2. Priority 1: المقاطع الدعائية الرسمية (Official Trailers & Teasers) */}
-      {/* ========================================================================= */}
-      {trailers.length > 0 && (
-        <section className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4 sm:p-6 shadow-[var(--shadow-sm)]">
-          <div className="mb-4 flex items-center justify-between gap-3 border-b border-[var(--border-subtle)] pb-3">
-            <h2 className="text-base sm:text-lg font-black text-[var(--text-primary)] flex items-center gap-2.5">
-              <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-red-500/20 text-red-400 text-xs">▶</span>
-              المقاطع الدعائية الرسمية (Trailers)
-            </h2>
-            <span className="rounded-full bg-red-500/10 px-3 py-1 text-[11px] text-red-400 font-black border border-red-500/20">
-              YouTube • {trailers.length} مقاطع
-            </span>
+      {/* Main Details Showcase Banner */}
+      <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0B0A16] p-6 sm:p-8 lg:p-10 shadow-panel">
+        <div className="absolute inset-0 bg-cover bg-center opacity-40 transition-all duration-1000" style={{ backgroundImage: `url('${bannerURL}')` }} />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0B0A16] via-[#0B0A16]/80 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#0B0A16]/95 via-[#0B0A16]/60 to-transparent" />
+        <div className="relative z-10 grid gap-8 md:grid-cols-[auto_1fr] items-start">
+          <div className="w-48 sm:w-56 shrink-0 overflow-hidden rounded-2xl border-2 border-white/20 shadow-2xl shadow-purple-950/60 mx-auto md:mx-0"><img src={posterURL} alt={englishTitle} className="h-full w-full object-cover aspect-[2/3]" onError={(e) => { e.target.src = "/nexora-poster-placeholder.PNG"; }} /></div>
+          <div className="flex flex-col gap-4 text-right"><div><h1 dir="ltr" className="text-left text-3xl font-black text-white sm:text-4xl lg:text-5xl tracking-tight">{englishTitle}</h1><p className="mt-1 text-sm font-bold text-white/70 sm:text-base">{arabicTitle}</p></div><div className="flex flex-wrap items-center justify-end gap-2 text-xs font-bold text-white/80"><span className="rounded-md bg-white/10 px-2.5 py-1">{current.year || 2023}</span><span className="rounded-md bg-white/10 px-2.5 py-1">HD</span>{(current.highlights || []).map((h) => <span key={h} className="rounded-md border border-purple-500/30 bg-purple-950/40 px-2.5 py-1 text-fuchsia-300">{h}</span>)}<span className="text-yellow-400 font-extrabold">★ {Number(current.rating || 8.5).toFixed(1)}</span></div><p className="text-xs leading-relaxed text-white/75 sm:text-sm max-w-2xl">{current.plot}</p><div className="mt-2 flex flex-wrap items-center justify-end gap-3"><button type="button" onClick={() => onQuickPlay(current)} className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-fuchsia-600 via-purple-600 to-fuchsia-700 px-7 py-3 text-xs font-black text-white"><Icon name="play" className="h-4 w-4 text-white fill-current shrink-0" /><span>تشغيل الآن</span></button><button type="button" onClick={handleEnrichMetadata} disabled={isEnriching} className="inline-flex items-center gap-2 rounded-xl border border-fuchsia-500/40 bg-fuchsia-950/40 px-5 py-3 text-xs font-bold text-fuchsia-300 disabled:opacity-50"><span>✨ تحديث معلومات TMDB</span></button></div>{enrichMsg && <p className="text-xs font-bold text-fuchsia-300 animate-pulse">{enrichMsg}</p>}</div>
+        </div>
+      </div>
+
+      {tmdb && (
+        <section className="grid gap-4 lg:grid-cols-2" aria-label="تفاصيل TMDB المحلية">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+            <h2 className="text-lg font-black text-white">تفاصيل العمل</h2>
+            <dl className="mt-4 grid grid-cols-2 gap-x-5 gap-y-3 text-xs">
+              {[["الحالة", tmdb.status], ["اللغة الأصلية", tmdb.original_language], ["المدة", tmdb.runtime ? `${tmdb.runtime} دقيقة` : null], ["عدد الحلقات", tmdb.number_of_episodes], ["عدد المواسم", tmdb.number_of_seasons], ["التقييمات", tmdb.vote_count]].filter(([, value]) => value).map(([label, value]) => (
+                <div key={label} className="border-b border-white/5 pb-2"><dt className="text-white/45">{label}</dt><dd className="mt-1 font-bold text-white">{value}</dd></div>
+              ))}
+            </dl>
+            {keywords.length > 0 && <div className="mt-5 flex flex-wrap gap-2">{keywords.slice(0, 12).map((keyword) => <span key={keyword.id || keyword.name} className="rounded-full bg-cyan-400/10 px-3 py-1 text-[11px] font-bold text-cyan-200">#{keyword.name}</span>)}</div>}
           </div>
-
-          <div onWheel={horizontalWheel} className="flex gap-3.5 overflow-x-auto pb-2 scrollbar-thin">
-            {trailers.slice(0, 5).map((video) => (
-              <article key={video.id || video.key} className="w-[260px] sm:w-[320px] shrink-0 overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)] shadow-sm">
-                <div className="aspect-video bg-black">
-                  <iframe
-                    className="h-full w-full"
-                    src={`https://www.youtube-nocookie.com/embed/${encodeURIComponent(video.key)}?rel=0`}
-                    title={video.name || "YouTube trailer"}
-                    loading="lazy"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                    allowFullScreen
-                  />
-                </div>
-                <div className="p-2.5">
-                  <p className="truncate text-xs font-bold text-[var(--text-primary)]">{video.name || "المقطع الدعائي"}</p>
-                  <p className="mt-0.5 text-[10px] text-[var(--text-muted)]">{video.type || "Trailer"} • جودة عالية</p>
-                </div>
-              </article>
-            ))}
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+            <h2 className="text-lg font-black text-white">المقاطع الدعائية</h2>
+            <p className="mt-1 text-xs leading-6 text-white/45">تشغّل داخل NEXORA من YouTube، وليست ملفات الفيديو المحلية في المكتبة.</p>
+            <div onWheel={horizontalWheel} className="mt-4 flex gap-3 overflow-x-auto pb-2">{trailers.slice(0, 8).map((video) => <article key={video.id || video.key} className="w-72 shrink-0 overflow-hidden rounded-xl border border-fuchsia-400/20 bg-black"><div className="aspect-video"><iframe className="h-full w-full" src={`https://www.youtube-nocookie.com/embed/${encodeURIComponent(video.key)}?rel=0`} title={video.name || "YouTube trailer"} loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen /></div><p className="truncate px-3 py-2 text-xs font-bold text-white">{video.name || "المقطع الدعائي"} <span className="text-white/45">({video.type})</span></p></article>)}{trailers.length === 0 && <p className="mt-4 text-sm text-white/45">لا توجد مقاطع YouTube متاحة لهذا العمل في TMDB.</p>}</div>
           </div>
         </section>
       )}
 
-      {/* ========================================================================= */}
-      {/* 3. Priority 2: الأجزاء والمواسم والحلقات (Seasons & Compact Episodes List) */}
-      {/* ========================================================================= */}
-      {/* Local Video Files / Seasons */}
+      {cast.length > 0 && <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5"><h2 className="text-lg font-black text-white">طاقم العمل</h2><div onWheel={horizontalWheel} className="mt-4 flex gap-3 overflow-x-auto pb-2">{cast.slice(0, 20).map((person) => { const englishPerson = englishCastByID.get(person.id); const profileURL = resolveAPIURL(englishPerson?.local_profile_path || person.local_profile_path) || tmdbImageURL(person.profile_path || englishPerson?.profile_path, "w185"); return <article key={person.id} className="w-28 shrink-0 overflow-hidden rounded-xl border border-white/5 bg-black/20"><div className="aspect-[4/5] bg-white/5">{profileURL ? <img src={profileURL} alt={person.name} className="h-full w-full object-cover" loading="lazy" /> : <div className="flex h-full items-center justify-center text-3xl text-white/25">♙</div>}</div><div className="p-2"><p className="truncate text-xs font-bold text-white">{person.name}</p><p className="mt-1 truncate text-[10px] text-white/45">{person.character || person.roles?.[0]?.character || "طاقم العمل"}</p></div></article>; })}</div></section>}
+
+      {related.length > 0 && <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5"><h2 className="text-lg font-black text-white">قد يعجبك أيضاً</h2><div onWheel={horizontalWheel} className="mt-4 flex gap-3 overflow-x-auto pb-2">{related.slice(0, 12).map((item) => { const englishItem = englishRelatedByID.get(item.id); const titleEN = englishItem?.title || englishItem?.name || item.original_title || item.original_name || item.title || item.name; const titleAR = hasArabicText(item.title || item.name) ? (item.title || item.name) : "لا تتوفر ترجمة عربية"; const relatedPoster = resolveAPIURL(englishItem?.local_poster_path || item.local_poster_path) || tmdbImageURL(item.poster_path || englishItem?.poster_path); return <article key={item.id} className="w-40 shrink-0 overflow-hidden rounded-xl border border-white/5 bg-black/20"><div className="aspect-[2/3] bg-white/5">{relatedPoster ? <img src={relatedPoster} alt={titleEN} className="h-full w-full object-cover" loading="lazy" /> : <div className="flex h-full items-center justify-center text-xs text-white/35">لا توجد صورة</div>}</div><div className="p-3"><p dir="ltr" className="line-clamp-2 text-left text-xs font-bold text-white">{titleEN}</p><p className="mt-1 line-clamp-2 text-xs text-white/55">{titleAR}</p><p className="mt-2 text-xs text-yellow-300">★ {Number(item.vote_average || englishItem?.vote_average || 0).toFixed(1)}</p></div></article>; })}</div></section>}
+
+      {imageGallery.length > 0 && <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5"><h2 className="text-lg font-black text-white">معرض الصور</h2><p className="mt-1 text-xs text-white/45">بوسترات وخلفيات وشعارات العمل المحفوظة محلياً عند توفرها.</p><div onWheel={horizontalWheel} className="mt-4 flex gap-3 overflow-x-auto pb-2">{imageGallery.map((image, index) => { const imageURL = resolveAPIURL(image.localPath) || tmdbImageURL(image.file_path, image.kind === "poster" ? "w342" : "w780"); return <figure key={`${image.file_path}-${index}`} className={`shrink-0 overflow-hidden rounded-xl border border-white/10 bg-black/30 ${image.kind === "poster" ? "w-28" : image.kind === "logo" ? "w-48" : "w-64"}`}><div className={image.kind === "poster" ? "aspect-[2/3]" : "aspect-video"}>{imageURL ? <img src={imageURL} alt={`${image.kind} ${index + 1}`} className="h-full w-full object-cover" loading="lazy" /> : null}</div><figcaption className="px-2 py-1.5 text-[10px] text-white/45">{image.kind === "poster" ? "بوستر" : image.kind === "logo" ? "شعار" : "خلفية"}</figcaption></figure>; })}</div></section>}
+
+      {crew.length > 0 && <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5"><h2 className="text-lg font-black text-white">فريق الإنتاج</h2><div onWheel={horizontalWheel} className="mt-4 flex gap-3 overflow-x-auto pb-2">{crew.slice(0, 30).map((person, index) => <article key={`${person.credit_id || person.id}-${index}`} className="w-36 shrink-0 rounded-xl border border-white/5 bg-black/20 p-3"><p className="truncate text-xs font-bold text-white">{person.name}</p><p className="mt-1 line-clamp-2 text-[11px] text-fuchsia-200">{person.job || person.jobs?.[0]?.job || person.department || "فريق الإنتاج"}</p></article>)}</div></section>}
+
+      {(collection || publicLists.length > 0) && <section className="grid gap-4 lg:grid-cols-2"><div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5"><h2 className="text-lg font-black text-white">السلسلة</h2>{collection ? <div className="mt-4 flex items-center gap-3"><div className="h-16 w-12 shrink-0 overflow-hidden rounded-lg bg-white/5">{collection.poster_path && <img src={tmdbImageURL(collection.poster_path)} alt={collection.name} className="h-full w-full object-cover" loading="lazy" />}</div><p className="text-sm font-bold text-white">{collection.name}</p></div> : <p className="mt-4 text-sm text-white/45">ليس ضمن سلسلة مسجلة في TMDB.</p>}</div><div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5"><h2 className="text-lg font-black text-white">القوائم العامة</h2>{publicLists.length > 0 ? <div className="mt-4 flex flex-wrap gap-2">{publicLists.map((list) => <span key={list.id} className="rounded-lg bg-white/5 px-3 py-1.5 text-xs text-white/75">{list.name}</span>)}</div> : <p className="mt-4 text-sm text-white/45">لا توجد قوائم عامة مرتبطة بهذا العمل.</p>}</div></section>}
+
+      {tmdb && <section className="grid gap-4 xl:grid-cols-3">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 xl:col-span-2">
+          <h2 className="text-lg font-black text-white">بيانات الفيلم الموسّعة</h2>
+          <dl className="mt-4 grid gap-x-6 gap-y-3 text-xs sm:grid-cols-2">{infoFields.map(([label, value]) => <div key={label} className="border-b border-white/5 pb-2"><dt className="text-white/45">{label}</dt><dd className="mt-1 break-words font-bold text-white">{value}</dd></div>)}</dl>
+          {productionCompanies.length > 0 && <p className="mt-5 text-xs text-white/65"><span className="text-white/45">شركات الإنتاج: </span>{productionCompanies.map((company) => company.name).join("، ")}</p>}
+          {productionCountries.length > 0 && <p className="mt-2 text-xs text-white/65"><span className="text-white/45">بلد الإنتاج: </span>{productionCountries.map((country) => country.name).join("، ")}</p>}
+          {spokenLanguages.length > 0 && <p className="mt-2 text-xs text-white/65"><span className="text-white/45">لغات الحوار: </span>{spokenLanguages.map((language) => language.name || language.english_name || language.iso_639_1).join("، ")}</p>}
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5"><h2 className="text-lg font-black text-white">الإصدارات والتصنيف</h2>{releaseCountry ? <div className="mt-4 space-y-2 text-xs text-white/70"><p>المنطقة: <span className="font-bold text-white">{releaseCountry.iso_3166_1}</span></p>{releaseCountry.release_dates?.slice(0, 3).map((release, index) => <p key={`${release.release_date}-${index}`}>{release.release_date?.slice(0, 10)} {release.certification && <span className="mr-2 rounded bg-white/10 px-1.5 py-0.5">{release.certification}</span>}</p>)}</div> : <p className="mt-4 text-sm text-white/45">لا توجد بيانات إصدار محلية لهذا العمل.</p>}</div>
+      </section>}
+
+      {tmdb && <section className="grid gap-4 lg:grid-cols-2">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5"><h2 className="text-lg font-black text-white">العناوين والترجمات</h2>{alternativeTitles.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{alternativeTitles.slice(0, 16).map((title, index) => <span key={`${title.title}-${index}`} className="rounded-lg bg-white/5 px-3 py-1.5 text-xs text-white/80">{title.title} <span className="text-white/40">{title.iso_3166_1}</span></span>)}</div>}<p className="mt-4 text-xs text-white/50">الترجمات المتاحة في TMDB: {translations.length || 0}</p>{translations.length > 0 && <p className="mt-2 line-clamp-2 text-xs text-white/70">{translations.slice(0, 14).map((translation) => translation.name || translation.english_name || translation.iso_639_1).join("، ")}</p>}</div>
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5"><h2 className="text-lg font-black text-white">المعرّفات الخارجية</h2><div className="mt-4 space-y-2 text-xs">{tmdb?.external_ids?.imdb_id && <a className="block text-cyan-300 hover:text-cyan-100" target="_blank" rel="noreferrer" href={`https://www.imdb.com/title/${tmdb.external_ids.imdb_id}/`}>IMDB: {tmdb.external_ids.imdb_id} ↗</a>}{Object.entries(tmdb?.external_ids || {}).filter(([key, value]) => value && key !== "imdb_id" && key !== "id").slice(0, 8).map(([key, value]) => <p key={key} className="break-all text-white/70">{key}: {String(value)}</p>)}</div></div>
+      </section>}
+
+      {providers.length > 0 && <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5"><h2 className="text-lg font-black text-white">أماكن المشاهدة المتاحة</h2><p className="mt-1 text-xs text-white/45">بيانات مزود المشاهدة مقدمة من JustWatch.</p><div className="mt-4 flex flex-wrap gap-2">{providers.map((provider) => <span key={provider.provider_id} className="rounded-lg bg-white/5 px-3 py-1.5 text-xs font-bold text-white/80">{provider.provider_name}</span>)}</div>{providerRegion?.link && <a href={providerRegion.link} target="_blank" rel="noreferrer" className="mt-4 inline-block text-xs font-bold text-cyan-300 hover:text-cyan-100">عرض عبر JustWatch ↗</a>}</section>}
+
+      {reviews.length > 0 && <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5"><h2 className="text-lg font-black text-white">مراجعات الجمهور</h2><div className="mt-4 grid gap-3 lg:grid-cols-2">{reviews.slice(0, 4).map((review) => <article key={review.id} className="rounded-xl border border-white/5 bg-black/20 p-4"><p className="text-xs font-bold text-fuchsia-200">{review.author_details?.name || review.author || "مستخدم TMDB"}</p><p className="mt-2 line-clamp-4 text-xs leading-6 text-white/70">{review.content}</p>{review.url && <a href={review.url} target="_blank" rel="noreferrer" className="mt-3 inline-block text-[11px] text-cyan-300">المراجعة الكاملة ↗</a>}</article>)}</div></section>}
+
+      {localizedSeasons.length > 0 && <section className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.03] p-5"><div><h2 className="text-lg font-black text-white">مواسم وحلقات TMDB</h2><p className="mt-1 text-xs text-white/45">تفاصيل المواسم والحلقات الوصفية محفوظة محلياً؛ التشغيل يظل من ملفات مكتبتك فقط.</p></div><div onWheel={horizontalWheel} className="flex gap-3 overflow-x-auto pb-2">{localizedSeasons.map((season, index) => { const englishSeason = englishSeasonsByNumber.get(season.season_number); const seasonPoster = tmdbImageURL(season.poster_path || englishSeason?.poster_path) || "/nexora-poster-placeholder.PNG"; return <button type="button" key={season.season_number} onClick={() => setSelectedMetadataSeason(index)} className={`w-40 shrink-0 overflow-hidden rounded-xl border text-right transition ${selectedRemoteSeason?.season_number === season.season_number ? "border-fuchsia-400 bg-fuchsia-500/10" : "border-white/10 bg-black/20 hover:border-white/30"}`}><div className="aspect-[2/3] bg-white/5"><img src={seasonPoster} alt={englishSeason?.name || season.name} className="h-full w-full object-cover" loading="lazy" onError={(event) => { event.currentTarget.src = "/nexora-poster-placeholder.PNG"; }} /></div><div className="p-3"><p dir="ltr" className="truncate text-left text-xs font-bold text-white">{englishSeason?.name || season.name || `Season ${season.season_number}`}</p><p className="mt-1 truncate text-xs text-white/55">{hasArabicText(season.name) ? season.name : "لا تتوفر ترجمة عربية"}</p><p className="mt-2 text-[11px] text-fuchsia-200">{season.episode_count || season.episodes?.length || 0} حلقة</p></div></button>; })}</div>{selectedRemoteSeason && <div><h3 className="text-sm font-black text-white">حلقات: {hasArabicText(selectedRemoteSeason.name) ? selectedRemoteSeason.name : englishSelectedRemoteSeason?.name || selectedRemoteSeason.name}</h3><div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{remoteEpisodes.map((episode) => { const englishEpisode = englishEpisodesByNumber.get(episode.episode_number); const titleEN = englishEpisode?.name || episode.name || `Episode ${episode.episode_number}`; const titleAR = hasArabicText(episode.name) ? episode.name : "لا تتوفر ترجمة عربية"; const still = tmdbImageURL(episode.still_path || englishEpisode?.still_path, "w342") || "/nexora-episode-placeholder.PNG"; return <article key={episode.id || episode.episode_number} className="overflow-hidden rounded-xl border border-white/10 bg-black/20"><div className="aspect-video bg-white/5"><img src={still} alt={titleEN} className="h-full w-full object-cover" loading="lazy" onError={(event) => { event.currentTarget.src = "/nexora-episode-placeholder.PNG"; }} /></div><div className="p-3"><p dir="ltr" className="truncate text-left text-xs font-bold text-white">{episode.episode_number}. {titleEN}</p><p className="mt-1 truncate text-xs text-white/55">{titleAR}</p><p className="mt-2 text-[11px] text-white/40">{episode.air_date || ""} {episode.runtime ? `· ${episode.runtime} دقيقة` : ""}</p><p className="mt-2 line-clamp-2 text-[11px] leading-5 text-white/65">{hasArabicText(episode.overview) ? episode.overview : (englishEpisode?.overview || episode.overview || "")}</p></div></article>; })}</div></div>}</section>}
+
+      {/* Seasons Tab & Episode List */}
       {seasonsList.length > 0 && (
-        <section className="space-y-4 rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4 sm:p-6 shadow-[var(--shadow-sm)]">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border-subtle)] pb-3">
-            <div>
-              <h2 className="text-base sm:text-lg font-black text-[var(--text-primary)] flex items-center gap-2">
-                <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-fuchsia-500/20 text-fuchsia-400 text-xs">📺</span>
-                المواسم وحلقات التشغيل المتاحة
-              </h2>
-              <p className="mt-0.5 text-xs text-[var(--text-muted)]">حلقات الفيديو المحلية الجاهزة للدفق المباشر بأعلى جودة.</p>
-            </div>
-            <span className="rounded-full bg-fuchsia-500/10 px-3.5 py-1 text-xs font-black text-fuchsia-300 border border-fuchsia-500/20">
-              {seasonsList.length} مواسم متوفرة
-            </span>
+        <section className="space-y-4">
+          <div className="border-b border-white/10 pb-2">
+            <h2 className="text-lg font-black text-white sm:text-xl">المواسم والحلقات</h2>
           </div>
 
           {/* Season Selector Tabs */}
-          <div className="flex flex-wrap gap-2 pt-1">
+          <div className="flex flex-wrap gap-2">
             {seasonsList.map((season, idx) => (
               <button
                 key={season.id || idx}
                 type="button"
                 onClick={() => setSelectedSeasonIdx(idx)}
-                className={`rounded-2xl px-4 py-2 text-xs font-bold transition flex items-center gap-2 ${
+                className={`rounded-xl px-4 py-2 text-xs font-bold transition ${
                   selectedSeasonIdx === idx
-                    ? "bg-gradient-to-r from-fuchsia-600 to-purple-600 text-white shadow-md shadow-fuchsia-900/40 scale-[1.02]"
-                    : "border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:border-fuchsia-500/50 hover:text-[var(--text-primary)]"
+                    ? "bg-gradient-to-r from-purple-800 to-fuchsia-700 text-white shadow-md shadow-purple-900/40"
+                    : "border border-white/10 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white"
                 }`}
               >
-                <span>{season.title_ar || season.title_en || `الموسم ${season.season_number || idx + 1}`}</span>
-                <span className="rounded-full bg-black/30 px-2 py-0.5 text-[10px] font-black">
-                  {season.episodes?.length || 0} حلقة
-                </span>
+                {season.title_ar || season.title_en || `الموسم ${season.season_number || idx + 1}`}
+                <span className="mr-1.5 opacity-60">({season.episodes?.length || 0} حلقة)</span>
               </button>
             ))}
           </div>
 
-          {/* Compact, Beautiful Local Episodes Grid */}
-          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 pt-2">
+          {/* Episodes Grid */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {activeEpisodes.map((ep, epIdx) => (
               <button
                 key={ep.id || epIdx}
                 type="button"
                 onClick={() => onQuickPlay(current, ep)}
-                className="group flex items-center gap-3 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)] p-2.5 text-right transition hover:border-fuchsia-500/60 hover:bg-[var(--bg-card)] hover:shadow-md active:scale-95"
+                className="group flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/40 p-3 text-right transition hover:border-fuchsia-500/50 hover:bg-black/60 shadow-sm"
               >
-                {/* Compact Episode Thumbnail */}
-                <div className="relative h-14 w-20 shrink-0 overflow-hidden rounded-xl bg-black/40 border border-white/10">
-                  <img
-                    src={posterURL}
-                    alt=""
-                    className="h-full w-full object-cover opacity-75 group-hover:scale-105 transition duration-300"
-                  />
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/35 group-hover:bg-black/10 transition">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-tr from-fuchsia-600 to-purple-600 text-white shadow text-[10px] font-black">
-                      ▶
-                    </span>
-                  </div>
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-fuchsia-600/20 text-fuchsia-400 group-hover:bg-fuchsia-600 group-hover:text-white transition">
+                  ▶
                 </div>
-
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <span className="rounded-md bg-gradient-to-r from-fuchsia-600 to-purple-600 px-2 py-0.5 text-[10px] font-black text-white shadow-sm shrink-0">
-                      حلقة {ep.episode_number || epIdx + 1}
-                    </span>
-                    <span className="rounded bg-white/10 px-1.5 py-0.2 text-[9px] font-bold text-[var(--text-muted)] truncate">
-                      {ep.resolution || "1080p"}
-                    </span>
-                  </div>
-                  <p className="truncate text-xs font-bold text-[var(--text-primary)] group-hover:text-fuchsia-300 transition">
+                  <p className="truncate text-xs font-bold text-white group-hover:text-fuchsia-300">
                     {ep.title_ar || ep.title_en || `الحلقة ${ep.episode_number || epIdx + 1}`}
                   </p>
-                  <p className="mt-0.5 text-[10px] text-[var(--text-muted)] truncate">
-                    {ep.video_codec || "HEVC/H264"} • تشغيل فوري
+                  <p className="mt-0.5 text-[10px] font-medium text-white/50">
+                    {ep.resolution || "1080p"} • {ep.video_codec || "HEVC/H264"}
                   </p>
                 </div>
               </button>
@@ -567,29 +345,26 @@ export default function MediaDetailsPage({
 
       {/* Direct Video Files list if no seasons */}
       {seasonsList.length === 0 && current.files && current.files.length > 0 && (
-        <section className="space-y-4 rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4 sm:p-6 shadow-[var(--shadow-sm)]">
-          <div className="border-b border-[var(--border-subtle)] pb-3">
-            <h2 className="text-base sm:text-lg font-black text-[var(--text-primary)] flex items-center gap-2">
-              <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-fuchsia-500/20 text-fuchsia-400 text-xs">🎬</span>
-              ملفات الفيديو المتاحة للتشغيل
-            </h2>
+        <section className="space-y-4">
+          <div className="border-b border-white/10 pb-2">
+            <h2 className="text-lg font-black text-white sm:text-xl">ملفات الفيديو المتاحة</h2>
           </div>
-          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {current.files.map((file, idx) => (
               <button
                 key={file.id || idx}
                 type="button"
                 onClick={() => onQuickPlay(current, file)}
-                className="group flex items-center gap-3 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)] p-3 text-right transition hover:border-fuchsia-500/60 hover:bg-[var(--bg-card)] shadow-sm active:scale-95"
+                className="group flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/40 p-3 text-right transition hover:border-fuchsia-500/50 hover:bg-black/60 shadow-sm"
               >
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-fuchsia-600 to-purple-600 text-white font-black text-xs group-hover:scale-105 transition shadow">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-fuchsia-600/20 text-fuchsia-400 group-hover:bg-fuchsia-600 group-hover:text-white transition">
                   ▶
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-xs font-bold text-[var(--text-primary)] group-hover:text-fuchsia-300">
+                  <p className="truncate text-xs font-bold text-white group-hover:text-fuchsia-300">
                     {file.title_ar || file.title_en || `ملف التشغيل #${idx + 1}`}
                   </p>
-                  <p className="mt-0.5 text-[10px] text-[var(--text-muted)]">
+                  <p className="mt-0.5 text-[10px] font-medium text-white/50">
                     {file.resolution || "1080p"} • {(Number(file.file_size || 0) / (1024 * 1024)).toFixed(1)} MB
                   </p>
                 </div>
@@ -598,555 +373,6 @@ export default function MediaDetailsPage({
           </div>
         </section>
       )}
-
-      {/* ========================================================================= */}
-      {/* TMDB Seasons & Episodes - High Quality Professional Cards (Like Main Catalogue) */}
-      {/* ========================================================================= */}
-      {localizedSeasons.length > 0 && (
-        <section className="space-y-5 rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4 sm:p-6 shadow-[var(--shadow-sm)]">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border-subtle)] pb-3">
-            <div>
-              <h2 className="text-base sm:text-lg font-black text-[var(--text-primary)] flex items-center gap-2">
-                <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-amber-500/20 text-amber-400 text-xs">✨</span>
-                مواسم وأجزاء العمل من TMDB
-              </h2>
-              <p className="mt-0.5 text-xs text-[var(--text-muted)]">اختر الموسم لمعاينة الحلقات وتفاصيل الدليل.</p>
-            </div>
-            <span className="rounded-full bg-amber-500/10 px-3.5 py-1 text-xs font-black text-amber-300 border border-amber-500/20">
-              {localizedSeasons.length} مواسم مسجلة
-            </span>
-          </div>
-
-          {/* Professional Season Cards Carousel (Matching NEXORA Cinema Card Aesthetics) */}
-          <div onWheel={horizontalWheel} className="flex gap-3.5 overflow-x-auto pb-3 scrollbar-thin">
-            {localizedSeasons.map((season, index) => {
-              const englishSeason = englishSeasonsByNumber.get(season.season_number);
-              const seasonPoster = tmdbImageURL(season.poster_path || englishSeason?.poster_path) || "/nexora-poster-placeholder.PNG";
-              const isSelected = selectedRemoteSeason?.season_number === season.season_number;
-              const sTitleEN = englishSeason?.name || `Season ${season.season_number}`;
-              const sTitleAR = hasArabicText(season.name) ? season.name : `الموسم ${season.season_number}`;
-              const epCount = season.episode_count || season.episodes?.length || 0;
-
-              return (
-                <button
-                  type="button"
-                  key={season.season_number}
-                  onClick={() => setSelectedMetadataSeason(index)}
-                  className={`group relative flex w-32 sm:w-40 shrink-0 flex-col overflow-hidden rounded-2xl border text-right transition-all duration-300 ${
-                    isSelected
-                      ? "border-amber-400 bg-amber-950/20 shadow-lg shadow-amber-900/30 ring-2 ring-amber-400 scale-[1.03]"
-                      : "border-[var(--border-default)] bg-[var(--bg-card)] hover:border-amber-400/60 hover:shadow-md"
-                  }`}
-                  aria-label={`اختيار ${sTitleAR}`}
-                >
-                  <div className="relative aspect-[3/4] w-full overflow-hidden bg-[#151225]">
-                    <img
-                      src={seasonPoster}
-                      alt={sTitleEN}
-                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                      loading="lazy"
-                      onError={(e) => {
-                        e.currentTarget.src = "/nexora-poster-placeholder.PNG";
-                      }}
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/30" />
-                    
-                    {/* Top Episode Count Badge */}
-                    <div className="absolute top-2 right-2">
-                      <span className="rounded-md border border-white/20 bg-black/60 backdrop-blur-md px-1.5 py-0.5 text-[9px] font-black text-amber-300">
-                        {epCount} حلقة
-                      </span>
-                    </div>
-
-                    {/* Bottom Status / Selection Glow */}
-                    {isSelected && (
-                      <div className="absolute bottom-2 inset-x-2 flex justify-center">
-                        <span className="rounded-full bg-amber-500 px-2.5 py-0.5 text-[9px] font-black text-black shadow">
-                          المحدد حالياً ✓
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="p-2 sm:p-2.5 flex flex-col justify-between flex-1">
-                    <p className="truncate text-xs font-black text-[var(--text-primary)] group-hover:text-amber-300 transition">
-                      {sTitleAR}
-                    </p>
-                    <p dir="ltr" className="mt-0.5 truncate text-left text-[10px] text-[var(--text-muted)]">
-                      {sTitleEN}
-                    </p>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Selected Season Episodes - Ultra-Compact Horizontal Rail */}
-          {selectedRemoteSeason && (
-            <div className="pt-2 border-t border-[var(--border-subtle)]">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-xs sm:text-sm font-black text-[var(--text-primary)] flex items-center gap-2">
-                  <span>حلقات:</span>
-                  <span className="text-amber-400 font-extrabold">{hasArabicText(selectedRemoteSeason.name) ? selectedRemoteSeason.name : (englishSelectedRemoteSeason?.name || selectedRemoteSeason.name)}</span>
-                </h3>
-                <span className="text-[11px] text-[var(--text-muted)] font-semibold">
-                  {remoteEpisodes.length} حلقة متوفرة في الدليل
-                </span>
-              </div>
-
-              <div onWheel={horizontalWheel} className="flex gap-3 overflow-x-auto pb-2.5 scrollbar-thin">
-                {remoteEpisodes.map((episode) => {
-                  const englishEpisode = englishEpisodesByNumber.get(episode.episode_number);
-                  const titleEN = englishEpisode?.name || episode.name || `Episode ${episode.episode_number}`;
-                  const titleAR = hasArabicText(episode.name) ? episode.name : null;
-                  const still = tmdbImageURL(episode.still_path || englishEpisode?.still_path, "w342") || "/nexora-episode-placeholder.PNG";
-                  
-                  return (
-                    <article key={episode.id || episode.episode_number} className="w-52 sm:w-60 shrink-0 overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)] flex flex-col justify-between hover:border-amber-500/50 transition">
-                      <div className="aspect-video bg-[var(--bg-surface)] overflow-hidden relative">
-                        <img src={still} alt={titleEN} className="h-full w-full object-cover" loading="lazy" onError={(e) => { e.currentTarget.src = "/nexora-episode-placeholder.PNG"; }} />
-                        <span className="absolute top-2 right-2 rounded-md bg-black/80 backdrop-blur-md px-2 py-0.5 text-[10px] font-black text-amber-300 border border-white/10">
-                          حلقة {episode.episode_number}
-                        </span>
-                        {episode.runtime && (
-                          <span className="absolute bottom-2 left-2 rounded-md bg-black/80 px-1.5 py-0.2 text-[9px] font-bold text-white/90">
-                            {episode.runtime} د
-                          </span>
-                        )}
-                      </div>
-                      <div className="p-2.5 flex-1 flex flex-col justify-between">
-                        <div>
-                          <p dir="ltr" className="truncate text-left text-xs font-black text-[var(--text-primary)]">{titleEN}</p>
-                          <p className="mt-0.5 truncate text-[11px] font-bold text-amber-300/90">{titleAR || "لا تتوفر ترجمة عربية"}</p>
-                        </div>
-                        <div className="mt-2 flex items-center justify-between pt-1.5 border-t border-[var(--border-subtle)] text-[10px] text-[var(--text-muted)]">
-                          <span>{episode.air_date || "تاريخ العرض"}</span>
-                          <span className="text-amber-400 font-bold">TMDB</span>
-                        </div>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </section>
-      )}
-
-      {/* ========================================================================= */}
-      {/* 4. Priority 3: معلومات أساسية وبيانات العمل واللغات والصوتيات */}
-      {/* ========================================================================= */}
-      {tmdb && (
-        <section className="grid gap-4 lg:grid-cols-3">
-          {/* Main Info Card (2 columns on large screens) */}
-          <div className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4 sm:p-6 shadow-[var(--shadow-sm)] lg:col-span-2 space-y-5">
-            <div className="flex items-center justify-between border-b border-[var(--border-subtle)] pb-3">
-              <h2 className="text-base sm:text-lg font-black text-[var(--text-primary)] flex items-center gap-2">
-                <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-purple-500/20 text-purple-400 text-xs">ℹ️</span>
-                معلومات وبيانات العمل الفني
-              </h2>
-              <span className="rounded-full bg-[var(--bg-elevated)] px-3 py-1 text-[10px] text-[var(--text-muted)] font-black border border-[var(--border-subtle)]">
-                بيانات معتمدة
-              </span>
-            </div>
-
-            {/* Languages & Audio Dual Banner */}
-            <div className="grid gap-2.5 sm:grid-cols-2">
-              <div className="flex items-center gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-950/30 p-3 text-emerald-200">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/20 text-lg">
-                  🎙️
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[11px] font-bold text-emerald-300">مسارات الصوت والدبلجة</p>
-                  <p className="text-xs font-black text-white truncate">
-                    {hasArAudio ? "صوت ودبلجة عربية متوفرة" : "اللغة الأصلية + الإنجليزية"}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3 rounded-2xl border border-sky-500/30 bg-sky-950/30 p-3 text-sky-200">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sky-500/20 text-lg">
-                  📝
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[11px] font-bold text-sky-300">الترجمة والنصوص (Subtitles)</p>
-                  <p className="text-xs font-black text-white truncate">
-                    {hasArSubs ? "ترجمة عربية معتمدة + English" : "الإنجليزية والأصلية"}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Responsive Specifications Grid (Mobile, Tablet, Laptop) */}
-            <div className="grid gap-2.5 grid-cols-2 sm:grid-cols-3">
-              {[
-                ["نوع العمل", current.type === "series" ? "مسلسل تلفزيوني" : "فيلم سينمائي"],
-                ["الحالة الفنية", tmdb.status || "مكتمل"],
-                ["إجمالي الأجزاء", tmdb.number_of_seasons ? `${tmdb.number_of_seasons} مواسم • ${tmdb.number_of_episodes || seasonsList.reduce((acc, s) => acc + (s.episodes?.length || 0), 0)} حلقة` : null],
-                ["اللغة الأصلية", (tmdb.original_language || "en").toUpperCase()],
-                ["مدة العرض", tmdb.runtime ? `${tmdb.runtime} دقيقة` : (tmdb.episode_run_time?.[0] ? `${tmdb.episode_run_time[0]} دقيقة` : "غير محدد")],
-                ["تاريخ الإصدار", tmdb.release_date || tmdb.first_air_date || current.year],
-                ["مؤشر الرواج", tmdb.popularity ? `🔥 ${Number(tmdb.popularity).toFixed(0)} نقطة تفاعل` : null],
-                ["الميزانية", tmdb.budget ? `$${Number(tmdb.budget).toLocaleString("en-US")}` : "غير معلنة"],
-                ["الإيرادات", tmdb.revenue ? `$${Number(tmdb.revenue).toLocaleString("en-US")}` : "غير معلنة"],
-                ["عدد المقيمين", tmdb.vote_count ? `${Number(tmdb.vote_count).toLocaleString("en-US")} تقييم` : null],
-                ["بلد الإنتاج", productionCountries?.map((c) => c.name).slice(0, 2).join("، ") || "عالمي"],
-                ["لغات الحوار", spokenLanguages?.map((l) => l.name || l.english_name).slice(0, 3).join("، ") || "متعددة"],
-              ]
-                .filter(([, val]) => val)
-                .map(([label, value]) => (
-                  <div key={label} className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] p-3 transition hover:border-[var(--color-accent)]/40">
-                    <p className="text-[10px] font-bold text-[var(--text-muted)]">{label}</p>
-                    <p className="mt-1 text-xs sm:text-sm font-black text-[var(--text-primary)] truncate">{value}</p>
-                  </div>
-                ))}
-            </div>
-
-            {/* Creators & Showrunners if available */}
-            {createdBy.length > 0 && (
-              <div className="pt-2 border-t border-[var(--border-subtle)]">
-                <p className="mb-2 text-xs font-bold text-[var(--text-muted)]">مبتكرو وصناع العمل (Creators)</p>
-                <div className="flex flex-wrap gap-2">
-                  {createdBy.map((creator) => (
-                    <div key={creator.id} className="flex items-center gap-2 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] px-3 py-1.5">
-                      <span className="text-xs">✍️</span>
-                      <span className="text-xs font-black text-[var(--text-primary)]">{creator.name}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Keywords & Tags */}
-            {keywords.length > 0 && (
-              <div className="pt-2">
-                <p className="mb-2 text-xs font-bold text-[var(--text-muted)]">الكلمات المفتاحية والوسوم</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {keywords.slice(0, 14).map((keyword) => (
-                    <span key={keyword.id || keyword.name} className="rounded-xl bg-fuchsia-500/10 border border-fuchsia-500/20 px-2.5 py-1 text-[11px] font-bold text-fuchsia-300">
-                      #{keyword.name}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Companies & Networks Card (With Official Logos) */}
-          <div className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4 sm:p-6 shadow-[var(--shadow-sm)] space-y-4 flex flex-col justify-between">
-            <div className="space-y-4">
-              {/* Broadcast Networks (For TV Series) */}
-              {networks.length > 0 && (
-                <div>
-                  <div className="border-b border-[var(--border-subtle)] pb-2.5 mb-3">
-                    <h2 className="text-xs sm:text-sm font-black text-[var(--text-primary)] flex items-center gap-2">
-                      <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-sky-500/20 text-sky-400 text-xs">📡</span>
-                      شبكات وقنوات البث الأصلية
-                    </h2>
-                  </div>
-                  <div className="space-y-2">
-                    {networks.map((network) => {
-                      const netLogo = network.logo_path ? tmdbImageURL(network.logo_path, "w185") : null;
-                      return (
-                        <div key={network.id} className="flex items-center gap-3 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] p-2.5 transition hover:border-sky-500/40">
-                          {netLogo ? (
-                            <div className="flex h-9 w-16 shrink-0 items-center justify-center rounded-xl bg-white/95 p-1 border border-white/20 shadow-sm">
-                              <img src={netLogo} alt={network.name} className="max-h-full max-w-full object-contain" loading="lazy" />
-                            </div>
-                          ) : (
-                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sky-500/10 text-sky-300 font-black text-xs">📺</div>
-                          )}
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-xs font-black text-[var(--text-primary)]">{network.name}</p>
-                            {network.origin_country && (
-                              <p className="text-[10px] text-[var(--text-muted)] font-bold">المنشأ: {network.origin_country}</p>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Production Companies & Studios */}
-              <div>
-                <div className="border-b border-[var(--border-subtle)] pb-2.5 mb-3">
-                  <h2 className="text-xs sm:text-lg font-black text-[var(--text-primary)] flex items-center gap-2">
-                    <span className="flex h-6 w-6 sm:h-7 sm:w-7 items-center justify-center rounded-xl bg-indigo-500/20 text-indigo-400 text-xs">🏢</span>
-                    الشركات والاستوديوهات المنتجة
-                  </h2>
-                  <p className="mt-0.5 text-[11px] sm:text-xs text-[var(--text-muted)]">استوديوهات صناعة هذا العمل (مع شعاراتها الرسمية).</p>
-                </div>
-
-                {productionCompanies.length > 0 ? (
-                  <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1 scrollbar-thin">
-                    {productionCompanies.map((company) => {
-                      const logoURL = company.logo_path ? tmdbImageURL(company.logo_path, "w185") : null;
-                      return (
-                        <div
-                          key={company.id}
-                          className="flex items-center gap-3 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] p-2.5 sm:p-3 transition hover:border-fuchsia-500/40"
-                        >
-                          {logoURL ? (
-                            <div className="flex h-10 w-18 sm:h-11 sm:w-20 shrink-0 items-center justify-center rounded-xl bg-white/95 p-1.5 border border-white/20 shadow-sm">
-                              <img
-                                src={logoURL}
-                                alt={company.name}
-                                className="max-h-full max-w-full object-contain"
-                                loading="lazy"
-                              />
-                            </div>
-                          ) : (
-                            <div className="flex h-10 w-10 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-300 font-black text-sm border border-indigo-500/20">
-                              🏢
-                            </div>
-                          )}
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-xs font-black text-[var(--text-primary)]">{company.name}</p>
-                            {company.origin_country && (
-                              <p className="text-[10px] text-[var(--text-muted)] font-bold mt-0.5">الدولة: {company.origin_country}</p>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <p className="text-xs text-[var(--text-muted)] py-4 text-center">لا توجد بيانات استوديوهات مسجلة.</p>
-                )}
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* ========================================================================= */}
-      {/* 5. Priority 4: طاقم التمثيل وصناع العمل (Cast & Production Crew) */}
-      {/* ========================================================================= */}
-      {cast.length > 0 && (
-        <section className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4 sm:p-6 shadow-[var(--shadow-sm)]">
-          <div className="flex items-center justify-between border-b border-[var(--border-subtle)] pb-3 mb-4">
-            <h2 className="text-base sm:text-lg font-black text-[var(--text-primary)] flex items-center gap-2">
-              <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-teal-500/20 text-teal-400 text-xs">🎭</span>
-              طاقم التمثيل ونجوم العمل
-            </h2>
-            <span className="rounded-full bg-teal-500/10 px-3 py-1 text-xs text-teal-300 font-black border border-teal-500/20">
-              {cast.length} ممثل
-            </span>
-          </div>
-
-          <div onWheel={horizontalWheel} className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
-            {cast.slice(0, 24).map((person) => {
-              const englishPerson = englishCastByID.get(person.id);
-              const profileURL = resolveAPIURL(englishPerson?.local_profile_path || person.local_profile_path) || tmdbImageURL(person.profile_path || englishPerson?.profile_path, "w185");
-              return (
-                <article key={person.id} className="w-28 sm:w-32 shrink-0 overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] shadow-sm hover:border-[var(--color-accent)]/50 transition">
-                  <div className="relative aspect-[4/5] bg-gradient-to-br from-cyan-950/40 via-purple-950/20 to-fuchsia-950/30 overflow-hidden">
-                    {profileURL ? (
-                      <img
-                        src={profileURL}
-                        alt={person.name}
-                        className="h-full w-full object-cover"
-                        loading="lazy"
-                        onError={(e) => {
-                          e.currentTarget.style.display = "none";
-                          if (e.currentTarget.nextElementSibling) e.currentTarget.nextElementSibling.classList.remove("hidden");
-                        }}
-                      />
-                    ) : null}
-                    <div className={`${profileURL ? "hidden" : ""} absolute inset-0 flex items-center justify-center p-2`}>
-                      <span className="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)] text-[var(--color-info)] shadow-inner">
-                        <Icon name="user" className="h-5 w-5 sm:h-6 sm:w-6" />
-                      </span>
-                    </div>
-                  </div>
-                  <div className="p-2 sm:p-2.5">
-                    <p className="truncate text-xs font-black text-[var(--text-primary)]">{person.name}</p>
-                    <p className="mt-0.5 truncate text-[10px] text-[var(--text-muted)]">{person.character || person.roles?.[0]?.character || "طاقم التمثيل"}</p>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      {/* Production Crew */}
-      {crew.length > 0 && (
-        <section className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4 sm:p-6 shadow-[var(--shadow-sm)]">
-          <div className="flex items-center justify-between border-b border-[var(--border-subtle)] pb-3 mb-4">
-            <h2 className="text-base sm:text-lg font-black text-[var(--text-primary)] flex items-center gap-2">
-              <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-orange-500/20 text-orange-400 text-xs">🎬</span>
-              فريق الإخراج والإنتاج
-            </h2>
-            <span className="rounded-full bg-orange-500/10 px-3 py-1 text-xs text-orange-300 font-black border border-orange-500/20">
-              {crew.length} مخرج وفني
-            </span>
-          </div>
-
-          <div onWheel={horizontalWheel} className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
-            {crew.slice(0, 24).map((person, index) => (
-              <article key={`${person.credit_id || person.id}-${index}`} className="w-36 shrink-0 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] p-3 hover:border-orange-500/40 transition">
-                <p className="truncate text-xs font-black text-[var(--text-primary)]">{person.name}</p>
-                <p className="mt-1 line-clamp-2 text-[11px] text-[var(--color-accent)] font-bold">{person.job || person.jobs?.[0]?.job || person.department || "فريق الإنتاج"}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* ========================================================================= */}
-      {/* 6. Priority 5: معرض الصور والسلاسل والأعمال المشابهة */}
-      {/* ========================================================================= */}
-      {imageGallery.length > 0 && (
-        <section className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4 sm:p-6 shadow-[var(--shadow-sm)]">
-          <h2 className="text-base sm:text-lg font-black text-[var(--text-primary)] mb-3 flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-sky-500/20 text-sky-400 text-xs">🖼️</span>
-            معرض الصور والبوسترات والشعارات
-          </h2>
-          <div onWheel={horizontalWheel} className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
-            {imageGallery.map((image, index) => {
-              const imageURL = resolveAPIURL(image.localPath) || tmdbImageURL(image.file_path, image.kind === "poster" ? "w342" : "w780");
-              return (
-                <figure key={`${image.file_path}-${index}`} className={`shrink-0 overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] ${image.kind === "poster" ? "w-28 sm:w-32" : image.kind === "logo" ? "w-44 sm:w-48" : "w-60 sm:w-64"}`}>
-                  <div className={image.kind === "poster" ? "aspect-[2/3]" : "aspect-video"}>
-                    {imageURL ? <img src={imageURL} alt="" className="h-full w-full object-cover" loading="lazy" /> : null}
-                  </div>
-                  <figcaption className="px-2 py-1.5 text-[10px] font-bold text-[var(--text-muted)] text-center bg-[var(--bg-card)]/50">
-                    {image.kind === "poster" ? "بوستر رسمي" : image.kind === "logo" ? "شعار العمل" : "خلفية سينمائية"}
-                  </figcaption>
-                </figure>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      {/* ========================================================================= */}
-      {/* 7. Collection (السلسلة السينمائية) & Related Movies (الأعمال المقترحة) */}
-      {/* Fully Mobile-Optimized with Dual Arabic/English Titles & Luxury Cards */}
-      {/* ========================================================================= */}
-      {(collection || related.length > 0) && (
-        <section className="space-y-6">
-          {/* Movie Collection Banner Card */}
-          {collection && (
-            <div className="relative overflow-hidden rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4 sm:p-6 shadow-[var(--shadow-sm)]">
-              {collection.backdrop_path && (
-                <div
-                  className="absolute inset-0 bg-cover bg-center opacity-30 blur-sm scale-105 pointer-events-none"
-                  style={{ backgroundImage: `url('${tmdbImageURL(collection.backdrop_path, "w780")}')` }}
-                />
-              )}
-              <div className="relative z-10">
-                <div className="flex items-center justify-between gap-3 border-b border-[var(--border-subtle)] pb-3 mb-4">
-                  <h2 className="text-base sm:text-lg font-black text-[var(--text-primary)] flex items-center gap-2">
-                    <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-amber-500/20 text-amber-400 text-xs">🍿</span>
-                    السلسلة والأجزاء السينمائية
-                  </h2>
-                  <span className="rounded-full bg-amber-500/10 px-3 py-1 text-xs font-black text-amber-300 border border-amber-500/20">
-                    عالم سينمائي متكامل
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-3.5 sm:gap-5 rounded-2xl bg-[var(--bg-elevated)]/90 border border-[var(--border-subtle)] p-3 sm:p-4 backdrop-blur-md">
-                  {collection.poster_path ? (
-                    <div className="h-20 w-14 sm:h-24 sm:w-16 shrink-0 overflow-hidden rounded-xl bg-black/40 border border-white/10 shadow-md">
-                      <img src={tmdbImageURL(collection.poster_path)} alt={collection.name} className="h-full w-full object-cover" loading="lazy" />
-                    </div>
-                  ) : null}
-                  <div className="min-w-0 flex-1">
-                    <span className="rounded-md bg-amber-500/20 px-2 py-0.5 text-[10px] font-black text-amber-300 border border-amber-500/30">
-                      سلسلة أفلام
-                    </span>
-                    <h3 className="mt-1.5 text-sm sm:text-base font-black text-[var(--text-primary)] truncate">
-                      {collection.name}
-                    </h3>
-                    <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">
-                      كافة أجزاء وأفلام السلسلة السينمائية المرتبطة بهذا العمل.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Related / Similar Movies & Series - Mobile-First Luxury Carousel */}
-          {related.length > 0 && (
-            <div className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4 sm:p-6 shadow-[var(--shadow-sm)]">
-              <div className="flex items-center justify-between border-b border-[var(--border-subtle)] pb-3 mb-4">
-                <h2 className="text-base sm:text-lg font-black text-[var(--text-primary)] flex items-center gap-2">
-                  <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-fuchsia-500/20 text-fuchsia-400 text-xs">✨</span>
-                  أعمال مقترحة ومميزة ذات صلة
-                </h2>
-                <span className="rounded-full bg-fuchsia-500/10 px-3 py-1 text-xs text-fuchsia-300 font-black border border-fuchsia-500/20">
-                  {related.length} مقترحات
-                </span>
-              </div>
-
-              {/* Responsive Cinema Cards Rail */}
-              <div onWheel={horizontalWheel} className="flex gap-3 sm:gap-4 overflow-x-auto pb-3 scrollbar-thin">
-                {related.slice(0, 14).map((item) => {
-                  const englishItem = englishRelatedByID.get(item.id);
-                  const titleEN = englishItem?.title || englishItem?.name || item.original_title || item.original_name || item.title || item.name;
-                  const titleAR = hasArabicText(item.title || item.name) ? (item.title || item.name) : null;
-                  const relatedPoster = resolveAPIURL(englishItem?.local_poster_path || item.local_poster_path) || tmdbImageURL(item.poster_path || englishItem?.poster_path);
-                  const year = (item.release_date || item.first_air_date || "").slice(0, 4);
-
-                  return (
-                    <article
-                      key={item.id}
-                      className="group relative flex w-32 sm:w-40 shrink-0 flex-col overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] shadow-md transition-all duration-300 hover:border-fuchsia-400/60 hover:shadow-lg"
-                    >
-                      <div className="relative aspect-[2/3] w-full overflow-hidden bg-[#151225]">
-                        {relatedPoster ? (
-                          <img
-                            src={relatedPoster}
-                            alt={titleEN}
-                            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="flex h-full items-center justify-center text-xs text-[var(--text-muted)]">لا توجد صورة</div>
-                        )}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20" />
-                        
-                        {/* Rating Star Badge */}
-                        <div className="absolute top-2 right-2">
-                          <span className="inline-flex items-center gap-1 rounded-md border border-amber-300/30 bg-black/60 backdrop-blur-md px-1.5 py-0.5 text-[9px] font-black text-amber-300">
-                            ★ {Number(item.vote_average || englishItem?.vote_average || 0).toFixed(1)}
-                          </span>
-                        </div>
-
-                        {/* Year Badge */}
-                        {year && (
-                          <div className="absolute bottom-2 right-2">
-                            <span className="rounded-md bg-black/60 backdrop-blur-md px-1.5 py-0.5 text-[9px] font-bold text-white/90">
-                              {year}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="p-2 sm:p-2.5 flex flex-col justify-between flex-1">
-                        <div>
-                          <p dir="ltr" className="truncate text-left text-xs font-black text-[var(--text-primary)] group-hover:text-fuchsia-300 transition">
-                            {titleEN}
-                          </p>
-                          <p className="mt-0.5 truncate text-[10px] text-[var(--text-secondary)]">
-                            {titleAR || "لا تتوفر ترجمة عربية"}
-                          </p>
-                        </div>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </section>
-      )}
     </div>
   );
 }
-

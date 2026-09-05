@@ -4,14 +4,8 @@ import CustomerCinemaLayout from "./layouts/CustomerCinemaLayout.jsx";
 import AdminPortalLayout from "./layouts/AdminPortalLayout.jsx";
 import DashboardPage from "./pages/DashboardPage.jsx";
 import CategoryPage from "./pages/CategoryPage.jsx";
-import SmartHubPage from "./pages/SmartHubPage.jsx";
-import FranchisePage from "./pages/FranchisePage.jsx";
-import PersonPage from "./pages/PersonPage.jsx";
-import DirectoryPage from "./pages/DirectoryPage.jsx";
 import MediaDetailsPage from "./pages/MediaDetailsPage.jsx";
 import AdminCategoriesPage from "./pages/admin/AdminCategoriesPage.jsx";
-import AdminCollectionsPage from "./pages/admin/AdminCollectionsPage.jsx";
-import AdminSmartHubsPage from "./pages/admin/AdminSmartHubsPage.jsx";
 import AdminMediaPage from "./pages/admin/AdminMediaPage.jsx";
 import AdminIndexerPage from "./pages/admin/AdminIndexerPage.jsx";
 import AdminQualityPage from "./pages/admin/AdminQualityPage.jsx";
@@ -20,8 +14,8 @@ import AdminOverviewPage from "./pages/admin/AdminOverviewPage.jsx";
 import TMDBSettingsPage from "./pages/TMDBSettingsPage.jsx";
 import AdminLoginPage from "./pages/AdminLoginPage.jsx";
 import VideoPlayer from "./components/VideoPlayer.jsx";
-import { categorySeed, getCategoryMeta } from "./data/library.js";
-import { getCategories, getHealth, getMediaDetail, getFileSubtitles, getMediaList, syncIndex, resolveAPIURL } from "./lib/api.js";
+import { categorySeed, findMockMedia, getCategoryMeta, mockLibrary } from "./data/library.js";
+import { getCategories, getHealth, getMediaDetail, getFileSubtitles, searchLibrary, syncIndex, resolveAPIURL } from "./lib/api.js";
 
 // Helper Wrapper for Category View
 function CategoryRouteWrapper({ onOpenMedia, onQuickPlay }) {
@@ -35,28 +29,36 @@ function CategoryRouteWrapper({ onOpenMedia, onQuickPlay }) {
   );
 }
 
-function SmartHubRouteWrapper({ onOpenMedia }) {
-  const { slug } = useParams();
-  return <SmartHubPage slug={slug} onOpenMedia={onOpenMedia} />;
-}
-function FranchiseRouteWrapper({ onOpenMedia }) {
-  const { slug } = useParams();
-  return <FranchisePage slug={slug} onOpenMedia={onOpenMedia} />;
-}
-function PersonRouteWrapper({ onOpenMedia }) {
-  const { slug } = useParams();
-  return <PersonPage slug={slug} onOpenMedia={onOpenMedia} />;
-}
-
 // Helper Wrapper for Media Details View
 function MediaDetailsRouteWrapper({ onOpenCategory, onQuickPlay }) {
   const { id } = useParams();
+  const [mediaItem, setMediaItem] = useState(null);
 
-  if (!id) return null;
+  useEffect(() => {
+    if (id) {
+      const found = mockLibrary.find((m) => String(m.id) === String(id)) || {
+        id: parseInt(id),
+        titleAr: "هجوم العمالقة: الموسم الأخير",
+        titleEn: "Attack on Titan: The Final Season",
+        type: "anime",
+        plot: "ملحمة إيرين ييغر وفيلق الاستكشاف في صراع البقاء الأخير.",
+        year: 2023,
+        rating: 9.1,
+        posterPath: "/nexora-poster-placeholder.PNG",
+        bannerPath: "/nexora-library-backdrop.PNG",
+        categorySlug: "anime",
+        fileCount: 28,
+        genres: ["أكشن", "دراما", "أنمي", "فانتازيا"],
+      };
+      setMediaItem(found);
+    }
+  }, [id]);
+
+  if (!mediaItem) return null;
 
   return (
     <MediaDetailsPage
-      media={{ id: parseInt(id, 10) }}
+      media={mediaItem}
       onOpenCategory={onOpenCategory}
       onQuickPlay={onQuickPlay}
     />
@@ -107,23 +109,14 @@ export default function App() {
       return;
     }
 
-    // Debounce typing: a single search request is made after the user pauses,
-    // rather than once for every character entered.
-    const query = deferredQuery.trim();
-    const timer = window.setTimeout(() => {
-      setIsSearching(true);
-      // Catalogue search deliberately goes through PostgreSQL-backed /api/media.
-      // Meilisearch remains available for administration, but card data must have
-      // the same local offline-first contract as every other catalogue surface.
-      getMediaList({ q: query, limit: 30 })
-        .then((payload) => {
-          setSearchResults(payload?.items || []);
-        })
-        .catch(() => setSearchResults([]))
-        .finally(() => setIsSearching(false));
-    }, 300);
-
-    return () => window.clearTimeout(timer);
+    setIsSearching(true);
+    searchLibrary(deferredQuery, { limit: 30 })
+      .then((payload) => {
+        const hits = payload?.hits || [];
+        setSearchResults(hits);
+      })
+      .catch(() => setSearchResults([]))
+      .finally(() => setIsSearching(false));
   }, [deferredQuery]);
 
   async function handleSyncIndex() {
@@ -146,9 +139,6 @@ export default function App() {
               categories={categories}
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
-              searchResults={searchResults}
-              onOpenMedia={(item) => (window.location.hash = `#/media/${item.id}`)}
-              onQuickPlay={handleQuickPlay}
             />
           }
         >
@@ -177,12 +167,6 @@ export default function App() {
               />
             }
           />
-          <Route path="hub/:slug" element={<SmartHubRouteWrapper onOpenMedia={(item) => (window.location.hash = `#/media/${item.id}`)} />} />
-          <Route path="franchise/:slug" element={<FranchiseRouteWrapper onOpenMedia={(item) => (window.location.hash = `#/media/${item.id}`)} />} />
-          <Route path="person/:slug" element={<PersonRouteWrapper onOpenMedia={(item) => (window.location.hash = `#/media/${item.id}`)} />} />
-          <Route path="directory/hubs" element={<DirectoryPage kind="hubs" onOpen={(hub) => (window.location.hash = `#/hub/${hub.slug}`)} />} />
-          <Route path="directory/people" element={<DirectoryPage kind="people" onOpen={(person) => (window.location.hash = `#/person/${person.slug}`)} />} />
-          <Route path="directory/franchises" element={<DirectoryPage kind="franchises" onOpen={(franchise) => (window.location.hash = `#/franchise/${franchise.slug}`)} />} />
 
           {/* Favorites Route */}
           <Route
@@ -228,8 +212,6 @@ export default function App() {
         >
           <Route index element={<Navigate to="/admin/categories" replace />} />
           <Route path="categories" element={<AdminCategoriesPage onNavigateToMedia={(slug) => (window.location.hash = `#/admin/media`)} />} />
-          <Route path="collections" element={<AdminCollectionsPage />} />
-          <Route path="hubs" element={<AdminSmartHubsPage />} />
           <Route path="media" element={<AdminMediaPage />} />
           <Route path="indexer" element={<AdminIndexerPage />} />
           <Route path="tmdb" element={<TMDBSettingsPage />} />
@@ -325,6 +307,12 @@ function RealVideoPlayerModal({ media, initialFile, onClose }) {
     : directFiles;
 
   const currentFile = activeFile || allPlayableItems[0] || null;
+  const currentFileIndex = allPlayableItems.findIndex((item) => item.id === currentFile?.id || (!item.id && item.file_path === currentFile?.file_path));
+  const nextFile = currentFileIndex >= 0 ? allPlayableItems[currentFileIndex + 1] : null;
+
+  function playNextFile() {
+    if (nextFile) setActiveFile(nextFile);
+  }
 
   const streamSrc = currentFile?.id
     ? resolveAPIURL(`/api/stream/file/${currentFile.id}`)
@@ -370,6 +358,11 @@ function RealVideoPlayerModal({ media, initialFile, onClose }) {
                 title={title}
                 poster={poster}
                 tracks={subtitles}
+                fileId={currentFile?.id}
+                onNext={playNextFile}
+                playlist={allPlayableItems}
+                currentFileId={currentFile?.id}
+                onSelectFile={setActiveFile}
               />
             ) : (
               <div className="flex flex-col items-center justify-center p-8 text-center text-white/60">

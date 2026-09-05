@@ -191,7 +191,7 @@ func (m *mockRepo) UpdateMediaFull(ctx context.Context, id int64, req db.UpdateM
 func (m *mockRepo) DeleteMediaItem(ctx context.Context, id int64) error {
 	return nil
 }
-func (m *mockRepo) CacheLocalArtwork(sourcePath string) string { return sourcePath }
+func (m *mockRepo) CacheLocalArtwork(sourcePath string) string             { return sourcePath }
 func (m *mockRepo) CleanAndSyncAllGenres(ctx context.Context) (int, error) { return 0, nil }
 func (m *mockRepo) GetTMDBSettings(ctx context.Context) (*metadata.TMDBSettings, error) {
 	settings := metadata.DefaultSettings()
@@ -203,15 +203,27 @@ func (m *mockRepo) SaveTMDBSettings(ctx context.Context, settings metadata.TMDBS
 func (m *mockRepo) GetTMDBUsageSummary(ctx context.Context) (*metadata.TMDBUsageSummary, error) {
 	return &metadata.TMDBUsageSummary{}, nil
 }
-func (m *mockRepo) GetTMDBUsageHistory(ctx context.Context, days int) ([]metadata.TMDBUsageDay, error) { return []metadata.TMDBUsageDay{}, nil }
+func (m *mockRepo) GetTMDBUsageHistory(ctx context.Context, days int) ([]metadata.TMDBUsageDay, error) {
+	return []metadata.TMDBUsageDay{}, nil
+}
 func (m *mockRepo) LogTMDBUsage(ctx context.Context, entry db.TMDBLogEntry) error { return nil }
-func (m *mockRepo) EnqueueTMDBRefresh(ctx context.Context, mediaID int64, priority int) error { return nil }
-func (m *mockRepo) EnqueueStaleTMDBRefreshes(ctx context.Context, staleDays, limit int) error { return nil }
-func (m *mockRepo) EnqueueTMDBRefreshIfStale(ctx context.Context, mediaID int64, staleDays int) error { return nil }
-func (m *mockRepo) ListTMDBQueue(ctx context.Context, limit int) ([]db.TMDBQueueJob, error) { return []db.TMDBQueueJob{}, nil }
-func (m *mockRepo) CancelTMDBQueueJob(ctx context.Context, id int64) error { return nil }
+func (m *mockRepo) EnqueueTMDBRefresh(ctx context.Context, mediaID int64, priority int) error {
+	return nil
+}
+func (m *mockRepo) EnqueueStaleTMDBRefreshes(ctx context.Context, staleDays, limit int) error {
+	return nil
+}
+func (m *mockRepo) EnqueueTMDBRefreshIfStale(ctx context.Context, mediaID int64, staleDays int) error {
+	return nil
+}
+func (m *mockRepo) ListTMDBQueue(ctx context.Context, limit int) ([]db.TMDBQueueJob, error) {
+	return []db.TMDBQueueJob{}, nil
+}
+func (m *mockRepo) CancelTMDBQueueJob(ctx context.Context, id int64) error          { return nil }
 func (m *mockRepo) ClaimTMDBQueueJob(ctx context.Context) (*db.TMDBQueueJob, error) { return nil, nil }
-func (m *mockRepo) FinishTMDBQueueJob(ctx context.Context, id int64, succeeded bool, message string) error { return nil }
+func (m *mockRepo) FinishTMDBQueueJob(ctx context.Context, id int64, succeeded bool, message string) error {
+	return nil
+}
 
 type mockSearch struct{}
 

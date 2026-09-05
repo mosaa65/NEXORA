@@ -182,14 +182,14 @@ type SeasonDetail struct {
 }
 
 type MediaItemDetail struct {
-	ID           int64          `json:"id"`
-	CategoryID   int64          `json:"category_id"`
-	CategorySlug string         `json:"category_slug,omitempty"`
-	CategoryAR   string         `json:"category_ar,omitempty"`
-	CategoryEN   string         `json:"category_en,omitempty"`
-	TitleAR      string         `json:"title_ar,omitempty"`
-	TitleEN      string         `json:"title_en"`
-	Type         string         `json:"type"`
+	ID            int64          `json:"id"`
+	CategoryID    int64          `json:"category_id"`
+	CategorySlug  string         `json:"category_slug,omitempty"`
+	CategoryAR    string         `json:"category_ar,omitempty"`
+	CategoryEN    string         `json:"category_en,omitempty"`
+	TitleAR       string         `json:"title_ar,omitempty"`
+	TitleEN       string         `json:"title_en"`
+	Type          string         `json:"type"`
 	PlotAR        string         `json:"plot_ar,omitempty"`
 	PlotEN        string         `json:"plot_en,omitempty"`
 	ReleaseYear   int            `json:"release_year,omitempty"`
@@ -248,22 +248,22 @@ type MediaListResult struct {
 // deliberately not the editorial Collection type below: provider identity is
 // stable while an editorial collection is controlled by the library owner.
 type ProviderCollection struct {
-	ID             int64  `json:"id"`
-	Slug           string `json:"slug"`
-	Provider       string `json:"provider"`
-	ExternalID     string `json:"external_id"`
-	Kind           string `json:"kind"`
-	TitleAR        string `json:"title_ar,omitempty"`
-	TitleEN        string `json:"title_en"`
-	OverviewAR     string `json:"overview_ar,omitempty"`
-	OverviewEN     string `json:"overview_en,omitempty"`
-	PosterPath     string `json:"poster_path,omitempty"`
-	BackdropPath   string `json:"backdrop_path,omitempty"`
-	PartsCount     int    `json:"parts_count"`
+	ID             int64   `json:"id"`
+	Slug           string  `json:"slug"`
+	Provider       string  `json:"provider"`
+	ExternalID     string  `json:"external_id"`
+	Kind           string  `json:"kind"`
+	TitleAR        string  `json:"title_ar,omitempty"`
+	TitleEN        string  `json:"title_en"`
+	OverviewAR     string  `json:"overview_ar,omitempty"`
+	OverviewEN     string  `json:"overview_en,omitempty"`
+	PosterPath     string  `json:"poster_path,omitempty"`
+	BackdropPath   string  `json:"backdrop_path,omitempty"`
+	PartsCount     int     `json:"parts_count"`
 	Rating         float64 `json:"rating,omitempty"`
-	LocalItemCount int    `json:"local_item_count"`
-	IsFeatured     bool   `json:"is_featured"`
-	IsHidden       bool   `json:"is_hidden"`
+	LocalItemCount int     `json:"local_item_count"`
+	IsFeatured     bool    `json:"is_featured"`
+	IsHidden       bool    `json:"is_hidden"`
 }
 
 // ProviderCollectionPart is an official TMDB collection member. Local media
@@ -3093,14 +3093,14 @@ type TMDBLogEntry struct {
 }
 
 type TMDBQueueJob struct {
-	ID          int64      `json:"id"`
-	MediaItemID int64      `json:"media_item_id"`
-	Priority    int        `json:"priority"`
-	Status      string     `json:"status"`
-	Attempts    int        `json:"attempts"`
-	LastError   string     `json:"last_error,omitempty"`
-	ScheduledAt time.Time  `json:"scheduled_at"`
-	CreatedAt   time.Time  `json:"created_at"`
+	ID          int64     `json:"id"`
+	MediaItemID int64     `json:"media_item_id"`
+	Priority    int       `json:"priority"`
+	Status      string    `json:"status"`
+	Attempts    int       `json:"attempts"`
+	LastError   string    `json:"last_error,omitempty"`
+	ScheduledAt time.Time `json:"scheduled_at"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 func (r *Repository) EnqueueTMDBRefresh(ctx context.Context, mediaID int64, priority int) error {
@@ -3109,27 +3109,39 @@ func (r *Repository) EnqueueTMDBRefresh(ctx context.Context, mediaID int64, prio
 }
 
 func (r *Repository) EnqueueStaleTMDBRefreshes(ctx context.Context, staleDays, limit int) error {
-	if staleDays < 1 { staleDays = 30 }
-	if limit < 1 || limit > 500 { limit = 100 }
+	if staleDays < 1 {
+		staleDays = 30
+	}
+	if limit < 1 || limit > 500 {
+		limit = 100
+	}
 	_, err := r.db.ExecContext(ctx, `INSERT INTO tmdb_refresh_queue (media_item_id,priority) SELECT id,0 FROM media_items WHERE metadata_provider IS NULL OR metadata_fetched_at IS NULL OR metadata_fetched_at < CURRENT_TIMESTAMP - ($1 * INTERVAL '1 day') ORDER BY metadata_fetched_at NULLS FIRST,id LIMIT $2 ON CONFLICT DO NOTHING`, staleDays, limit)
 	return err
 }
 
 func (r *Repository) EnqueueTMDBRefreshIfStale(ctx context.Context, mediaID int64, staleDays int) error {
-	if staleDays < 1 { staleDays = 7 }
+	if staleDays < 1 {
+		staleDays = 7
+	}
 	_, err := r.db.ExecContext(ctx, `INSERT INTO tmdb_refresh_queue (media_item_id,priority) SELECT id,20 FROM media_items WHERE id=$1 AND (metadata_provider IS NULL OR metadata_fetched_at IS NULL OR metadata_fetched_at < CURRENT_TIMESTAMP - ($2 * INTERVAL '1 day')) ON CONFLICT DO NOTHING`, mediaID, staleDays)
 	return err
 }
 
 func (r *Repository) ListTMDBQueue(ctx context.Context, limit int) ([]TMDBQueueJob, error) {
-	if limit <= 0 || limit > 200 { limit = 50 }
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
 	rows, err := r.db.QueryContext(ctx, `SELECT id,media_item_id,priority,status,attempts,COALESCE(last_error,''),scheduled_at,created_at FROM tmdb_refresh_queue ORDER BY CASE status WHEN 'running' THEN 0 WHEN 'pending' THEN 1 ELSE 2 END,priority DESC,scheduled_at,id LIMIT $1`, limit)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	defer rows.Close()
 	jobs := make([]TMDBQueueJob, 0)
 	for rows.Next() {
 		var job TMDBQueueJob
-		if err := rows.Scan(&job.ID, &job.MediaItemID, &job.Priority, &job.Status, &job.Attempts, &job.LastError, &job.ScheduledAt, &job.CreatedAt); err != nil { return nil, err }
+		if err := rows.Scan(&job.ID, &job.MediaItemID, &job.Priority, &job.Status, &job.Attempts, &job.LastError, &job.ScheduledAt, &job.CreatedAt); err != nil {
+			return nil, err
+		}
 		jobs = append(jobs, job)
 	}
 	return jobs, rows.Err()
@@ -3137,16 +3149,24 @@ func (r *Repository) ListTMDBQueue(ctx context.Context, limit int) ([]TMDBQueueJ
 
 func (r *Repository) CancelTMDBQueueJob(ctx context.Context, id int64) error {
 	result, err := r.db.ExecContext(ctx, `UPDATE tmdb_refresh_queue SET status='cancelled',finished_at=CURRENT_TIMESTAMP WHERE id=$1 AND status='pending'`, id)
-	if err != nil { return err }
-	if affected, _ := result.RowsAffected(); affected == 0 { return sql.ErrNoRows }
+	if err != nil {
+		return err
+	}
+	if affected, _ := result.RowsAffected(); affected == 0 {
+		return sql.ErrNoRows
+	}
 	return nil
 }
 
 func (r *Repository) ClaimTMDBQueueJob(ctx context.Context) (*TMDBQueueJob, error) {
 	var job TMDBQueueJob
-	err := r.db.QueryRowContext(ctx, `UPDATE tmdb_refresh_queue SET status='running',attempts=attempts+1,started_at=CURRENT_TIMESTAMP WHERE id=(SELECT id FROM tmdb_refresh_queue WHERE status='pending' AND scheduled_at <= CURRENT_TIMESTAMP ORDER BY priority DESC,scheduled_at,id FOR UPDATE SKIP LOCKED LIMIT 1) RETURNING id,media_item_id,priority,status,attempts,COALESCE(last_error,''),scheduled_at,created_at`, ).Scan(&job.ID, &job.MediaItemID, &job.Priority, &job.Status, &job.Attempts, &job.LastError, &job.ScheduledAt, &job.CreatedAt)
-	if errors.Is(err, sql.ErrNoRows) { return nil, nil }
-	if err != nil { return nil, err }
+	err := r.db.QueryRowContext(ctx, `UPDATE tmdb_refresh_queue SET status='running',attempts=attempts+1,started_at=CURRENT_TIMESTAMP WHERE id=(SELECT id FROM tmdb_refresh_queue WHERE status='pending' AND scheduled_at <= CURRENT_TIMESTAMP ORDER BY priority DESC,scheduled_at,id FOR UPDATE SKIP LOCKED LIMIT 1) RETURNING id,media_item_id,priority,status,attempts,COALESCE(last_error,''),scheduled_at,created_at`).Scan(&job.ID, &job.MediaItemID, &job.Priority, &job.Status, &job.Attempts, &job.LastError, &job.ScheduledAt, &job.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
 	return &job, nil
 }
 
@@ -3227,15 +3247,21 @@ func (r *Repository) GetTMDBUsageSummary(ctx context.Context) (*metadata.TMDBUsa
 }
 
 func (r *Repository) GetTMDBUsageHistory(ctx context.Context, days int) ([]metadata.TMDBUsageDay, error) {
-	if days < 1 || days > 730 { days = 90 }
+	if days < 1 || days > 730 {
+		days = 90
+	}
 	rows, err := r.db.QueryContext(ctx, `SELECT created_at::date,COUNT(*),COALESCE(SUM(bytes_downloaded),0),COALESCE(SUM(images_downloaded),0),COUNT(*) FILTER (WHERE status_code BETWEEN 200 AND 299),COUNT(*) FILTER (WHERE status_code < 200 OR status_code >= 300) FROM tmdb_usage_log WHERE created_at >= CURRENT_DATE - ($1 * INTERVAL '1 day') GROUP BY created_at::date ORDER BY created_at::date DESC`, days)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	defer rows.Close()
 	history := make([]metadata.TMDBUsageDay, 0)
 	for rows.Next() {
 		var day time.Time
 		var item metadata.TMDBUsageDay
-		if err := rows.Scan(&day, &item.Requests, &item.BytesDownloaded, &item.ImagesDownloaded, &item.Successful, &item.Failed); err != nil { return nil, err }
+		if err := rows.Scan(&day, &item.Requests, &item.BytesDownloaded, &item.ImagesDownloaded, &item.Successful, &item.Failed); err != nil {
+			return nil, err
+		}
 		item.Day = day.Format("2006-01-02")
 		item.MBDownloaded = float64(item.BytesDownloaded) / (1024 * 1024)
 		history = append(history, item)

@@ -184,12 +184,18 @@ func (s *Server) runTMDBQueue() {
 			_ = s.repository.EnqueueStaleTMDBRefreshes(context.Background(), settings.RefreshIntervalDays, 100)
 		}
 		workers := settings.QueueMaxConcurrent
-		if workers < 1 { workers = 1 }
-		if workers > 4 { workers = 4 }
+		if workers < 1 {
+			workers = 1
+		}
+		if workers > 4 {
+			workers = 4
+		}
 		var group sync.WaitGroup
 		for index := 0; index < workers; index++ {
 			job, err := s.repository.ClaimTMDBQueueJob(context.Background())
-			if err != nil || job == nil { break }
+			if err != nil || job == nil {
+				break
+			}
 			group.Add(1)
 			go func(job *db.TMDBQueueJob) {
 				defer group.Done()
@@ -201,14 +207,16 @@ func (s *Server) runTMDBQueue() {
 }
 
 func (s *Server) processTMDBQueueJob(job *db.TMDBQueueJob) {
-		request := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/media/%d/enrich", job.MediaItemID), nil)
-		request.SetPathValue("id", strconv.FormatInt(job.MediaItemID, 10))
-		response := httptest.NewRecorder()
-		s.handleMediaEnrich(response, request)
-		succeeded := response.Code >= 200 && response.Code < 300
-		message := ""
-		if !succeeded { message = strings.TrimSpace(response.Body.String()) }
-		_ = s.repository.FinishTMDBQueueJob(context.Background(), job.ID, succeeded, message)
+	request := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/media/%d/enrich", job.MediaItemID), nil)
+	request.SetPathValue("id", strconv.FormatInt(job.MediaItemID, 10))
+	response := httptest.NewRecorder()
+	s.handleMediaEnrich(response, request)
+	succeeded := response.Code >= 200 && response.Code < 300
+	message := ""
+	if !succeeded {
+		message = strings.TrimSpace(response.Body.String())
+	}
+	_ = s.repository.FinishTMDBQueueJob(context.Background(), job.ID, succeeded, message)
 }
 
 func (s *Server) routes() {
@@ -275,6 +283,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/stream", s.handleStream)
 	s.mux.HandleFunc("GET /api/stream/image", s.handleStreamImage)
 	s.mux.HandleFunc("GET /api/stream/file/{id}", s.handleStreamByID)
+	s.mux.HandleFunc("GET /api/stream/file/{id}/preview", s.handleFilePreview)
 	s.mux.HandleFunc("GET /api/stream/file/{id}/subtitles", s.handleFileSubtitles)
 	s.mux.HandleFunc("GET /api/stream/file/{id}/subtitles/{subId}", s.handleFileSubtitleStream)
 
@@ -1211,6 +1220,42 @@ func (s *Server) handleStreamByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.serveMediaPath(w, r, path)
+}
+
+// handleFilePreview returns a cached FFmpeg frame for timeline hovering. The
+// requested timestamp is quantized to ten seconds, so one short hover creates
+// one reusable image instead of running FFmpeg for every cursor movement.
+func (s *Server) handleFilePreview(w http.ResponseWriter, r *http.Request) {
+	fileID, ok := parsePositiveID(r.PathValue("id"))
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "file id must be a positive integer"})
+		return
+	}
+	second, err := strconv.Atoi(r.URL.Query().Get("at"))
+	if err != nil || second < 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "at must be a non-negative second"})
+		return
+	}
+	second = (second / 10) * 10
+	path, err := s.repository.GetVideoFilePath(r.Context(), fileID)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]any{"error": err.Error()})
+		return
+	}
+	if !s.mediaPathAllowed(path) {
+		writeJSON(w, http.StatusForbidden, map[string]any{"error": "media path is outside configured roots"})
+		return
+	}
+	relative := filepath.ToSlash(filepath.Join("previews", strconv.FormatInt(fileID, 10), fmt.Sprintf("%d.jpg", second)))
+	outputPath := filepath.Join(s.config.AssetImageDir, filepath.FromSlash(relative))
+	if _, err := os.Stat(outputPath); err != nil {
+		if _, err := s.processor.GenerateThumbnail(r.Context(), path, outputPath, time.Duration(second)*time.Second); err != nil {
+			writeJSON(w, http.StatusFailedDependency, map[string]any{"error": err.Error()})
+			return
+		}
+	}
+	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	http.Redirect(w, r, "/assets/images/"+relative, http.StatusTemporaryRedirect)
 }
 
 func (s *Server) serveMediaPath(w http.ResponseWriter, r *http.Request, path string) {
@@ -2180,31 +2225,54 @@ func (s *Server) handleTMDBSettingsGet(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleTMDBQueueGet(w http.ResponseWriter, r *http.Request) {
 	jobs, err := s.repository.ListTMDBQueue(r.Context(), 100)
-	if err != nil { writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()}); return }
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"jobs": jobs})
 }
 
 func (s *Server) handleTMDBUsageHistory(w http.ResponseWriter, r *http.Request) {
 	days := 90
-	if raw := r.URL.Query().Get("days"); raw != "" { if parsed, err := strconv.Atoi(raw); err == nil { days = parsed } }
+	if raw := r.URL.Query().Get("days"); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil {
+			days = parsed
+		}
+	}
 	history, err := s.repository.GetTMDBUsageHistory(r.Context(), days)
-	if err != nil { writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()}); return }
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"history": history})
 }
 
 func (s *Server) handleTMDBQueueCreate(w http.ResponseWriter, r *http.Request) {
-	var request struct { MediaItemID int64 `json:"media_item_id"`; Priority int `json:"priority"` }
-	if err := decodeJSON(r, &request); err != nil || request.MediaItemID <= 0 {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "media_item_id must be positive"}); return
+	var request struct {
+		MediaItemID int64 `json:"media_item_id"`
+		Priority    int   `json:"priority"`
 	}
-	if err := s.repository.EnqueueTMDBRefresh(r.Context(), request.MediaItemID, request.Priority); err != nil { writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()}); return }
+	if err := decodeJSON(r, &request); err != nil || request.MediaItemID <= 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "media_item_id must be positive"})
+		return
+	}
+	if err := s.repository.EnqueueTMDBRefresh(r.Context(), request.MediaItemID, request.Priority); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
 	writeJSON(w, http.StatusAccepted, map[string]any{"ok": true, "media_item_id": request.MediaItemID})
 }
 
 func (s *Server) handleTMDBQueueCancel(w http.ResponseWriter, r *http.Request) {
 	id, ok := parsePositiveID(r.PathValue("id"))
-	if !ok { writeJSON(w, http.StatusBadRequest, map[string]any{"error": "queue id must be positive"}); return }
-	if err := s.repository.CancelTMDBQueueJob(r.Context(), id); err != nil { writeJSON(w, http.StatusNotFound, map[string]any{"error": err.Error()}); return }
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "queue id must be positive"})
+		return
+	}
+	if err := s.repository.CancelTMDBQueueJob(r.Context(), id); err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]any{"error": err.Error()})
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "id": id})
 }
 
