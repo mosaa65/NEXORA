@@ -146,7 +146,7 @@ export default function ShowcaseHero({ context = "home", category, fallbackItems
       <div className="absolute inset-0 -z-10 bg-gradient-to-t from-black/70 via-transparent to-black/20" />
       <div className={`absolute inset-y-0 right-0 -z-10 w-2 bg-gradient-to-b ${accent}`} />
 
-      <div className="flex min-h-[360px] max-w-2xl flex-col justify-end gap-4 p-5 pb-24 sm:min-h-[420px] sm:p-8 sm:pb-20 lg:min-h-[480px] lg:p-10">
+      <div className="flex min-h-[360px] max-w-2xl flex-col justify-end gap-4 p-5 sm:min-h-[420px] sm:p-8 lg:min-h-[480px] lg:p-10">
         <div className="flex flex-wrap items-center gap-2">
           <span className={`inline-flex items-center gap-1.5 rounded-full bg-gradient-to-l ${accent} px-3 py-1.5 text-xs font-extrabold text-white shadow-lg`}>
             <Icon name={isCollection ? "spark" : current.type === "movie" ? "film" : "tv"} className="h-3.5 w-3.5" />
@@ -163,19 +163,18 @@ export default function ShowcaseHero({ context = "home", category, fallbackItems
 
         {facts.length > 0 && <div className="flex flex-wrap gap-2">{facts.map((fact) => <span key={fact} className="rounded-lg border border-white/20 bg-black/35 px-2.5 py-1.5 text-xs font-bold text-white backdrop-blur">{fact}</span>)}</div>}
 
-        <div className="flex flex-wrap items-center gap-3 pt-1">
-          <button type="button" onClick={open} disabled={isFallback} className={`min-h-11 rounded-xl bg-gradient-to-l ${accent} px-5 text-sm font-extrabold text-white shadow-lg transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:cursor-default disabled:opacity-90`}>
+        <div className="flex min-w-0 items-center gap-2 pt-1">
+          <button type="button" onClick={open} disabled={isFallback} className={`min-h-10 shrink-0 rounded-xl bg-gradient-to-l ${accent} px-3 text-xs font-extrabold text-white shadow-lg transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:cursor-default disabled:opacity-90 sm:min-h-11 sm:px-5 sm:text-sm`}>
             {isFallback ? "جارٍ تجهيز مكتبتك" : isCollection ? "استكشف المجموعة" : "تفاصيل العمل"}
           </button>
-          {isCollection && current.target?.category && <button type="button" onClick={() => onNavigate?.({ category: current.target.category })} className="min-h-11 rounded-xl border border-white/25 bg-black/20 px-5 text-sm font-bold text-white backdrop-blur transition hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">عرض الكل</button>}
+          {isCollection && current.target?.category && <button type="button" onClick={() => onNavigate?.({ category: current.target.category })} className="min-h-10 shrink-0 rounded-xl border border-white/25 bg-black/20 px-3 text-xs font-bold text-white backdrop-blur transition hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white sm:min-h-11 sm:px-5 sm:text-sm">عرض الكل</button>}
+          {slides.length > 1 && <div className="ml-auto flex min-w-0 shrink items-center gap-0.5 rounded-xl border border-white/15 bg-black/35 p-1 backdrop-blur sm:gap-2 sm:rounded-2xl sm:p-1.5" aria-label="شرائح العرض">
+            <button type="button" onClick={() => { setPaused(true); setActive((value) => (value - 1 + slides.length) % slides.length); }} aria-label="المحتوى السابق" title="المحتوى السابق" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-base text-white/80 transition hover:bg-white/15 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-white sm:h-8 sm:w-8 sm:rounded-xl sm:text-lg">‹</button>
+            <div className="flex min-w-0 items-center gap-1 overflow-hidden px-0.5 sm:gap-1.5 sm:px-1">{slides.map((slide, slideIndex) => <button key={slide.id} type="button" onClick={() => { setPaused(true); setActive(slideIndex); }} aria-label={`عرض الشريحة ${slideIndex + 1}`} aria-current={slideIndex === index} className={`h-2 rounded-full transition-all ${slideIndex === index ? "w-5 bg-white sm:w-7" : "w-2 bg-white/40 hover:bg-white/70"}`} />)}</div>
+            <button type="button" onClick={() => { setPaused(true); setActive((value) => (value + 1) % slides.length); }} aria-label="المحتوى التالي" title="المحتوى التالي" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-base text-white/80 transition hover:bg-white/15 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-white sm:h-8 sm:w-8 sm:rounded-xl sm:text-lg">›</button>
+          </div>}
         </div>
       </div>
-
-      {slides.length > 1 && <div className="absolute bottom-4 left-1/2 flex max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-1.5 rounded-2xl border border-white/15 bg-black/35 p-1.5 backdrop-blur sm:bottom-7 sm:left-7 sm:max-w-none sm:translate-x-0 sm:gap-2" aria-label="شرائح العرض">
-        <button type="button" onClick={() => { setPaused(true); setActive((value) => (value - 1 + slides.length) % slides.length); }} aria-label="المحتوى السابق" title="المحتوى السابق" className="flex h-8 w-8 items-center justify-center rounded-xl text-lg text-white/80 transition hover:bg-white/15 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-white">‹</button>
-        <div className="flex items-center gap-1.5 px-1">{slides.map((slide, slideIndex) => <button key={slide.id} type="button" onClick={() => { setPaused(true); setActive(slideIndex); }} aria-label={`عرض الشريحة ${slideIndex + 1}`} aria-current={slideIndex === index} className={`h-2.5 rounded-full transition-all ${slideIndex === index ? "w-7 bg-white" : "w-2.5 bg-white/40 hover:bg-white/70"}`} />)}</div>
-        <button type="button" onClick={() => { setPaused(true); setActive((value) => (value + 1) % slides.length); }} aria-label="المحتوى التالي" title="المحتوى التالي" className="flex h-8 w-8 items-center justify-center rounded-xl text-lg text-white/80 transition hover:bg-white/15 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-white">›</button>
-      </div>}
     </section>
   );
 }
