@@ -1,0 +1,157 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "NEXORA Enterprise Cinema & Media API",
+    "description": "واجهة برمجة التطبيقات الرسمية لمنظومة NEXORA لإدارة ودفق ومزامنة مكتبات الوسائط الضخمة.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8080",
+      "description": "خادم التطوير المحلي"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "AdminBearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "HMAC-SHA256",
+        "description": "رمز مصادقة المشرف الموقّع تشفيرياً عبر HMAC-SHA256"
+      }
+    },
+    "schemas": {
+      "HealthResponse": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "example": "ok" },
+          "database": { "type": "string", "example": "connected" },
+          "version": { "type": "string", "example": "1.0.0" }
+        }
+      },
+      "AdminLoginRequest": {
+        "type": "object",
+        "required": ["username", "password"],
+        "properties": {
+          "username": { "type": "string", "example": "admin" },
+          "password": { "type": "string", "example": "admin123" }
+        }
+      },
+      "AdminLoginResponse": {
+        "type": "object",
+        "properties": {
+          "ok": { "type": "boolean", "example": true },
+          "token": { "type": "string" },
+          "user": {
+            "type": "object",
+            "properties": {
+              "username": { "type": "string" },
+              "role": { "type": "string", "example": "superadmin" }
+            }
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "فحص جاهزية وصحة النظام وقاعدة البيانات",
+        "tags": ["System"],
+        "responses": {
+          "200": { "description": "النظام يعمل بصحة تامة" }
+        }
+      }
+    },
+    "/api/admin/login": {
+      "post": {
+        "summary": "تسجيل دخول المشرف وإصدار توكن الجلسة الآمن",
+        "tags": ["Authentication"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/AdminLoginRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "نجاح تسجيل الدخول" },
+          "401": { "description": "بيانات الدخول غير صحيحة" }
+        }
+      }
+    },
+    "/api/admin/session": {
+      "get": {
+        "summary": "التحقق من صلاحية جلسة المشرف النشطة",
+        "tags": ["Authentication"],
+        "security": [{ "AdminBearerAuth": [] }],
+        "responses": {
+          "200": { "description": "الجلسة صالحة وموثقة" },
+          "401": { "description": "الجلسة منتهية أو غير موثقة" }
+        }
+      }
+    },
+    "/api/categories": {
+      "get": {
+        "summary": "استعراض تصنيفات المكتبة وإحصائيات الأعمال",
+        "tags": ["Catalog"],
+        "responses": {
+          "200": { "description": "قائمة التصنيفات" }
+        }
+      },
+      "post": {
+        "summary": "إنشاء تصنيف جديد (مخصص للمشرف)",
+        "tags": ["Catalog Administration"],
+        "security": [{ "AdminBearerAuth": [] }],
+        "responses": {
+          "201": { "description": "تم إنشاء التصنيف بنجاح" },
+          "401": { "description": "غير مصرح" }
+        }
+      }
+    },
+    "/api/media": {
+      "get": {
+        "summary": "البحث واستعراض وسائط الكتالوج مع الفلاتر",
+        "tags": ["Media"],
+        "parameters": [
+          { "name": "category", "in": "query", "schema": { "type": "string" } },
+          { "name": "sort", "in": "query", "schema": { "type": "string" } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 24 } },
+          { "name": "offset", "in": "query", "schema": { "type": "integer", "default": 0 } }
+        ],
+        "responses": {
+          "200": { "description": "قائمة الوسائط والعدد الإجمالي" }
+        }
+      }
+    },
+    "/api/stream": {
+      "get": {
+        "summary": "دفق فيديو الوسائط بأعلى جودة مع دعم Range Requests",
+        "tags": ["Streaming"],
+        "parameters": [
+          { "name": "path", "in": "query", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "بث كامل" },
+          "206": { "description": "دفق جزئي عبر Partial Content" },
+          "403": { "description": "المسار محظور خارج نطاق الوسائط" }
+        }
+      }
+    },
+    "/api/system/browse": {
+      "get": {
+        "summary": "استعراض شجرة المجلدات لاختيار مسارات الوسائط (مشرف فقط)",
+        "tags": ["System Administration"],
+        "security": [{ "AdminBearerAuth": [] }],
+        "parameters": [
+          { "name": "path", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "محتويات المجلد" },
+          "401": { "description": "غير مصرح" }
+        }
+      }
+    }
+  }
+}

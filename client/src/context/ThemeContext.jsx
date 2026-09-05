@@ -3,7 +3,7 @@ import React, { createContext, useCallback, useEffect, useState } from "react";
 const STORAGE_KEY = "nexora_theme";
 const FONT_STORAGE_KEY = "nexora_font";
 const VALID_THEMES = ["dark", "light"];
-const VALID_FONTS = ["plex", "cairo"];
+const VALID_FONTS = ["plex", "cairo", "changa", "messiri", "kufi", "vazir"];
 
 export const ThemeContext = createContext({
   theme: "dark",

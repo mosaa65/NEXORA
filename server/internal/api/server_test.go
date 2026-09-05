@@ -412,6 +412,7 @@ func TestOfflineCatalogGraphEndpoints(t *testing.T) {
 			body = bytes.NewBufferString(`{"is_featured":true}`)
 		}
 		req := httptest.NewRequest(testCase.method, testCase.path, body)
+		req.Header.Set("Authorization", "Bearer nexora_admin_auth_token_active")
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, req)
 		if rec.Code != http.StatusOK {
@@ -491,6 +492,7 @@ func TestIndexStreamsFilesInBoundedBatches(t *testing.T) {
 	}
 	req := httptest.NewRequest(http.MethodPost, "/api/index", bytes.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer nexora_admin_auth_token_active")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -527,5 +529,71 @@ func TestQualityReportEndpoint(t *testing.T) {
 	}
 	if report.DuplicateGroupsCount != 1 {
 		t.Errorf("expected 1 duplicate group, got: %d", report.DuplicateGroupsCount)
+	}
+}
+
+func TestAdminAuthProtection(t *testing.T) {
+	handler := setupTestServer()
+
+	// 1. Unauthenticated admin call should return 401
+	reqUnauth := httptest.NewRequest(http.MethodPost, "/api/admin/catalog/sync-relations", bytes.NewBufferString("{}"))
+	recUnauth := httptest.NewRecorder()
+	handler.ServeHTTP(recUnauth, reqUnauth)
+	if recUnauth.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 Unauthorized for unauth admin request, got: %d", recUnauth.Code)
+	}
+
+	// 2. Admin login returns signed token
+	loginBody := bytes.NewBufferString(`{"username":"admin","password":"admin123"}`)
+	reqLogin := httptest.NewRequest(http.MethodPost, "/api/admin/login", loginBody)
+	recLogin := httptest.NewRecorder()
+	handler.ServeHTTP(recLogin, reqLogin)
+	if recLogin.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for admin login, got: %d: %s", recLogin.Code, recLogin.Body.String())
+	}
+	var loginResp struct {
+		OK    bool   `json:"ok"`
+		Token string `json:"token"`
+	}
+	if err := json.NewDecoder(recLogin.Body).Decode(&loginResp); err != nil || !loginResp.OK || loginResp.Token == "" {
+		t.Fatalf("invalid login response: %v, resp: %#v", err, loginResp)
+	}
+
+	// 3. Authenticated admin call with token should return 200
+	reqAuth := httptest.NewRequest(http.MethodPost, "/api/admin/catalog/sync-relations", bytes.NewBufferString("{}"))
+	reqAuth.Header.Set("Authorization", "Bearer "+loginResp.Token)
+	recAuth := httptest.NewRecorder()
+	handler.ServeHTTP(recAuth, reqAuth)
+	if recAuth.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for authenticated admin call, got: %d: %s", recAuth.Code, recAuth.Body.String())
+	}
+}
+
+func TestSecurityMediaPathAllowed(t *testing.T) {
+	tempRoot := t.TempDir()
+	server := &Server{
+		config: config.Config{
+			MediaRoots:    []string{tempRoot},
+			AssetImageDir: filepath.Join(tempRoot, "assets"),
+		},
+	}
+
+	// Valid inside media roots
+	validFile := filepath.Join(tempRoot, "movie.mp4")
+	if !server.mediaPathAllowed(validFile) {
+		t.Errorf("expected validFile within media roots to be allowed: %s", validFile)
+	}
+
+	// Arbitrary path traversal attack outside root
+	attackPaths := []string{
+		`C:\Windows\System32\cmd.exe`,
+		`/etc/passwd`,
+		filepath.Join(tempRoot, "..", "secret.txt"),
+		"",
+	}
+	for _, attack := range attackPaths {
+		if server.mediaPathAllowed(attack) {
+			t.Errorf("security violation: path %q should NOT be allowed", attack)
+		}
 	}
 }

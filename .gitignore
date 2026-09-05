@@ -29,6 +29,10 @@ client/tmp/
 .env
 .env.*
 !.env.example
+server/.env
+server/.env.*
+client/.env
+client/.env.*
 
 # === Local caches and logs ===
 .cache/

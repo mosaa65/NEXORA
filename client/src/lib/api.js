@@ -63,13 +63,21 @@ async function requestJSON(path, options = {}) {
   }
 
   const performRequest = async () => {
-  const response = await fetch(`${API_BASE}${path}`, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {})
-    },
-    ...options
-  });
+    let authHeader = {};
+    if (typeof localStorage !== "undefined") {
+      const token = localStorage.getItem("nexora_admin_token");
+      if (token) {
+        authHeader = { Authorization: `Bearer ${token}` };
+      }
+    }
+    const response = await fetch(`${API_BASE}${path}`, {
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeader,
+        ...(options.headers || {})
+      },
+      ...options
+    });
 
   const text = await response.text();
   let data = null;

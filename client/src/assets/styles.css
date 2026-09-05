@@ -13,6 +13,10 @@
 @font-face { font-family: "NEXORA Latin"; src: url("/fonts/manrope-600.ttf") format("truetype"); font-weight: 600; font-style: normal; font-display: swap; }
 @font-face { font-family: "NEXORA Latin"; src: url("/fonts/manrope-700.ttf") format("truetype"); font-weight: 700; font-style: normal; font-display: swap; }
 @font-face { font-family: "NEXORA Latin"; src: url("/fonts/manrope-800.ttf") format("truetype"); font-weight: 800 900; font-style: normal; font-display: swap; }
+@font-face { font-family: "NEXORA Changa"; src: url("/fonts/changa-variable.ttf") format("truetype"); font-weight: 200 800; font-style: normal; font-display: swap; }
+@font-face { font-family: "NEXORA El Messiri"; src: url("/fonts/el-messiri-variable.ttf") format("truetype"); font-weight: 400 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "NEXORA Kufi"; src: url("/fonts/noto-kufi-arabic-variable.ttf") format("truetype"); font-weight: 100 900; font-style: normal; font-display: swap; }
+@font-face { font-family: "NEXORA Vazirmatn"; src: url("/fonts/vazirmatn-variable.ttf") format("truetype"); font-weight: 100 900; font-style: normal; font-display: swap; }
 
 @tailwind base;
 @tailwind components;
@@ -39,8 +43,8 @@ body {
   margin: 0;
   min-width: 320px;
   direction: ltr;
-  overflow: hidden;
-  font-family: var(--font-family);
+  overflow-x: hidden;
+  font-family: var(--font-family), "NEXORA Arabic", sans-serif;
   background: var(--bg-base);
   color: var(--text-primary);
   text-rendering: optimizeLegibility;
@@ -48,11 +52,18 @@ body {
   font-feature-settings: "kern" 1, "ss01" 1;
 }
 
+button,
+input,
+select,
+textarea {
+  font-family: var(--font-family), "NEXORA Arabic", sans-serif;
+}
+
 #root {
   direction: rtl;
-  height: 100dvh;
-  overflow-y: auto;
-  overflow-x: hidden;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
 }
 
 body::before {

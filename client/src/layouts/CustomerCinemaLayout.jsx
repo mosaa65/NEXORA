@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import Sidebar from "../components/Sidebar.jsx";
 import TopBar from "../components/TopBar.jsx";
@@ -102,7 +102,13 @@ export default function CustomerCinemaLayout({
 
           {/* Page Outlet */}
           <main className="min-w-0 flex-1">
-            <Outlet />
+            <Suspense fallback={
+              <div className="flex h-64 items-center justify-center">
+                <div className="h-8 w-8 animate-spin rounded-full border-2 border-fuchsia-500 border-t-transparent" />
+              </div>
+            }>
+              <Outlet />
+            </Suspense>
           </main>
         </div>
       </div>

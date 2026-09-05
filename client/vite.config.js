@@ -19,6 +19,17 @@ export default defineConfig({
       "react-dom": path.resolve(clientRoot, "node_modules/react-dom")
     }
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ["react", "react-dom", "react-router-dom"],
+          motion: ["framer-motion"],
+          player: ["plyr"]
+        }
+      }
+    }
+  },
   server: {
     host: "0.0.0.0",
     port: 5173,

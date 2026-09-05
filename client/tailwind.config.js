@@ -18,8 +18,9 @@ export default {
         glass: "rgba(255, 255, 255, 0.08)"
       },
       fontFamily: {
-        display: ['"Space Grotesk"', '"Cairo"', "sans-serif"],
-        body: ['"Cairo"', '"Space Grotesk"', "sans-serif"]
+        sans: ["var(--font-family)"],
+        display: ["var(--font-latin)", "var(--font-arabic)", "sans-serif"],
+        body: ["var(--font-family)"]
       },
       boxShadow: {
         neon: "0 0 0 1px rgba(25, 183, 255, 0.18), 0 0 48px rgba(90, 50, 244, 0.22)",

@@ -1,24 +1,25 @@
-import React, { useEffect, useState, useDeferredValue } from "react";
+import React, { useEffect, useState, useDeferredValue, Suspense } from "react";
 import { HashRouter, Routes, Route, Navigate, useNavigate, useParams } from "react-router-dom";
 import CustomerCinemaLayout from "./layouts/CustomerCinemaLayout.jsx";
 import AdminPortalLayout from "./layouts/AdminPortalLayout.jsx";
 import DashboardPage from "./pages/DashboardPage.jsx";
 import CategoryPage from "./pages/CategoryPage.jsx";
 import SmartHubPage from "./pages/SmartHubPage.jsx";
-import FranchisePage from "./pages/FranchisePage.jsx";
-import PersonPage from "./pages/PersonPage.jsx";
-import DirectoryPage from "./pages/DirectoryPage.jsx";
-import MediaDetailsPage from "./pages/MediaDetailsPage.jsx";
-import AdminCategoriesPage from "./pages/admin/AdminCategoriesPage.jsx";
-import AdminCollectionsPage from "./pages/admin/AdminCollectionsPage.jsx";
-import AdminSmartHubsPage from "./pages/admin/AdminSmartHubsPage.jsx";
-import AdminMediaPage from "./pages/admin/AdminMediaPage.jsx";
-import AdminIndexerPage from "./pages/admin/AdminIndexerPage.jsx";
-import AdminQualityPage from "./pages/admin/AdminQualityPage.jsx";
-import AdminMigrationPage from "./pages/admin/AdminMigrationPage.jsx";
-import AdminOverviewPage from "./pages/admin/AdminOverviewPage.jsx";
-import TMDBSettingsPage from "./pages/TMDBSettingsPage.jsx";
-import AdminLoginPage from "./pages/AdminLoginPage.jsx";
+
+const FranchisePage = React.lazy(() => import("./pages/FranchisePage.jsx"));
+const PersonPage = React.lazy(() => import("./pages/PersonPage.jsx"));
+const DirectoryPage = React.lazy(() => import("./pages/DirectoryPage.jsx"));
+const MediaDetailsPage = React.lazy(() => import("./pages/MediaDetailsPage.jsx"));
+const AdminCategoriesPage = React.lazy(() => import("./pages/admin/AdminCategoriesPage.jsx"));
+const AdminCollectionsPage = React.lazy(() => import("./pages/admin/AdminCollectionsPage.jsx"));
+const AdminSmartHubsPage = React.lazy(() => import("./pages/admin/AdminSmartHubsPage.jsx"));
+const AdminMediaPage = React.lazy(() => import("./pages/admin/AdminMediaPage.jsx"));
+const AdminIndexerPage = React.lazy(() => import("./pages/admin/AdminIndexerPage.jsx"));
+const AdminQualityPage = React.lazy(() => import("./pages/admin/AdminQualityPage.jsx"));
+const AdminMigrationPage = React.lazy(() => import("./pages/admin/AdminMigrationPage.jsx"));
+const AdminOverviewPage = React.lazy(() => import("./pages/admin/AdminOverviewPage.jsx"));
+const TMDBSettingsPage = React.lazy(() => import("./pages/TMDBSettingsPage.jsx"));
+const AdminLoginPage = React.lazy(() => import("./pages/AdminLoginPage.jsx"));
 import VideoPlayer from "./components/VideoPlayer.jsx";
 import { categorySeed, getCategoryMeta } from "./data/library.js";
 import { getCategories, getHealth, getMediaDetail, getFileSubtitles, getMediaList, syncIndex, resolveAPIURL } from "./lib/api.js";
@@ -213,9 +214,11 @@ export default function App() {
         <Route
           path="/admin/login"
           element={
-            <AdminLoginPage
-              onLoginSuccess={() => (window.location.hash = "#/admin/categories")}
-            />
+            <Suspense fallback={<div className="min-h-screen bg-[var(--bg-base)]" />}>
+              <AdminLoginPage
+                onLoginSuccess={() => (window.location.hash = "#/admin/categories")}
+              />
+            </Suspense>
           }
         />
 

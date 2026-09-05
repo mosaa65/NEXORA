@@ -30,6 +30,9 @@ type Config struct {
 	RedisAddr      string
 	RedisPassword  string
 	RedisDB        int
+	AdminUser      string
+	AdminPass      string
+	AdminSecret    string
 }
 
 func Load() Config {
@@ -57,6 +60,9 @@ func Load() Config {
 		RedisAddr:      envString("NEXORA_REDIS_ADDR", "127.0.0.1:6379"),
 		RedisPassword:  os.Getenv("NEXORA_REDIS_PASSWORD"),
 		RedisDB:        envInt("NEXORA_REDIS_DB", 0),
+		AdminUser:      envString("NEXORA_ADMIN_USER", "admin"),
+		AdminPass:      envString("NEXORA_ADMIN_PASS", "admin123"),
+		AdminSecret:    envString("NEXORA_ADMIN_SECRET", "nexora_admin_secret_signing_key_2026"),
 	}
 }
 

@@ -8,3 +8,7 @@
 }
 
 [data-font="cairo"] { --font-arabic: "NEXORA Cairo", sans-serif; }
+[data-font="changa"] { --font-arabic: "NEXORA Changa", sans-serif; }
+[data-font="messiri"] { --font-arabic: "NEXORA El Messiri", sans-serif; }
+[data-font="kufi"] { --font-arabic: "NEXORA Kufi", sans-serif; }
+[data-font="vazir"] { --font-arabic: "NEXORA Vazirmatn", sans-serif; }
