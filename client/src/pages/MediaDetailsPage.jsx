@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Icon from "../components/Icon.jsx";
 import { getMediaDetail, enrichMedia, getMediaMetadataSnapshot, getMediaSeasonMetadata, resolveAPIURL } from "../lib/api.js";
 import { horizontalWheel } from "../lib/horizontalScroll.js";
@@ -48,6 +49,7 @@ export default function MediaDetailsPage({
   onOpenCategory,
   onQuickPlay,
 }) {
+  const navigate = useNavigate();
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedSeasonIdx, setSelectedSeasonIdx] = useState(0);
@@ -188,7 +190,7 @@ export default function MediaDetailsPage({
               if (window.history.length > 1) {
                 window.history.back();
               } else {
-                window.location.hash = "#/";
+                navigate("/");
               }
             }}
             className="group inline-flex items-center gap-2.5 rounded-full border border-[var(--border-default)] bg-[var(--bg-card)] px-5 py-2.5 text-xs font-bold text-[var(--text-primary)] shadow-[var(--shadow-md)] backdrop-blur-xl"
@@ -217,7 +219,7 @@ export default function MediaDetailsPage({
               if (window.history.length > 1) {
                 window.history.back();
               } else {
-                window.location.hash = "#/";
+                navigate("/");
               }
             }}
             className="group inline-flex items-center gap-2.5 rounded-full border border-[var(--border-default)] bg-[var(--bg-card)] hover:bg-[var(--bg-elevated)] px-5 py-2.5 text-xs font-bold text-[var(--text-primary)] shadow-[var(--shadow-md)] backdrop-blur-xl transition"
@@ -292,7 +294,7 @@ export default function MediaDetailsPage({
             if (window.history.length > 1) {
               window.history.back();
             } else {
-              window.location.hash = "#/";
+              navigate("/");
             }
           }}
           className="group inline-flex items-center gap-2.5 rounded-full border border-[var(--border-default)] bg-[var(--bg-card)] px-4 py-2 text-xs font-bold text-[var(--text-primary)] shadow-[var(--shadow-sm)] backdrop-blur-xl transition hover:border-[var(--color-accent)] hover:bg-[var(--bg-elevated)]"

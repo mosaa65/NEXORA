@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import ShowcaseHero from "../components/ShowcaseHero.jsx";
 import UnifiedMediaCard from "../components/UnifiedMediaCard.jsx";
 import HubBannerCard from "../components/HubBannerCard.jsx";
@@ -49,6 +50,7 @@ export default function DashboardPage({
   onQuickPlay,
   onNavigateCategory,
 }) {
+  const navigate = useNavigate();
   const [items, setItems] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -62,7 +64,7 @@ export default function DashboardPage({
     let alive = true;
     setLoading(true);
 
-    getMediaList({ limit: 1000, sort: "rating" })
+    getMediaList({ limit: 24, sort: "rating" })
       .then((data) => {
         if (!alive) return;
         if (data?.items && data.items.length > 0) {
@@ -132,25 +134,23 @@ export default function DashboardPage({
   return (
     <div className="theme-aware-page space-y-10 pb-16 text-right" dir="rtl">
       {/* 1. Database-backed editorial showcase */}
-      {heroItems.length > 0 && (
-        <ShowcaseHero
-          context="home"
-          fallbackItems={heroItems}
-          onOpenMedia={onOpenMedia}
-          onNavigate={(target) => target?.category && onNavigateCategory?.(target.category)}
-        />
-      )}
+      <ShowcaseHero
+        context="home"
+        fallbackItems={heroItems}
+        onOpenMedia={onOpenMedia}
+        onNavigate={(target) => target?.category && onNavigateCategory?.(target.category)}
+      />
 
       <SmartHubRail
         title="استكشف حسب ذوقك"
         description="محاور ذكية تتكوّن تلقائيًا من بيانات مكتبتك المحلية."
-        onViewAll={() => (window.location.hash = "#/directory/hubs")}
-        onOpen={(hub) => (window.location.hash = `#/hub/${hub.slug}`)}
+        onViewAll={() => navigate("/directory/hubs")}
+        onOpen={(hub) => navigate(`/hub/${hub.slug}`)}
       />
 
-      <FranchiseRail onViewAll={() => (window.location.hash = "#/directory/franchises")} onOpen={(franchise) => { window.location.hash = `#/franchise/${franchise.slug}`; }} />
+      <FranchiseRail onViewAll={() => navigate("/directory/franchises")} onOpen={(franchise) => navigate(`/franchise/${franchise.slug}`)} />
 
-      <PeopleRail onViewAll={() => (window.location.hash = "#/directory/people")} onOpen={(person) => { window.location.hash = `#/person/${person.slug}`; }} />
+      <PeopleRail onViewAll={() => navigate("/directory/people")} onOpen={(person) => navigate(`/person/${person.slug}`)} />
 
       {/* 2. Featured Hub Banners Grid */}
       <div className="space-y-4">

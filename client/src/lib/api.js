@@ -5,6 +5,7 @@ const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 // navigation (and an accidental page refresh) does not repeatedly hit the API.
 const READ_CACHE_TTL = 2 * 60 * 1000;
 const HEALTH_CACHE_TTL = 15 * 1000;
+const MAX_CACHE_ENTRIES = 80;
 const CACHE_PREFIX = "nexora:api-cache:";
 const responseCache = new Map();
 const pendingRequests = new Map();
@@ -38,6 +39,11 @@ function readCachedResponse(key) {
 
 function saveCachedResponse(key, data, ttl) {
   const entry = { data, expiresAt: Date.now() + ttl };
+  if (responseCache.size >= MAX_CACHE_ENTRIES && !responseCache.has(key)) {
+    const oldestKey = [...responseCache.entries()]
+      .reduce((oldest, current) => (current[1].expiresAt < oldest[1].expiresAt ? current : oldest))[0];
+    responseCache.delete(oldestKey);
+  }
   responseCache.set(key, entry);
   try { sessionStorage.setItem(`${CACHE_PREFIX}${key}`, JSON.stringify(entry)); } catch {}
 }

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Icon from "../../components/Icon.jsx";
 import {
   Card,
@@ -58,6 +59,7 @@ const INITIAL_HUB_FORM = {
 };
 
 export default function AdminSmartHubsPage() {
+  const navigate = useNavigate();
   const [hubs, setHubs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editModal, setEditModal] = useState(null);
@@ -302,7 +304,7 @@ export default function AdminSmartHubsPage() {
                   <div className="flex items-center justify-between pt-3 border-t border-white/10">
                     <button
                       type="button"
-                      onClick={() => (window.location.hash = `#/hub/${hub.slug}`)}
+                      onClick={() => navigate(`/hub/${hub.slug}`)}
                       className="text-xs font-bold text-fuchsia-400 hover:text-fuchsia-300 hover:underline transition"
                     >
                       معاينة المحور ↵

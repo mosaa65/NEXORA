@@ -64,7 +64,8 @@ function MediaDetailsRouteWrapper({ onOpenCategory, onQuickPlay }) {
   );
 }
 
-export default function App() {
+function AppRoutes() {
+  const navigate = useNavigate();
   const [health, setHealth] = useState(null);
   const [categories, setCategories] = useState(categorySeed);
   const [searchQuery, setSearchQuery] = useState("");
@@ -134,7 +135,7 @@ export default function App() {
   }
 
   return (
-    <HashRouter>
+    <>
       <Routes>
         {/* ========================================================================= */}
         {/* 1. CUSTOMER CINEMA LOUNGE LAYOUT ROUTES                                    */}
@@ -148,7 +149,7 @@ export default function App() {
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
               searchResults={searchResults}
-              onOpenMedia={(item) => (window.location.hash = `#/media/${item.id}`)}
+              onOpenMedia={(item) => navigate(`/media/${item.id}`)}
               onQuickPlay={handleQuickPlay}
             />
           }
@@ -161,9 +162,9 @@ export default function App() {
                 searchQuery={searchQuery}
                 onSearchChange={setSearchQuery}
                 searchResults={searchResults}
-                onOpenMedia={(item) => (window.location.hash = `#/media/${item.id}`)}
+                onOpenMedia={(item) => navigate(`/media/${item.id}`)}
                 onQuickPlay={handleQuickPlay}
-                onNavigateCategory={(slug) => (window.location.hash = `#/catalog/${slug}`)}
+                onNavigateCategory={(slug) => navigate(`/catalog/${slug}`)}
               />
             }
           />
@@ -173,24 +174,24 @@ export default function App() {
             path="catalog/:category"
             element={
               <CategoryRouteWrapper
-                onOpenMedia={(item) => (window.location.hash = `#/media/${item.id}`)}
+                onOpenMedia={(item) => navigate(`/media/${item.id}`)}
                 onQuickPlay={handleQuickPlay}
               />
             }
           />
-          <Route path="hub/:slug" element={<SmartHubRouteWrapper onOpenMedia={(item) => (window.location.hash = `#/media/${item.id}`)} />} />
-          <Route path="franchise/:slug" element={<FranchiseRouteWrapper onOpenMedia={(item) => (window.location.hash = `#/media/${item.id}`)} />} />
-          <Route path="person/:slug" element={<PersonRouteWrapper onOpenMedia={(item) => (window.location.hash = `#/media/${item.id}`)} />} />
-          <Route path="directory/hubs" element={<DirectoryPage kind="hubs" onOpen={(hub) => (window.location.hash = `#/hub/${hub.slug}`)} />} />
-          <Route path="directory/people" element={<DirectoryPage kind="people" onOpen={(person) => (window.location.hash = `#/person/${person.slug}`)} />} />
-          <Route path="directory/franchises" element={<DirectoryPage kind="franchises" onOpen={(franchise) => (window.location.hash = `#/franchise/${franchise.slug}`)} />} />
+          <Route path="hub/:slug" element={<SmartHubRouteWrapper onOpenMedia={(item) => navigate(`/media/${item.id}`)} />} />
+          <Route path="franchise/:slug" element={<FranchiseRouteWrapper onOpenMedia={(item) => navigate(`/media/${item.id}`)} />} />
+          <Route path="person/:slug" element={<PersonRouteWrapper onOpenMedia={(item) => navigate(`/media/${item.id}`)} />} />
+          <Route path="directory/hubs" element={<DirectoryPage kind="hubs" onOpen={(hub) => navigate(`/hub/${hub.slug}`)} />} />
+          <Route path="directory/people" element={<DirectoryPage kind="people" onOpen={(person) => navigate(`/person/${person.slug}`)} />} />
+          <Route path="directory/franchises" element={<DirectoryPage kind="franchises" onOpen={(franchise) => navigate(`/franchise/${franchise.slug}`)} />} />
 
           {/* Favorites Route */}
           <Route
             path="favorites"
             element={
               <CategoryRouteWrapper
-                onOpenMedia={(item) => (window.location.hash = `#/media/${item.id}`)}
+                onOpenMedia={(item) => navigate(`/media/${item.id}`)}
                 onQuickPlay={handleQuickPlay}
               />
             }
@@ -201,7 +202,7 @@ export default function App() {
             path="media/:id"
             element={
               <MediaDetailsRouteWrapper
-                onOpenCategory={(slug) => (window.location.hash = `#/catalog/${slug}`)}
+                onOpenCategory={(slug) => navigate(`/catalog/${slug}`)}
                 onQuickPlay={handleQuickPlay}
               />
             }
@@ -216,7 +217,7 @@ export default function App() {
           element={
             <Suspense fallback={<div className="min-h-screen bg-[var(--bg-base)]" />}>
               <AdminLoginPage
-                onLoginSuccess={() => (window.location.hash = "#/admin/categories")}
+                onLoginSuccess={() => navigate("/admin/categories")}
               />
             </Suspense>
           }
@@ -230,7 +231,7 @@ export default function App() {
           element={<AdminPortalLayout health={health} onSyncIndex={handleSyncIndex} />}
         >
           <Route index element={<Navigate to="/admin/categories" replace />} />
-          <Route path="categories" element={<AdminCategoriesPage onNavigateToMedia={(slug) => (window.location.hash = `#/admin/media`)} />} />
+          <Route path="categories" element={<AdminCategoriesPage onNavigateToMedia={() => navigate("/admin/media")} />} />
           <Route path="collections" element={<AdminCollectionsPage />} />
           <Route path="hubs" element={<AdminSmartHubsPage />} />
           <Route path="media" element={<AdminMediaPage />} />
@@ -253,6 +254,14 @@ export default function App() {
           onClose={() => setPlayingMediaState(null)}
         />
       )}
+    </>
+  );
+}
+
+export default function App() {
+  return (
+    <HashRouter>
+      <AppRoutes />
     </HashRouter>
   );
 }

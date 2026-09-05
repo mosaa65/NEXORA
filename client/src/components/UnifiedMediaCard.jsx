@@ -12,6 +12,14 @@ const typeStyles = {
   play: "border-amber-300/25 bg-amber-950/70 text-amber-100",
   season: "border-indigo-300/25 bg-indigo-950/70 text-indigo-100",
 };
+const cardToneStyles = {
+  movie: "hover:border-cyan-400/70 hover:shadow-cyan-950/40",
+  series: "hover:border-emerald-400/70 hover:shadow-emerald-950/40",
+  anime: "hover:border-fuchsia-400/70 hover:shadow-fuchsia-950/40",
+  documentary: "hover:border-sky-400/70 hover:shadow-sky-950/40",
+  play: "hover:border-violet-400/70 hover:shadow-violet-950/40",
+  season: "hover:border-indigo-400/70 hover:shadow-indigo-950/40",
+};
 const statusLabels = { completed: "مكتمل", ongoing: "يعرض الآن", upcoming: "قادم", cancelled: "ملغي" };
 const statusStyles = {
   completed: "border-emerald-300/35 bg-emerald-500/20 text-emerald-50 shadow-[0_5px_18px_rgba(16,185,129,.20)]",
@@ -104,7 +112,7 @@ export default function UnifiedMediaCard({ media, onOpen, variant = "standard", 
   if (layout === "list") {
     return (
       <motion.button type="button" onClick={() => onOpen?.(media)} whileHover={{ x: -3 }} whileTap={{ scale: 0.99 }} transition={{ duration: 0.2 }}
-        className="group flex w-full items-stretch overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] text-right shadow-[var(--shadow-sm)] transition-[border-color,box-shadow] hover:border-fuchsia-400/55 hover:shadow-[var(--shadow-md)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]" dir="rtl" aria-label={`فتح تفاصيل ${title}`}>
+        className={`group flex w-full items-stretch overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] text-right shadow-[var(--shadow-sm)] transition-[border-color,box-shadow] ${cardToneStyles[mediaKind] || cardToneStyles.movie} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]`} dir="rtl" aria-label={`فتح تفاصيل ${title}`}>
         <div className="relative w-24 shrink-0 overflow-hidden bg-black sm:w-32"><img src={posterURL} alt="" loading="lazy" onError={(event) => { event.currentTarget.src = "/nexora-poster-placeholder.PNG"; }} className="h-full min-h-[132px] w-full object-cover transition-transform duration-500 group-hover:scale-105" /><div className="absolute inset-0 bg-gradient-to-l from-black/35 to-transparent" />{item.bestResolution && <span className="absolute bottom-2 right-2 rounded-md border border-cyan-300/30 bg-cyan-950/75 px-1.5 py-0.5 text-[9px] font-black text-cyan-100 backdrop-blur">{item.bestResolution}</span>}</div>
         <div className="flex min-w-0 flex-1 flex-col justify-center p-3.5 sm:p-4">
           <div className="flex items-center justify-between gap-3"><div className="flex flex-wrap items-center gap-1.5"><span className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[9px] font-extrabold ${typeStyles[mediaKind] || "border-white/15 bg-black/55 text-white"}`}><Icon name={typeIcons[mediaKind] || "film"} className="h-3 w-3" />{typeLabels[mediaKind] || "مكتبة"}</span>{item.contentRating && <span className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[9px] font-black tracking-wider ${getContentRatingStyle(item.contentRating)}`}>{item.contentRating}</span>}{status && <span className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[9px] font-extrabold ${statusStyle}`}><i className={`h-1.5 w-1.5 rounded-full ${statusDotStyle}`} />{status}</span>}</div>{item.rating > 0 && <span className="inline-flex items-center gap-1 text-[11px] font-black tabular-nums text-amber-500"><Icon name="star" className="h-3.5 w-3.5 fill-current stroke-0" />{item.rating.toFixed(1)}</span>}</div>
@@ -118,7 +126,7 @@ export default function UnifiedMediaCard({ media, onOpen, variant = "standard", 
 
   return (
     <motion.button type="button" onClick={() => onOpen?.(media)} whileHover={{ y: -5 }} whileTap={{ scale: 0.985 }} transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-      className="group relative flex w-full flex-col overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] text-right shadow-[var(--shadow-md)] transition-[border-color,box-shadow] duration-300 hover:border-fuchsia-400/55 hover:shadow-[var(--shadow-lg)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]"
+      className={`group relative flex w-full flex-col overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] text-right shadow-[var(--shadow-md)] transition-[border-color,box-shadow] duration-300 ${cardToneStyles[mediaKind] || cardToneStyles.movie} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]`}
       aria-label={`فتح تفاصيل ${title}`} dir="rtl">
       <div className="relative aspect-[4/5] w-full overflow-hidden bg-[#151225]">
         <img src={posterURL} alt={`بوستر ${title}`} loading="lazy" onError={(event) => { event.currentTarget.src = "/nexora-poster-placeholder.PNG"; }} className="h-full w-full object-cover transition-transform duration-700 motion-reduce:transition-none group-hover:scale-[1.055]" />

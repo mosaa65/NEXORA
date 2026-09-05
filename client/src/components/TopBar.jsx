@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import Icon from "./Icon.jsx";
 import useTheme from "../hooks/useTheme.js";
 import { resolveAPIURL } from "../lib/api.js";
@@ -12,6 +13,7 @@ export default function TopBar({
   onToggleSidebar,
   isCollapsed = false,
 }) {
+  const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
   const searchContainerRef = useRef(null);
@@ -188,7 +190,7 @@ export default function TopBar({
           src="/nexora-brand-logo.PNG"
           alt="NEXORA"
           className="h-7 sm:h-9 md:h-10 w-auto object-contain cursor-pointer transition-transform duration-200 hover:scale-105 select-none"
-          onClick={() => { window.location.hash = "#/"; }}
+          onClick={() => navigate("/")}
           title="NEXORA الرئيسية"
         />
       </div>

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState, useRef, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import ShowcaseHero from "../components/ShowcaseHero.jsx";
 import FilterToolbar from "../components/FilterToolbar.jsx";
 import MediaCollection from "../components/MediaCollection.jsx";
@@ -12,6 +13,7 @@ import { useScrollRestoration } from "../hooks/useScrollRestoration.js";
 const PAGE_SIZE = 36;
 
 export default function CategoryPage({ selectedCategory = "series", onOpenMedia, onQuickPlay }) {
+  const navigate = useNavigate();
   const { getPageState, savePageState } = useNavigationState();
   const cacheKey = `category:${selectedCategory}`;
 
@@ -521,27 +523,25 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
   return (
     <div className="space-y-8 pb-16 text-right" dir="rtl">
       {/* 1. Unified database-backed showcase */}
-      {heroItems.length > 0 && (
-        <ShowcaseHero
-          context="category"
-          category={selectedCategory}
-          fallbackItems={heroItems}
-          onOpenMedia={onOpenMedia}
-          onNavigate={(target) => {
-            if (target?.category && target.category !== selectedCategory) {
-              window.location.hash = `#/catalog/${target.category}`;
-            }
-          }}
-        />
-      )}
+      <ShowcaseHero
+        context="category"
+        category={selectedCategory}
+        fallbackItems={heroItems}
+        onOpenMedia={onOpenMedia}
+        onNavigate={(target) => {
+          if (target?.category && target.category !== selectedCategory) {
+            navigate(`/catalog/${target.category}`);
+          }
+        }}
+      />
 
       {/* 2. Unified Official Database Smart Hubs Rail */}
       <SmartHubRail
         scope={selectedCategory}
         title={`مجموعات ومحاور ${categoryConfig.titleAr}`}
         description="تصنيفات ذكية ومحاور حقيقية مبنية تلقائيًا ومربوطة بلوحة التحكم."
-        onViewAll={() => (window.location.hash = "#/directory/hubs")}
-        onOpen={(hub) => (window.location.hash = `#/hub/${hub.slug}`)}
+        onViewAll={() => navigate("/directory/hubs")}
+        onOpen={(hub) => navigate(`/hub/${hub.slug}`)}
       />
 
       {/* 3. Multi-Dimensional Context-Aware Filter Toolbar */}
