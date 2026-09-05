@@ -271,6 +271,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/stream", s.handleStream)
 	s.mux.HandleFunc("GET /api/stream/image", s.handleStreamImage)
 	s.mux.HandleFunc("GET /api/stream/file/{id}", s.handleStreamByID)
+	s.mux.HandleFunc("GET /api/stream/file/{id}/preview", s.handleFilePreview)
 	s.mux.HandleFunc("GET /api/stream/file/{id}/subtitles", s.handleFileSubtitles)
 	s.mux.HandleFunc("GET /api/stream/file/{id}/subtitles/{subId}", s.handleFileSubtitleStream)
 

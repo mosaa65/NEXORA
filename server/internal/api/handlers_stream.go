@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"nexora/server/internal/media"
 )
@@ -84,6 +85,42 @@ func (s *Server) handleStreamByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.serveMediaPath(w, r, path)
+}
+
+// handleFilePreview returns a cached FFmpeg frame for timeline hovering. The
+// requested timestamp is quantized to ten seconds, so one short hover creates
+// one reusable image instead of running FFmpeg for every cursor movement.
+func (s *Server) handleFilePreview(w http.ResponseWriter, r *http.Request) {
+	fileID, ok := parsePositiveID(r.PathValue("id"))
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "file id must be a positive integer"})
+		return
+	}
+	second, err := strconv.Atoi(r.URL.Query().Get("at"))
+	if err != nil || second < 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "at must be a non-negative second"})
+		return
+	}
+	second = (second / 10) * 10
+	path, err := s.repository.GetVideoFilePath(r.Context(), fileID)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]any{"error": err.Error()})
+		return
+	}
+	if !s.mediaPathAllowed(path) {
+		writeJSON(w, http.StatusForbidden, map[string]any{"error": "media path is outside configured roots"})
+		return
+	}
+	relative := filepath.ToSlash(filepath.Join("previews", strconv.FormatInt(fileID, 10), fmt.Sprintf("%d.jpg", second)))
+	outputPath := filepath.Join(s.config.AssetImageDir, filepath.FromSlash(relative))
+	if _, err := os.Stat(outputPath); err != nil {
+		if _, err := s.processor.GenerateThumbnail(r.Context(), path, outputPath, time.Duration(second)*time.Second); err != nil {
+			writeJSON(w, http.StatusFailedDependency, map[string]any{"error": err.Error()})
+			return
+		}
+	}
+	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	http.Redirect(w, r, "/assets/images/"+relative, http.StatusTemporaryRedirect)
 }
 
 func (s *Server) serveMediaPath(w http.ResponseWriter, r *http.Request, path string) {

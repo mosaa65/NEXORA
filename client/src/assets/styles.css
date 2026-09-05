@@ -224,3 +224,192 @@ select {
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   background: linear-gradient(180deg, rgba(5, 7, 16, 0.1), rgba(10, 9, 20, 0.95));
 }
+
+.nexora-player:focus-visible {
+  outline: 2px solid #e879f9;
+  outline-offset: 3px;
+}
+
+.nexora-player:fullscreen {
+  width: 100vw;
+  height: 100vh;
+  aspect-ratio: auto;
+  border: 0;
+  border-radius: 0;
+  background: #000;
+}
+
+.nexora-player:fullscreen video {
+  width: 100%;
+  height: 100%;
+}
+
+.nexora-player-button {
+  min-width: 2rem;
+  height: 2rem;
+  border-radius: .5rem;
+  padding: 0 .35rem;
+  font-size: .72rem;
+  font-weight: 800;
+  transition: background-color .16s ease, transform .16s ease;
+}
+
+.nexora-player-button:hover,
+.nexora-player-button:focus-visible {
+  background: rgba(255, 255, 255, .16);
+  outline: none;
+}
+
+.nexora-player-button:active { transform: scale(.94); }
+
+.nexora-player-center-controls {
+  background: radial-gradient(circle at center, rgba(0, 0, 0, .26), transparent 38%);
+}
+
+.nexora-player-center-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, .19);
+  color: #fff;
+  background: rgba(13, 10, 25, .62);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, .34);
+  backdrop-filter: blur(12px);
+  transition: transform .18s ease, background-color .18s ease, border-color .18s ease;
+}
+
+.nexora-player-center-button:hover,
+.nexora-player-center-button:focus-visible {
+  border-color: rgba(244, 114, 182, .82);
+  background: rgba(192, 38, 211, .88);
+  outline: none;
+  transform: scale(1.08);
+}
+
+.nexora-player-main-button {
+  width: 4.8rem;
+  height: 4.8rem;
+  border-radius: 999px;
+  padding-left: .16rem;
+  font-size: 2rem;
+  background: linear-gradient(135deg, rgba(217, 70, 239, .9), rgba(109, 40, 217, .9));
+}
+
+.nexora-player-episodes-button {
+  display: inline-flex;
+  align-items: center;
+  gap: .45rem;
+  border: 1px solid rgba(255,255,255,.24);
+  border-radius: 999px;
+  background: rgba(14, 10, 26, .78);
+  padding: .58rem .9rem;
+  color: #fff;
+  font-size: .75rem;
+  font-weight: 900;
+  box-shadow: 0 10px 28px rgba(0,0,0,.35);
+  backdrop-filter: blur(12px);
+  transition: transform .18s ease, background-color .18s ease, border-color .18s ease;
+}
+
+.nexora-player-episodes-slot { display: flex; justify-content: center; margin: -.1rem 0 .45rem; }
+.nexora-player-episodes-button span { display: grid; min-width: 1.25rem; height: 1.25rem; place-items: center; border-radius: 999px; background: #d946ef; font-size: .65rem; }
+.nexora-player-episodes-button:hover, .nexora-player-episodes-button:focus-visible { border-color: rgba(244,114,182,.9); background: rgba(192,38,211,.82); outline: none; transform: translateY(-2px); }
+
+.nexora-player-seek-button {
+  position: relative;
+  width: 3.15rem;
+  height: 3.15rem;
+  border-radius: 999px;
+  color: rgba(255, 255, 255, .92);
+}
+
+.nexora-player-seek-button small {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -48%);
+  padding: 0;
+  color: currentColor;
+  font-size: .6rem;
+  font-weight: 950;
+  letter-spacing: -.03em;
+  line-height: 1;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, .7);
+}
+
+@media (max-width: 640px) {
+  .nexora-player-main-button { width: 3.9rem; height: 3.9rem; font-size: 1.65rem; }
+  .nexora-player-seek-button { width: 2.65rem; height: 2.65rem; }
+  .nexora-player-seek-button small { font-size: .48rem; }
+}
+
+.nexora-player-progress {
+  height: .85rem;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+}
+
+.nexora-player-progress::-webkit-slider-runnable-track {
+  height: .42rem;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #d946ef 0%, #a855f7 var(--player-progress, 0%), rgba(255, 255, 255, .23) var(--player-progress, 0%), rgba(255, 255, 255, .23) 100%);
+  box-shadow: inset 0 1px 1px rgba(0,0,0,.45);
+}
+
+.nexora-player-progress::-webkit-slider-thumb {
+  width: 1rem;
+  height: 1rem;
+  margin-top: -.29rem;
+  appearance: none;
+  -webkit-appearance: none;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  background: #d946ef;
+  box-shadow: 0 2px 10px rgba(217, 70, 239, .65);
+  transition: transform .16s ease;
+}
+
+.nexora-player-progress:hover::-webkit-slider-thumb { transform: scale(1.16); }
+
+.nexora-player-progress::-moz-range-track {
+  height: .42rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .23);
+}
+
+.nexora-player-progress::-moz-range-progress { height: .42rem; border-radius: 999px; background: linear-gradient(90deg, #d946ef, #a855f7); }
+.nexora-player-progress::-moz-range-thumb { width: .8rem; height: .8rem; border: 2px solid white; border-radius: 50%; background: #d946ef; }
+
+.nexora-fullscreen-episodes {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 30;
+  transform: translateY(100%);
+  transition: transform .28s cubic-bezier(.2,.8,.2,1);
+  pointer-events: none;
+}
+
+.nexora-fullscreen-episodes.is-open { transform: translateY(0); pointer-events: auto; }
+
+.nexora-fullscreen-episodes-panel {
+  max-height: min(52vh, 29rem);
+  overflow: hidden;
+  border-top: 1px solid rgba(255,255,255,.16);
+  border-radius: 1.25rem 1.25rem 0 0;
+  background: linear-gradient(180deg, rgba(24,18,40,.98), rgba(5,5,9,.99));
+  padding: 1rem max(1rem, env(safe-area-inset-right)) calc(1rem + env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+  box-shadow: 0 -18px 48px rgba(0,0,0,.56);
+  backdrop-filter: blur(18px);
+}
+
+.nexora-fullscreen-episodes-list { display: grid; max-height: min(38vh, 20rem); gap: .48rem; overflow-y: auto; padding-inline-start: .15rem; }
+.nexora-fullscreen-episodes-list button { display: grid; grid-template-columns: 1.8rem minmax(0,1fr) auto; align-items: center; gap: .65rem; width: 100%; border: 1px solid rgba(255,255,255,.1); border-radius: .75rem; background: rgba(255,255,255,.055); padding: .7rem .8rem; color: #fff; text-align: right; transition: background-color .16s ease, border-color .16s ease; }
+.nexora-fullscreen-episodes-list button:hover { border-color: rgba(232,121,249,.6); background: rgba(217,70,239,.16); }
+.nexora-fullscreen-episodes-list b { overflow: hidden; font-size: .8rem; text-overflow: ellipsis; white-space: nowrap; }
+.nexora-fullscreen-episodes-list small { color: rgba(255,255,255,.5); font-size: .66rem; font-weight: 700; }
+.nexora-fullscreen-episodes-close { display: grid; width: 1.85rem; height: 1.85rem; place-items: center; border-radius: .55rem; background: rgba(255,255,255,.09); color: rgba(255,255,255,.75); font-size: 1.3rem; line-height: 1; transition: background-color .16s ease, color .16s ease; }
+.nexora-fullscreen-episodes-close:hover { background: rgba(217,70,239,.32); color: #fff; }
+

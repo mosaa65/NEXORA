@@ -328,6 +328,12 @@ function RealVideoPlayerModal({ media, initialFile, onClose }) {
     : directFiles;
 
   const currentFile = activeFile || allPlayableItems[0] || null;
+  const currentFileIndex = allPlayableItems.findIndex((item) => item.id === currentFile?.id || (!item.id && item.file_path === currentFile?.file_path));
+  const nextFile = currentFileIndex >= 0 ? allPlayableItems[currentFileIndex + 1] : null;
+
+  function playNextFile() {
+    if (nextFile) setActiveFile(nextFile);
+  }
 
   const streamSrc = currentFile?.id
     ? resolveAPIURL(`/api/stream/file/${currentFile.id}`)
@@ -373,6 +379,11 @@ function RealVideoPlayerModal({ media, initialFile, onClose }) {
                 title={title}
                 poster={poster}
                 tracks={subtitles}
+                fileId={currentFile?.id}
+                onNext={playNextFile}
+                playlist={allPlayableItems}
+                currentFileId={currentFile?.id}
+                onSelectFile={setActiveFile}
               />
             ) : (
               <div className="flex flex-col items-center justify-center p-8 text-center text-white/60">
