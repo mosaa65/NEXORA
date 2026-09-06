@@ -104,12 +104,12 @@ export default function UnifiedMediaCard({ media, onOpen, variant = "standard", 
   if (layout === "list") {
     return (
       <motion.button type="button" onClick={() => onOpen?.(media)} whileHover={{ x: -3 }} whileTap={{ scale: 0.99 }} transition={{ duration: 0.2 }}
-        className="group flex w-full items-stretch overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] text-right shadow-[var(--shadow-sm)] transition-[border-color,box-shadow] hover:border-fuchsia-400/55 hover:shadow-[var(--shadow-md)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]" dir="rtl" aria-label={`فتح تفاصيل ${title}`}>
+        className="group flex w-full items-stretch overflow-hidden rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)] text-right shadow-[var(--shadow-sm)] transition-[border-color,box-shadow] hover:border-fuchsia-400/55 hover:shadow-[var(--shadow-md)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]" dir="rtl" aria-label={`فتح تفاصيل ${title}`}>
         <div className="relative w-24 shrink-0 overflow-hidden bg-black sm:w-32"><img src={posterURL} alt="" loading="lazy" onError={(event) => { event.currentTarget.src = "/nexora-poster-placeholder.PNG"; }} className="h-full min-h-[132px] w-full object-cover transition-transform duration-500 group-hover:scale-105" /><div className="absolute inset-0 bg-gradient-to-l from-black/35 to-transparent" />{item.bestResolution && <span className="absolute bottom-2 right-2 rounded-md border border-cyan-300/30 bg-cyan-950/75 px-1.5 py-0.5 text-[9px] font-black text-cyan-100 backdrop-blur">{item.bestResolution}</span>}</div>
-        <div className="flex min-w-0 flex-1 flex-col justify-center p-3.5 sm:p-4">
-          <div className="flex items-center justify-between gap-3"><div className="flex flex-wrap items-center gap-1.5"><span className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[9px] font-extrabold ${typeStyles[mediaKind] || "border-white/15 bg-black/55 text-white"}`}><Icon name={typeIcons[mediaKind] || "film"} className="h-3 w-3" />{typeLabels[mediaKind] || "مكتبة"}</span>{item.contentRating && <span className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[9px] font-black tracking-wider ${getContentRatingStyle(item.contentRating)}`}>{item.contentRating}</span>}{status && <span className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[9px] font-extrabold ${statusStyle}`}><i className={`h-1.5 w-1.5 rounded-full ${statusDotStyle}`} />{status}</span>}</div>{item.rating > 0 && <span className="inline-flex items-center gap-1 text-[11px] font-black tabular-nums text-amber-500"><Icon name="star" className="h-3.5 w-3.5 fill-current stroke-0" />{item.rating.toFixed(1)}</span>}</div>
-          <h3 dir={titleIsArabic ? "rtl" : "ltr"} className={`mt-2 truncate text-sm font-extrabold text-[var(--text-primary)] ${titleIsArabic ? "text-right" : "text-left"}`}>{title}</h3>{englishTitle && <p dir="ltr" className="mt-0.5 truncate text-left text-[11px] text-[var(--text-muted)]">{englishTitle}</p>}
-          <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] font-semibold text-[var(--text-secondary)]">{facts.map((fact) => <span key={fact} className="rounded-md bg-[var(--bg-surface)] px-1.5 py-0.5">{fact}</span>)}{item.hasArabicAudio && <span className="rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[var(--color-success)] font-bold">صوت عربي</span>}{!item.hasArabicAudio && item.hasArabicSubtitles && <span className="rounded-md bg-cyan-500/10 px-1.5 py-0.5 text-[var(--color-info)] font-bold">ترجمة عربية</span>}</div>
+        <div className="flex min-w-0 flex-1 flex-col justify-center p-3 sm:p-4">
+          <div className="flex items-center justify-between gap-2"><div className="flex flex-wrap items-center gap-1.5"><span className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[9px] font-extrabold ${typeStyles[mediaKind] || "border-white/15 bg-black/55 text-white"}`}><Icon name={typeIcons[mediaKind] || "film"} className="h-3 w-3" />{typeLabels[mediaKind] || "مكتبة"}</span>{item.contentRating && <span className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[9px] font-black tracking-wider ${getContentRatingStyle(item.contentRating)}`}>{item.contentRating}</span>}{status && <span className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[9px] font-extrabold ${statusStyle}`}><i className={`h-1.5 w-1.5 rounded-full ${statusDotStyle}`} />{status}</span>}</div>{item.rating > 0 && <span className="inline-flex items-center gap-1 text-[10.5px] font-black tabular-nums text-amber-500"><Icon name="star" className="h-3.5 w-3.5 fill-current stroke-0" />{item.rating.toFixed(1)}</span>}</div>
+          <h3 dir="auto" className="mt-2 truncate text-[13px] font-extrabold text-[var(--text-primary)] text-start sm:text-sm">{title}</h3>{englishTitle && <p dir="auto" className="mt-0.5 truncate text-[10.5px] text-[var(--text-muted)] text-start sm:text-[11px]">{englishTitle}</p>}
+          <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[9.5px] font-semibold text-[var(--text-secondary)] sm:text-[10px]">{facts.map((fact) => <span key={fact} className="rounded-md bg-[var(--bg-surface)] px-1.5 py-0.5">{fact}</span>)}{item.hasArabicAudio && <span className="rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[var(--color-success)] font-bold">صوت عربي</span>}{!item.hasArabicAudio && item.hasArabicSubtitles && <span className="rounded-md bg-cyan-500/10 px-1.5 py-0.5 text-[var(--color-info)] font-bold">ترجمة عربية</span>}</div>
         </div>
         <div className="flex w-10 items-center justify-center border-r border-[var(--border-subtle)] text-[var(--text-muted)] transition-colors group-hover:text-[var(--color-accent)]"><span aria-hidden="true">‹</span></div>
       </motion.button>
@@ -117,74 +117,90 @@ export default function UnifiedMediaCard({ media, onOpen, variant = "standard", 
   }
 
   return (
-    <motion.button type="button" onClick={() => onOpen?.(media)} whileHover={{ y: -5 }} whileTap={{ scale: 0.985 }} transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-      className="group relative flex w-full flex-col overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] text-right shadow-[var(--shadow-md)] transition-[border-color,box-shadow] duration-300 hover:border-fuchsia-400/55 hover:shadow-[var(--shadow-lg)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]"
+    <motion.button type="button" onClick={() => onOpen?.(media)} whileHover={{ y: -4 }} whileTap={{ scale: 0.985 }} transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+      className="group relative flex w-full flex-col overflow-hidden rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)] text-right shadow-[var(--shadow-md)] transition-[border-color,box-shadow] duration-300 hover:border-fuchsia-400/55 hover:shadow-[var(--shadow-lg)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]"
       aria-label={`فتح تفاصيل ${title}`} dir="rtl">
       <div className="relative aspect-[4/5] w-full overflow-hidden bg-[#151225]">
-        <img src={posterURL} alt={`بوستر ${title}`} loading="lazy" onError={(event) => { event.currentTarget.src = "/nexora-poster-placeholder.PNG"; }} className="h-full w-full object-cover transition-transform duration-700 motion-reduce:transition-none group-hover:scale-[1.055]" />
+        <img src={posterURL} alt={`بوستر ${title}`} loading="lazy" onError={(event) => { event.currentTarget.src = "/nexora-poster-placeholder.PNG"; }} className="h-full w-full object-cover transition-transform duration-700 motion-reduce:transition-none group-hover:scale-[1.05]" />
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(5,4,12,.34)_0%,transparent_36%,rgba(8,7,14,.08)_52%,transparent_100%)]" />
-        {/* Top Badges: Type & Status on Right, Rating on Left */}
-        <div className="absolute inset-x-2 top-2 flex items-center justify-between gap-1.5 sm:inset-x-2.5 sm:top-2.5">
-          <div className="flex min-w-0 flex-nowrap items-center gap-1.5">
-            <span className={`inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-[10px] font-black shadow-sm backdrop-blur-md sm:text-[11px] ${typeStyles[mediaKind] || "border-white/15 bg-black/55 text-white/95"}`}>
-              <Icon name={typeIcons[mediaKind] || "film"} className="h-3 w-3 shrink-0 sm:h-3.5 sm:w-3.5" />
+        
+        {/* Top Badges: Type & Status on Right, Rating on Left - Collision-proof */}
+        <div className="absolute inset-x-1.5 top-1.5 flex min-w-0 items-center justify-between gap-1 sm:inset-x-2 sm:top-2">
+          <div className="flex min-w-0 shrink items-center gap-1 overflow-hidden">
+            <span className={`inline-flex shrink-0 items-center gap-0.5 rounded border px-1.5 py-0.5 text-[8.5px] font-black shadow-sm backdrop-blur-md sm:gap-1 sm:px-2 sm:py-1 sm:text-[9.5px] ${typeStyles[mediaKind] || "border-white/15 bg-black/55 text-white/95"}`}>
+              <Icon name={typeIcons[mediaKind] || "film"} className="h-2.5 w-2.5 shrink-0 sm:h-3 sm:w-3" />
               <span>{typeLabels[mediaKind] || "مكتبة"}</span>
             </span>
             {status && (
-              <span title={status} className={`inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-[10px] font-extrabold backdrop-blur-md sm:text-[11px] ${statusStyle}`}>
+              <span title={status} className={`inline-flex shrink items-center gap-1 truncate rounded border px-1.5 py-0.5 text-[8px] font-extrabold backdrop-blur-md sm:px-2 sm:py-1 sm:text-[9px] ${statusStyle}`}>
                 <i className={`h-1.5 w-1.5 shrink-0 rounded-full ${statusDotStyle} ${item.status === "ongoing" ? "animate-pulse" : ""}`} />
-                <span className="max-[350px]:hidden">{status}</span>
+                <span className="truncate">{status}</span>
               </span>
             )}
           </div>
           {item.rating > 0 && (
-            <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-amber-300/30 bg-black/70 px-2 py-1 text-[10px] font-black tabular-nums text-amber-100 shadow-sm backdrop-blur-md sm:text-[11px]">
-              <Icon name="star" className="h-3 w-3 shrink-0 fill-current stroke-0 text-amber-300 sm:h-3.5 sm:w-3.5" />
+            <span className="inline-flex shrink-0 items-center gap-0.5 rounded border border-amber-300/30 bg-black/75 px-1.5 py-0.5 text-[8.5px] font-black tabular-nums text-amber-100 shadow-sm backdrop-blur-md sm:gap-1 sm:px-2 sm:py-1 sm:text-[9.5px]">
+              <Icon name="star" className="h-2.5 w-2.5 shrink-0 fill-current stroke-0 text-amber-300 sm:h-3 sm:w-3" />
               <span>{item.rating.toFixed(1)}</span>
             </span>
           )}
         </div>
 
         {/* Bottom Badges: Resolution on Right, Age/Content Rating on Left */}
-        <div className="absolute inset-x-2 bottom-2 flex items-end justify-between gap-2 sm:inset-x-2.5 sm:bottom-2.5">
+        <div className="absolute inset-x-1.5 bottom-1.5 flex items-end justify-between gap-1 sm:inset-x-2 sm:bottom-2">
           {item.bestResolution ? (
-            <span className="rounded-md border border-cyan-300/35 bg-cyan-950/80 px-2 py-1 text-[10px] font-black tracking-wide text-cyan-100 shadow-sm backdrop-blur-md sm:text-[11px]">
+            <span className="rounded border border-cyan-300/35 bg-cyan-950/80 px-1.5 py-0.5 text-[8.5px] font-black tracking-wide text-cyan-100 shadow-sm backdrop-blur-md sm:px-2 sm:py-1 sm:text-[9.5px]">
               {item.bestResolution}
             </span>
           ) : (
             <span />
           )}
           {item.contentRating ? (
-            <span className={`rounded-md border px-2 py-1 text-[10px] font-black tracking-wider shadow-sm backdrop-blur-md sm:text-[11px] ${getContentRatingStyle(item.contentRating)}`}>
+            <span className={`rounded border px-1.5 py-0.5 text-[8.5px] font-black tracking-wider shadow-sm backdrop-blur-md sm:px-2 sm:py-1 sm:text-[9.5px] ${getContentRatingStyle(item.contentRating)}`}>
               {item.contentRating}
             </span>
           ) : (
-            <span className="translate-y-1 rounded-full border border-white/10 bg-black/35 px-2.5 py-1 text-[10px] font-bold text-white/90 opacity-0 backdrop-blur-md transition duration-200 group-hover:translate-y-0 group-hover:opacity-100 motion-reduce:transition-none">
+            <span className="translate-y-1 rounded-full border border-white/10 bg-black/35 px-2 py-0.5 text-[8.5px] font-bold text-white/90 opacity-0 backdrop-blur-md transition duration-200 group-hover:translate-y-0 group-hover:opacity-100 motion-reduce:transition-none sm:text-[9.5px]">
               التفاصيل <span aria-hidden="true">‹</span>
             </span>
           )}
         </div>
       </div>
-      <div className={`relative flex flex-1 flex-col justify-between min-h-[98px] ${compact ? "p-2.5" : "p-3 sm:p-4"}`}>
-        <div className="absolute inset-x-3 top-0 h-px bg-[var(--border-subtle)]" />
-        <div>
-          <h3 dir={titleIsArabic ? "rtl" : "ltr"} className={`line-clamp-2 text-[13.5px] font-extrabold leading-5 text-[var(--text-primary)] transition-colors group-hover:text-[var(--color-accent-hover)] sm:text-[15px] sm:leading-6 ${titleIsArabic ? "text-right" : "text-left tracking-[0.01em]"}`}>{title}</h3>
-          {englishTitle && <p dir="ltr" className="mt-0.5 truncate text-left text-[10.5px] font-medium tracking-wide text-[var(--text-muted)] sm:text-[11.5px]">{englishTitle}</p>}
+
+      <div className={`relative flex flex-1 flex-col justify-between ${compact ? "p-2 min-h-[82px]" : "p-2.5 sm:p-3 min-h-[86px] sm:min-h-[92px]"}`}>
+        <div className="absolute inset-x-2.5 top-0 h-px bg-[var(--border-subtle)]" />
+        <div className="w-full min-w-0">
+          <h3
+            dir="auto"
+            title={title}
+            className="line-clamp-2 text-[12px] font-extrabold leading-[1.35] text-[var(--text-primary)] transition-colors group-hover:text-[var(--color-accent-hover)] sm:text-[13.5px] sm:leading-snug break-words text-start"
+          >
+            {title}
+          </h3>
+          {englishTitle && (
+            <p
+              dir="auto"
+              title={englishTitle}
+              className="mt-0.5 truncate text-[10px] font-medium tracking-wide text-[var(--text-muted)] sm:text-[11px] text-start"
+            >
+              {englishTitle}
+            </p>
+          )}
         </div>
-        <div className="mt-2 flex min-h-5 flex-nowrap items-center gap-1 overflow-hidden whitespace-nowrap text-[10px] font-semibold leading-5 text-[var(--text-secondary)] sm:text-[11px]" aria-label="معلومات العمل">
+        <div className="mt-1.5 flex min-h-4 flex-nowrap items-center gap-1 overflow-hidden whitespace-nowrap text-[9px] font-semibold leading-4 text-[var(--text-secondary)] sm:text-[10px]" aria-label="معلومات العمل">
           {facts.map((fact, index) => (
-            <span key={`${fact}-${index}`} className="inline-flex shrink-0 items-center gap-1 rounded-md bg-[var(--bg-surface)] px-2 py-0.5">
-              {index > 0 && <i className="h-1 w-1 rounded-full bg-[var(--text-muted)]" />}
+            <span key={`${fact}-${index}`} className="inline-flex shrink-0 items-center gap-1 rounded bg-[var(--bg-surface)] px-1.5 py-0.5">
+              {index > 0 && <i className="h-0.5 w-0.5 rounded-full bg-[var(--text-muted)]" />}
               {fact}
             </span>
           ))}
           {item.hasArabicAudio && (
-            <span className="shrink-0 rounded-md border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-[var(--color-success)] sm:text-[11px]">
+            <span className="shrink-0 rounded border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-bold text-[var(--color-success)] sm:text-[10px]">
               صوت عربي
             </span>
           )}
           {!item.hasArabicAudio && item.hasArabicSubtitles && (
-            <span className="shrink-0 rounded-md border border-cyan-500/20 bg-cyan-500/10 px-2 py-0.5 text-[10px] font-bold text-[var(--color-info)] sm:text-[11px]">
+            <span className="shrink-0 rounded border border-cyan-500/20 bg-cyan-500/10 px-1.5 py-0.5 text-[9px] font-bold text-[var(--color-info)] sm:text-[10px]">
               ترجمة عربية
             </span>
           )}
