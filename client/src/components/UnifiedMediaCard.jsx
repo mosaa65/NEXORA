@@ -91,8 +91,15 @@ export default function UnifiedMediaCard({ media, onOpen, variant = "standard", 
     hasArabicSubtitles: media.hasArabicSubtitles ?? media.has_arabic_subtitles, isSeason: Boolean(media.isSeason || media.type === "season"),
   };
   const title = item.titleAr || item.titleEn || "عنوان غير متوفر";
-  const englishTitle = item.titleEn && item.titleEn !== title ? item.titleEn : "";
   const titleIsArabic = /[\u0600-\u06FF]/.test(title);
+  // Only show English subtitle if main title is in Arabic and a distinct English name exists
+  const englishTitle =
+    titleIsArabic &&
+    item.titleEn &&
+    !/[\u0600-\u06FF]/.test(item.titleEn) &&
+    item.titleEn.trim().toLowerCase() !== title.trim().toLowerCase()
+      ? item.titleEn.trim()
+      : "";
   const mediaKind = item.isSeason ? "season" : item.type;
   const posterURL = resolveAPIURL(item.posterPath) || "/nexora-poster-placeholder.PNG";
   const facts = compactDetails(item, item.isSeason);
@@ -104,12 +111,13 @@ export default function UnifiedMediaCard({ media, onOpen, variant = "standard", 
   if (layout === "list") {
     return (
       <motion.button type="button" onClick={() => onOpen?.(media)} whileHover={{ x: -3 }} whileTap={{ scale: 0.99 }} transition={{ duration: 0.2 }}
-        className="group flex w-full items-stretch overflow-hidden rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)] text-right shadow-[var(--shadow-sm)] transition-[border-color,box-shadow] hover:border-fuchsia-400/55 hover:shadow-[var(--shadow-md)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]" dir="rtl" aria-label={`فتح تفاصيل ${title}`}>
-        <div className="relative w-24 shrink-0 overflow-hidden bg-black sm:w-32"><img src={posterURL} alt="" loading="lazy" onError={(event) => { event.currentTarget.src = "/nexora-poster-placeholder.PNG"; }} className="h-full min-h-[132px] w-full object-cover transition-transform duration-500 group-hover:scale-105" /><div className="absolute inset-0 bg-gradient-to-l from-black/35 to-transparent" />{item.bestResolution && <span className="absolute bottom-2 right-2 rounded-md border border-cyan-300/30 bg-cyan-950/75 px-1.5 py-0.5 text-[9px] font-black text-cyan-100 backdrop-blur">{item.bestResolution}</span>}</div>
+        className="group flex w-full items-stretch overflow-hidden rounded-lg border border-[var(--border-default)] bg-[var(--bg-card)] text-right shadow-[var(--shadow-sm)] transition-[border-color,box-shadow] hover:border-fuchsia-400/55 hover:shadow-[var(--shadow-md)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]" dir="rtl" aria-label={`فتح تفاصيل ${title}`}>
+        <div className="relative w-24 shrink-0 overflow-hidden bg-black sm:w-32"><img src={posterURL} alt="" loading="lazy" onError={(event) => { event.currentTarget.src = "/nexora-poster-placeholder.PNG"; }} className="h-full min-h-[132px] w-full object-cover transition-transform duration-500 group-hover:scale-105" /><div className="absolute inset-0 bg-gradient-to-l from-black/35 to-transparent" />{item.bestResolution && <span className="absolute bottom-2 right-2 rounded border border-cyan-300/30 bg-cyan-950/75 px-1.5 py-0.5 text-[8.5px] font-black text-cyan-100 backdrop-blur">{item.bestResolution}</span>}</div>
         <div className="flex min-w-0 flex-1 flex-col justify-center p-3 sm:p-4">
-          <div className="flex items-center justify-between gap-2"><div className="flex flex-wrap items-center gap-1.5"><span className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[9px] font-extrabold ${typeStyles[mediaKind] || "border-white/15 bg-black/55 text-white"}`}><Icon name={typeIcons[mediaKind] || "film"} className="h-3 w-3" />{typeLabels[mediaKind] || "مكتبة"}</span>{item.contentRating && <span className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[9px] font-black tracking-wider ${getContentRatingStyle(item.contentRating)}`}>{item.contentRating}</span>}{status && <span className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[9px] font-extrabold ${statusStyle}`}><i className={`h-1.5 w-1.5 rounded-full ${statusDotStyle}`} />{status}</span>}</div>{item.rating > 0 && <span className="inline-flex items-center gap-1 text-[10.5px] font-black tabular-nums text-amber-500"><Icon name="star" className="h-3.5 w-3.5 fill-current stroke-0" />{item.rating.toFixed(1)}</span>}</div>
-          <h3 dir="auto" className="mt-2 truncate text-[13px] font-extrabold text-[var(--text-primary)] text-start sm:text-sm">{title}</h3>{englishTitle && <p dir="auto" className="mt-0.5 truncate text-[10.5px] text-[var(--text-muted)] text-start sm:text-[11px]">{englishTitle}</p>}
-          <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[9.5px] font-semibold text-[var(--text-secondary)] sm:text-[10px]">{facts.map((fact) => <span key={fact} className="rounded-md bg-[var(--bg-surface)] px-1.5 py-0.5">{fact}</span>)}{item.hasArabicAudio && <span className="rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[var(--color-success)] font-bold">صوت عربي</span>}{!item.hasArabicAudio && item.hasArabicSubtitles && <span className="rounded-md bg-cyan-500/10 px-1.5 py-0.5 text-[var(--color-info)] font-bold">ترجمة عربية</span>}</div>
+          <div className="flex items-center justify-between gap-2"><div className="flex flex-wrap items-center gap-1.5"><span className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[9px] font-extrabold ${typeStyles[mediaKind] || "border-white/15 bg-black/55 text-white"}`}><Icon name={typeIcons[mediaKind] || "film"} className="h-3 w-3" />{typeLabels[mediaKind] || "مكتبة"}</span>{item.contentRating && <span className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[9px] font-black tracking-wider ${getContentRatingStyle(item.contentRating)}`}>{item.contentRating}</span>}{status && <span className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[9px] font-extrabold ${statusStyle}`}><i className={`h-1.5 w-1.5 rounded-full ${statusDotStyle}`} />{status}</span>}</div>{item.rating > 0 && <span className="inline-flex items-center gap-1 text-[10.5px] font-black tabular-nums text-amber-500"><Icon name="star" className="h-3.5 w-3.5 fill-current stroke-0" />{item.rating.toFixed(1)}</span>}</div>
+          <h3 dir={titleIsArabic ? "rtl" : "ltr"} className={`mt-2 truncate text-[13px] font-extrabold text-[var(--text-primary)] sm:text-sm ${titleIsArabic ? "text-right" : "text-left"}`}>{title}</h3>
+          {englishTitle && <p dir="ltr" className="mt-0.5 truncate text-[10.5px] text-[var(--text-muted)] text-left sm:text-[11px]">{englishTitle}</p>}
+          <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[9.5px] font-semibold text-[var(--text-secondary)] sm:text-[10px]">{facts.map((fact) => <span key={fact} className="rounded bg-[var(--bg-surface)] px-1.5 py-0.5">{fact}</span>)}{item.hasArabicAudio && <span className="rounded border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 text-[var(--color-success)] font-bold">صوت عربي</span>}{!item.hasArabicAudio && item.hasArabicSubtitles && <span className="rounded border border-cyan-500/20 bg-cyan-500/10 px-1.5 py-0.5 text-[var(--color-info)] font-bold">ترجمة عربية</span>}</div>
         </div>
         <div className="flex w-10 items-center justify-center border-r border-[var(--border-subtle)] text-[var(--text-muted)] transition-colors group-hover:text-[var(--color-accent)]"><span aria-hidden="true">‹</span></div>
       </motion.button>
@@ -118,9 +126,9 @@ export default function UnifiedMediaCard({ media, onOpen, variant = "standard", 
 
   return (
     <motion.button type="button" onClick={() => onOpen?.(media)} whileHover={{ y: -4 }} whileTap={{ scale: 0.985 }} transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-      className="group relative flex w-full flex-col overflow-hidden rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)] text-right shadow-[var(--shadow-md)] transition-[border-color,box-shadow] duration-300 hover:border-fuchsia-400/55 hover:shadow-[var(--shadow-lg)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]"
+      className="group relative flex w-full flex-col overflow-hidden rounded-lg border border-[var(--border-default)] bg-[var(--bg-card)] text-right shadow-[var(--shadow-md)] transition-[border-color,box-shadow] duration-300 hover:border-fuchsia-400/55 hover:shadow-[var(--shadow-lg)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]"
       aria-label={`فتح تفاصيل ${title}`} dir="rtl">
-      <div className="relative aspect-[4/5] w-full overflow-hidden bg-[#151225]">
+      <div className="relative aspect-[4/5] w-full overflow-hidden rounded-t-lg bg-[#151225]">
         <img src={posterURL} alt={`بوستر ${title}`} loading="lazy" onError={(event) => { event.currentTarget.src = "/nexora-poster-placeholder.PNG"; }} className="h-full w-full object-cover transition-transform duration-700 motion-reduce:transition-none group-hover:scale-[1.05]" />
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(5,4,12,.34)_0%,transparent_36%,rgba(8,7,14,.08)_52%,transparent_100%)]" />
         
@@ -171,17 +179,17 @@ export default function UnifiedMediaCard({ media, onOpen, variant = "standard", 
         <div className="absolute inset-x-2.5 top-0 h-px bg-[var(--border-subtle)]" />
         <div className="w-full min-w-0">
           <h3
-            dir="auto"
+            dir={titleIsArabic ? "rtl" : "ltr"}
             title={title}
-            className="line-clamp-2 text-[12px] font-extrabold leading-[1.35] text-[var(--text-primary)] transition-colors group-hover:text-[var(--color-accent-hover)] sm:text-[13.5px] sm:leading-snug break-words text-start"
+            className={`line-clamp-2 text-[12px] font-extrabold leading-[1.35] text-[var(--text-primary)] transition-colors group-hover:text-[var(--color-accent-hover)] sm:text-[13.5px] sm:leading-snug break-words ${titleIsArabic ? "text-right" : "text-left"}`}
           >
             {title}
           </h3>
           {englishTitle && (
             <p
-              dir="auto"
+              dir="ltr"
               title={englishTitle}
-              className="mt-0.5 truncate text-[10px] font-medium tracking-wide text-[var(--text-muted)] sm:text-[11px] text-start"
+              className="mt-0.5 block w-full truncate text-left text-[10px] font-medium text-[var(--text-muted)] sm:text-[11px] leading-tight"
             >
               {englishTitle}
             </p>
