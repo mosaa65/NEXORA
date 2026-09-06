@@ -120,61 +120,72 @@ export default function ShowcaseHero({ context = "home", category, fallbackItems
     else onOpenMedia?.({ id: current.media_id, titleAr: current.title_ar, titleEn: current.title_en });
   };
 
-  return (
-    <section
-      className="luminous-hero relative isolate min-h-[360px] overflow-hidden rounded-2xl bg-[#0E0C1A] sm:min-h-[420px] lg:min-h-[480px]"
-      dir="rtl"
-      aria-label="العرض المميز"
-      onMouseEnter={() => setPaused(true)}
-      onFocusCapture={() => setPaused(true)}
-      onPointerDown={() => setPaused(true)}
-    >
-      <AnimatePresence mode="wait" initial={false}>
-        <motion.img
-          key={current.id}
-          src={artwork}
-          alt=""
-          className="absolute inset-0 -z-30 h-full w-full object-cover"
-          style={{ objectPosition: current.artwork_position || "center center" }}
-          initial={reduceMotion ? false : { opacity: 0, scale: 1.025 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: reduceMotion ? 0 : 0.32, ease: "easeOut" }}
-        />
-      </AnimatePresence>
-      <div className="absolute inset-0 -z-20 bg-gradient-to-l from-black/90 via-black/65 to-black/10" />
-      <div className="absolute inset-0 -z-10 bg-gradient-to-t from-black/70 via-transparent to-black/20" />
-      <div className={`absolute inset-y-0 right-0 -z-10 w-2 bg-gradient-to-b ${accent}`} />
+return ( 
+  <section 
+    className="luminous-hero relative isolate min-h-[360px] overflow-hidden rounded-2xl bg-[#0E0C1A] sm:min-h-[420px] lg:min-h-[480px]" 
+    dir="rtl" 
+    aria-label="العرض المميز" 
+    onMouseEnter={() => setPaused(true)} 
+    onFocusCapture={() => setPaused(true)} 
+    onPointerDown={() => setPaused(true)} 
+  > 
+    <AnimatePresence mode="wait" initial={false}> 
+      <motion.img 
+        key={current.id} 
+        src={artwork} 
+        alt="" 
+        className="absolute inset-0 -z-30 h-full w-full object-cover" 
+        style={{ objectPosition: current.artwork_position || "center center" }} 
+        initial={reduceMotion ? false : { opacity: 0, scale: 1.025 }} 
+        animate={{ opacity: 1, scale: 1 }} 
+        exit={{ opacity: 0 }} 
+        transition={{ duration: reduceMotion ? 0 : 0.32, ease: "easeOut" }} 
+      /> 
+    </AnimatePresence> 
+    <div className="absolute inset-0 -z-20 bg-gradient-to-l from-black/90 via-black/65 to-black/10" /> 
+    <div className="absolute inset-0 -z-10 bg-gradient-to-t from-black/70 via-transparent to-black/20" /> 
+    <div className={`absolute inset-y-0 right-0 -z-10 w-2 bg-gradient-to-b ${accent}`} /> 
 
-      <div className="flex min-h-[360px] max-w-2xl flex-col justify-end gap-4 p-5 sm:min-h-[420px] sm:p-8 lg:min-h-[480px] lg:p-10">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className={`inline-flex items-center gap-1.5 rounded-full bg-gradient-to-l ${accent} px-3 py-1.5 text-xs font-extrabold text-white shadow-lg`}>
-            <Icon name={isCollection ? "spark" : current.type === "movie" ? "film" : "tv"} className="h-3.5 w-3.5" />
-            {isCollection ? "مجموعة مختارة" : typeLabel[current.type] || "عمل مميز"}
-          </span>
-          {!isCollection && current.rating > 0 && <span className="rounded-full border border-amber-300/30 bg-black/30 px-3 py-1.5 text-xs font-bold text-amber-100 backdrop-blur">★ {Number(current.rating).toFixed(1)}</span>}
+    <div className="flex min-h-[360px] max-w-full flex-col justify-end gap-4 p-5 sm:min-h-[420px] sm:p-8 lg:min-h-[480px] lg:p-10"> 
+      <div className="flex flex-wrap items-center gap-2"> 
+        <span className={`inline-flex items-center gap-1.5 rounded-full bg-gradient-to-l ${accent} px-3 py-1.5 text-xs font-extrabold text-white shadow-lg`}> 
+          <Icon name={isCollection ? "spark" : current.type === "movie" ? "film" : "tv"} className="h-3.5 w-3.5" /> 
+          {isCollection ? "مجموعة مختارة" : typeLabel[current.type] || "عمل مميز"} 
+        </span> 
+        {!isCollection && current.rating > 0 && <span className="rounded-full border border-amber-300/30 bg-black/30 px-3 py-1.5 text-xs font-bold text-amber-100 backdrop-blur">★ {Number(current.rating).toFixed(1)}</span>} 
+      </div> 
+
+      <div className="space-y-2"> 
+        <h1 className={`max-w-xl text-3xl font-black leading-[1.15] tracking-tight text-white drop-shadow sm:text-4xl lg:text-5xl ${englishOnly ? "text-left" : ""}`} dir={englishOnly ? "ltr" : "rtl"}>{title}</h1> 
+        {current.title_ar && current.title_en && <p className="text-sm font-semibold tracking-wide text-white drop-shadow-sm" dir="ltr">{current.title_en}</p>} 
+        <p className="line-clamp-2 max-w-xl text-sm leading-7 text-white drop-shadow-sm sm:text-base">{description}</p> 
+      </div> 
+
+      {facts.length > 0 && <div className="flex flex-wrap gap-2">{facts.map((fact) => <span key={fact} className="rounded-lg border border-white/20 bg-black/35 px-2.5 py-1.5 text-xs font-bold text-white backdrop-blur">{fact}</span>)}</div>} 
+
+      {/* شريط الإجراءات والتحكم بالشرائح */}
+      <div className="flex w-full items-center justify-between gap-2 pt-1"> 
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={open} disabled={isFallback} className={`min-h-10 shrink-0 rounded-xl bg-gradient-to-l ${accent} px-3 text-xs font-extrabold text-white shadow-lg transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:cursor-default disabled:opacity-90 sm:min-h-11 sm:px-5 sm:text-sm`}> 
+            {isFallback ? "جارٍ تجهيز مكتبتك" : isCollection ? "استكشف المجموعة" : "تفاصيل العمل"} 
+          </button> 
+          {isCollection && current.target?.category && <button type="button" onClick={() => onNavigate?.({ category: current.target.category })} className="min-h-10 shrink-0 rounded-xl border border-white/25 bg-black/20 px-3 text-xs font-bold text-white backdrop-blur transition hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white sm:min-h-11 sm:px-5 sm:text-sm">عرض الكل</button>} 
         </div>
 
-        <div className="space-y-2">
-          <h1 className={`max-w-xl text-3xl font-black leading-[1.15] tracking-tight text-white drop-shadow sm:text-4xl lg:text-5xl ${englishOnly ? "text-left" : ""}`} dir={englishOnly ? "ltr" : "rtl"}>{title}</h1>
-          {current.title_ar && current.title_en && <p className="text-sm font-semibold tracking-wide text-white drop-shadow-sm" dir="ltr">{current.title_en}</p>}
-          <p className="line-clamp-2 max-w-xl text-sm leading-7 text-white drop-shadow-sm sm:text-base">{description}</p>
-        </div>
-
-        {facts.length > 0 && <div className="flex flex-wrap gap-2">{facts.map((fact) => <span key={fact} className="rounded-lg border border-white/20 bg-black/35 px-2.5 py-1.5 text-xs font-bold text-white backdrop-blur">{fact}</span>)}</div>}
-
-        <div className="flex min-w-0 items-center gap-2 pt-1">
-          <button type="button" onClick={open} disabled={isFallback} className={`min-h-10 shrink-0 rounded-xl bg-gradient-to-l ${accent} px-3 text-xs font-extrabold text-white shadow-lg transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:cursor-default disabled:opacity-90 sm:min-h-11 sm:px-5 sm:text-sm`}>
-            {isFallback ? "جارٍ تجهيز مكتبتك" : isCollection ? "استكشف المجموعة" : "تفاصيل العمل"}
-          </button>
-          {isCollection && current.target?.category && <button type="button" onClick={() => onNavigate?.({ category: current.target.category })} className="min-h-10 shrink-0 rounded-xl border border-white/25 bg-black/20 px-3 text-xs font-bold text-white backdrop-blur transition hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white sm:min-h-11 sm:px-5 sm:text-sm">عرض الكل</button>}
-          {slides.length > 1 && <div className="ml-auto flex min-w-0 shrink items-center gap-0.5 rounded-xl border border-white/15 bg-black/35 p-1 backdrop-blur sm:gap-2 sm:rounded-2xl sm:p-1.5" aria-label="شرائح العرض">
-            <button type="button" onClick={() => { setPaused(true); setActive((value) => (value - 1 + slides.length) % slides.length); }} aria-label="المحتوى السابق" title="المحتوى السابق" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-base text-white/80 transition hover:bg-white/15 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-white sm:h-8 sm:w-8 sm:rounded-xl sm:text-lg">‹</button>
-            <div className="flex min-w-0 items-center gap-1 overflow-hidden px-0.5 sm:gap-1.5 sm:px-1">{slides.map((slide, slideIndex) => <button key={slide.id} type="button" onClick={() => { setPaused(true); setActive(slideIndex); }} aria-label={`عرض الشريحة ${slideIndex + 1}`} aria-current={slideIndex === index} className={`h-2 rounded-full transition-all ${slideIndex === index ? "w-5 bg-white sm:w-7" : "w-2 bg-white/40 hover:bg-white/70"}`} />)}</div>
-            <button type="button" onClick={() => { setPaused(true); setActive((value) => (value + 1) % slides.length); }} aria-label="المحتوى التالي" title="المحتوى التالي" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-base text-white/80 transition hover:bg-white/15 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-white sm:h-8 sm:w-8 sm:rounded-xl sm:text-lg">›</button>
-          </div>}
-        </div>
-      </div>
-    </section>
-  );
+        {/* أزرار التحكم الممثلة بشرائح العرض مع محاذاتها أقصى اليسار */}
+        {slides.length > 1 && (
+          <div className="ms-auto flex shrink-0 items-center gap-0.5 rounded-xl border border-white/15 bg-black/35 p-1 backdrop-blur sm:gap-2 sm:rounded-2xl sm:p-1.5" aria-label="شرائح العرض"> 
+            <button type="button" onClick={() => { setPaused(true); setActive((value) => (value - 1 + slides.length) % slides.length); }} aria-label="المحتوى السابق" title="المحتوى السابق" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-base text-white/80 transition hover:bg-white/15 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-white sm:h-8 sm:w-8 sm:rounded-xl sm:text-lg">‹</button> 
+            <div className="flex min-w-0 items-center gap-1 overflow-hidden px-0.5 sm:gap-1.5 sm:px-1">
+              {slides.map((slide, slideIndex) => (
+                <button key={slide.id} type="button" onClick={() => { setPaused(true); setActive(slideIndex); }} aria-label={`عرض الشريحة ${slideIndex + 1}`} aria-current={slideIndex === index} className={`h-2 rounded-full transition-all ${slideIndex === index ? "w-5 bg-white sm:w-7" : "w-2 bg-white/40 hover:bg-white/70"}`} />
+              ))}
+            </div> 
+            <button type="button" onClick={() => { setPaused(true); setActive((value) => (value + 1) % slides.length); }} aria-label="المحتوى التالي" title="المحتوى التالي" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-base text-white/80 transition hover:bg-white/15 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-white sm:h-8 sm:w-8 sm:rounded-xl sm:text-lg">›</button> 
+          </div>
+        )} 
+      </div> 
+    </div> 
+  </section> 
+);
 }

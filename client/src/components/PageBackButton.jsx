@@ -6,7 +6,7 @@ export default function PageBackButton({ fallback = "/" }) {
   const navigate = useNavigate();
   const goBack = () => {
     if (window.history.length > 1) {
-      window.history.back();
+      navigate(-1);
     } else {
       navigate(fallback);
     }

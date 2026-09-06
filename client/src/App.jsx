@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useDeferredValue, Suspense } from "react";
-import { HashRouter, Routes, Route, Navigate, useNavigate, useParams } from "react-router-dom";
+import { HashRouter, Routes, Route, Navigate, useNavigate, useParams, useLocation, useNavigationType } from "react-router-dom";
 import CustomerCinemaLayout from "./layouts/CustomerCinemaLayout.jsx";
 import AdminPortalLayout from "./layouts/AdminPortalLayout.jsx";
 import DashboardPage from "./pages/DashboardPage.jsx";
@@ -24,11 +24,30 @@ import VideoPlayer from "./components/VideoPlayer.jsx";
 import { categorySeed, getCategoryMeta } from "./data/library.js";
 import { getCategories, getHealth, getMediaDetail, getFileSubtitles, getMediaList, syncIndex, resolveAPIURL } from "./lib/api.js";
 
-// Helper Wrapper for Category View
+/**
+ * Ensures that on fresh navigations (PUSH/REPLACE: clicking menus, cards, links),
+ * the window is cleanly scrolled to the top (0, 0).
+ * On back navigations (POP), allows the saved scroll restoration to handle position.
+ */
+function ScrollManager() {
+  const location = useLocation();
+  const navType = useNavigationType();
+
+  useEffect(() => {
+    if (navType !== "POP") {
+      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    }
+  }, [location.pathname, location.search, navType]);
+
+  return null;
+}
+
+// Helper Wrapper for Category View with unique key per category
 function CategoryRouteWrapper({ onOpenMedia, onQuickPlay }) {
   const { category = "series" } = useParams();
   return (
     <CategoryPage
+      key={category}
       selectedCategory={category}
       onOpenMedia={onOpenMedia}
       onQuickPlay={onQuickPlay}
@@ -38,18 +57,18 @@ function CategoryRouteWrapper({ onOpenMedia, onQuickPlay }) {
 
 function SmartHubRouteWrapper({ onOpenMedia }) {
   const { slug } = useParams();
-  return <SmartHubPage slug={slug} onOpenMedia={onOpenMedia} />;
+  return <SmartHubPage key={slug} slug={slug} onOpenMedia={onOpenMedia} />;
 }
 function FranchiseRouteWrapper({ onOpenMedia }) {
   const { slug } = useParams();
-  return <FranchisePage slug={slug} onOpenMedia={onOpenMedia} />;
+  return <FranchisePage key={slug} slug={slug} onOpenMedia={onOpenMedia} />;
 }
 function PersonRouteWrapper({ onOpenMedia }) {
   const { slug } = useParams();
-  return <PersonPage slug={slug} onOpenMedia={onOpenMedia} />;
+  return <PersonPage key={slug} slug={slug} onOpenMedia={onOpenMedia} />;
 }
 
-// Helper Wrapper for Media Details View
+// Helper Wrapper for Media Details View with unique key per media id
 function MediaDetailsRouteWrapper({ onOpenCategory, onQuickPlay }) {
   const { id } = useParams();
 
@@ -57,6 +76,7 @@ function MediaDetailsRouteWrapper({ onOpenCategory, onQuickPlay }) {
 
   return (
     <MediaDetailsPage
+      key={id}
       media={{ id: parseInt(id, 10) }}
       onOpenCategory={onOpenCategory}
       onQuickPlay={onQuickPlay}
@@ -136,6 +156,7 @@ function AppRoutes() {
 
   return (
     <>
+      <ScrollManager />
       <Routes>
         {/* ========================================================================= */}
         {/* 1. CUSTOMER CINEMA LOUNGE LAYOUT ROUTES                                    */}

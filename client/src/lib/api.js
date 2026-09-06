@@ -1,17 +1,31 @@
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 
-// Catalogue data changes far less often than users navigate between pages. Keep
-// successful GET responses briefly in memory and session storage so back/forward
-// navigation (and an accidental page refresh) does not repeatedly hit the API.
-const READ_CACHE_TTL = 2 * 60 * 1000;
-const HEALTH_CACHE_TTL = 15 * 1000;
-const MAX_CACHE_ENTRIES = 80;
-const CACHE_PREFIX = "nexora:api-cache:";
+// Fast in-memory cache with smart TTLs and zero JSON serialization overhead.
+// Instant (0ms) access when navigating back and forth across catalogue surfaces.
+const READ_CACHE_TTL = 3 * 60 * 1000;       // 3 minutes for catalogue listings
+const DETAIL_CACHE_TTL = 8 * 60 * 1000;     // 8 minutes for media details & snapshots
+const STATIC_CACHE_TTL = 15 * 60 * 1000;    // 15 minutes for categories, hubs, showcases
+const HEALTH_CACHE_TTL = 15 * 1000;         // 15 seconds for health
+const MAX_CACHE_ENTRIES = 250;
+
 const responseCache = new Map();
 const pendingRequests = new Map();
 
 function cacheTTL(path) {
-  return path.startsWith("/api/health") ? HEALTH_CACHE_TTL : READ_CACHE_TTL;
+  if (path.startsWith("/api/health")) return HEALTH_CACHE_TTL;
+  if (
+    path.startsWith("/api/categories") ||
+    path.startsWith("/api/showcases") ||
+    path.startsWith("/api/hubs") ||
+    path.startsWith("/api/franchises") ||
+    path.startsWith("/api/people")
+  ) {
+    return STATIC_CACHE_TTL;
+  }
+  if (path.startsWith("/api/media/") || path.startsWith("/api/stream/file/")) {
+    return DETAIL_CACHE_TTL;
+  }
+  return READ_CACHE_TTL;
 }
 
 function isCacheableRequest(path, options) {
@@ -21,41 +35,28 @@ function isCacheableRequest(path, options) {
 }
 
 function readCachedResponse(key) {
-  const now = Date.now();
   const memory = responseCache.get(key);
-  if (memory && memory.expiresAt > now) return memory.data;
-  if (memory) responseCache.delete(key);
-
-  try {
-    const saved = JSON.parse(sessionStorage.getItem(`${CACHE_PREFIX}${key}`));
-    if (saved?.expiresAt > now) {
-      responseCache.set(key, saved);
-      return saved.data;
+  if (memory) {
+    if (memory.expiresAt > Date.now()) {
+      return memory.data;
     }
-    sessionStorage.removeItem(`${CACHE_PREFIX}${key}`);
-  } catch {}
+    responseCache.delete(key);
+  }
   return undefined;
 }
 
 function saveCachedResponse(key, data, ttl) {
-  const entry = { data, expiresAt: Date.now() + ttl };
   if (responseCache.size >= MAX_CACHE_ENTRIES && !responseCache.has(key)) {
-    const oldestKey = [...responseCache.entries()]
-      .reduce((oldest, current) => (current[1].expiresAt < oldest[1].expiresAt ? current : oldest))[0];
-    responseCache.delete(oldestKey);
+    const oldestKey = responseCache.keys().next().value;
+    if (oldestKey) responseCache.delete(oldestKey);
   }
-  responseCache.set(key, entry);
-  try { sessionStorage.setItem(`${CACHE_PREFIX}${key}`, JSON.stringify(entry)); } catch {}
+  responseCache.set(key, { data, expiresAt: Date.now() + ttl });
 }
 
 // Exported for admin save/delete workflows and future live-refresh events.
 export function invalidateAPICache() {
   responseCache.clear();
-  try {
-    Object.keys(sessionStorage)
-      .filter((key) => key.startsWith(CACHE_PREFIX))
-      .forEach((key) => sessionStorage.removeItem(key));
-  } catch {}
+  pendingRequests.clear();
 }
 
 async function requestJSON(path, options = {}) {

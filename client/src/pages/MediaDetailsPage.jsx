@@ -188,7 +188,7 @@ export default function MediaDetailsPage({
             type="button"
             onClick={() => {
               if (window.history.length > 1) {
-                window.history.back();
+                navigate(-1);
               } else {
                 navigate("/");
               }
@@ -217,7 +217,7 @@ export default function MediaDetailsPage({
             type="button"
             onClick={() => {
               if (window.history.length > 1) {
-                window.history.back();
+                navigate(-1);
               } else {
                 navigate("/");
               }
@@ -292,7 +292,7 @@ export default function MediaDetailsPage({
           type="button"
           onClick={() => {
             if (window.history.length > 1) {
-              window.history.back();
+              navigate(-1);
             } else {
               navigate("/");
             }
