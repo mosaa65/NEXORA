@@ -138,6 +138,22 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
     genres: item.genres || [],
   }), [selectedCategory]);
 
+  // Safe media opener that captures exact scroll position at the click moment
+  const handleOpenMedia = useCallback((item) => {
+    if (cacheKey) {
+      savePageState(cacheKey, {
+        items,
+        totalCount,
+        filters: currentFilters,
+        sort: activeSort,
+        searchQuery,
+        hasMore,
+        scrollY: window.scrollY,
+      });
+    }
+    onOpenMedia?.(item);
+  }, [savePageState, cacheKey, items, totalCount, currentFilters, activeSort, searchQuery, hasMore, onOpenMedia]);
+
   const loadInitialItems = useCallback(async () => {
     if (isFetchingRef.current) return;
     isFetchingRef.current = true;
@@ -161,8 +177,6 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
         fetchParams.type = "movie";
       } else if (selectedCategory === "series") {
         fetchParams.type = "series";
-      } else if (["family", "kids", "anime"].includes(selectedCategory)) {
-        // Cross-category
       } else {
         fetchParams.category = selectedCategory;
       }
@@ -218,8 +232,6 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
         fetchParams.type = "movie";
       } else if (selectedCategory === "series") {
         fetchParams.type = "series";
-      } else if (["family", "kids", "anime"].includes(selectedCategory)) {
-        // Cross-category
       } else {
         fetchParams.category = selectedCategory;
       }
@@ -530,7 +542,7 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
         context="category"
         category={selectedCategory}
         fallbackItems={heroItems}
-        onOpenMedia={onOpenMedia}
+        onOpenMedia={handleOpenMedia}
         onNavigate={(target) => {
           if (target?.category && target.category !== selectedCategory) {
             navigate(`/catalog/${target.category}`);
@@ -631,7 +643,7 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
           </div>
         ) : (
           <>
-            <MediaCollection items={sortedItems} onOpen={onOpenMedia} />
+            <MediaCollection items={sortedItems} onOpen={handleOpenMedia} />
 
             {/* Infinite Scroll Sentinel */}
             {hasMore && (

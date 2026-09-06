@@ -21,6 +21,19 @@ export function useScrollRestoration(pageKey, isDataReady = true, customData = {
   const customDataRef = useRef(customData);
   customDataRef.current = customData;
 
+  const lastPositiveScrollYRef = useRef(0);
+
+  // Continuously track positive user scroll position
+  useEffect(() => {
+    const onScroll = () => {
+      if (window.scrollY > 0) {
+        lastPositiveScrollYRef.current = window.scrollY;
+      }
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   // Set active key for continuous scroll listener
   useEffect(() => {
     setActiveKey(pageKey);
@@ -33,8 +46,9 @@ export function useScrollRestoration(pageKey, isDataReady = true, customData = {
   useEffect(() => {
     return () => {
       if (pageKey) {
+        const scrollY = window.scrollY > 0 ? window.scrollY : lastPositiveScrollYRef.current;
         savePageState(pageKey, {
-          scrollY: window.scrollY,
+          scrollY,
           ...customDataRef.current,
         });
       }
@@ -53,11 +67,12 @@ export function useScrollRestoration(pageKey, isDataReady = true, customData = {
       const cached = getPageState(pageKey);
       if (cached && typeof cached.scrollY === "number" && cached.scrollY > 0) {
         hasRestoredRef.current = true;
-        // Double rAF to ensure browser has painted content before scrolling
+        const targetY = cached.scrollY;
+        window.scrollTo({ top: targetY, behavior: "instant" });
         window.requestAnimationFrame(() => {
-          window.scrollTo({ top: cached.scrollY, behavior: "instant" });
+          window.scrollTo({ top: targetY, behavior: "instant" });
           window.requestAnimationFrame(() => {
-            window.scrollTo({ top: cached.scrollY, behavior: "instant" });
+            window.scrollTo({ top: targetY, behavior: "instant" });
           });
         });
         return;
