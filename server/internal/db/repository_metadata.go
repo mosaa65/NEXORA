@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/lib/pq"
@@ -147,6 +148,9 @@ func (r *Repository) UpdateMediaMetadata(ctx context.Context, id int64, meta met
 		if err := r.syncCreditsFromMetadata(ctx, id, meta); err != nil {
 			return nil, fmt.Errorf("sync provider credits: %w", err)
 		}
+		if err := r.syncRelatedFromMetadata(ctx, id, meta); err != nil {
+			return nil, fmt.Errorf("sync related titles: %w", err)
+		}
 	}
 
 	// Fetch single document for search reindexing
@@ -257,10 +261,7 @@ func (r *Repository) syncCreditsFromMetadata(ctx context.Context, mediaID int64,
 		casts = raw.AggregateCredits.Cast
 		crews = raw.AggregateCredits.Crew
 	}
-	for index, cast := range casts {
-		if index >= 12 {
-			break
-		}
+	for _, cast := range casts {
 		creditID := cast.CreditID
 		if creditID == "" {
 			creditID = fmt.Sprintf("aggregate-cast-%d", cast.ID)
@@ -313,6 +314,88 @@ func (r *Repository) syncCreditsFromMetadata(ctx context.Context, mediaID int64,
 	return err
 }
 
+// syncRelatedFromMetadata projects TMDB recommendations and similar titles
+// into relational records. It stores identity by TMDB ID, never by title.
+func (r *Repository) syncRelatedFromMetadata(ctx context.Context, mediaID int64, meta metadata.Result) error {
+	if meta.Provider != "tmdb" || len(meta.RawPayload) == 0 {
+		return nil
+	}
+	type relatedTitle struct {
+		ID              int64   `json:"id"`
+		Title           string  `json:"title"`
+		Name            string  `json:"name"`
+		OriginalTitle   string  `json:"original_title"`
+		OriginalName    string  `json:"original_name"`
+		Overview        string  `json:"overview"`
+		PosterPath      string  `json:"poster_path"`
+		LocalPosterPath string  `json:"local_poster_path"`
+		ReleaseDate     string  `json:"release_date"`
+		FirstAirDate    string  `json:"first_air_date"`
+		VoteAverage     float64 `json:"vote_average"`
+	}
+	var document map[string]json.RawMessage
+	if err := json.Unmarshal(meta.RawPayload, &document); err != nil {
+		return nil
+	}
+	for _, relationType := range []string{"recommendation", "similar"} {
+		payload, exists := document[relationType+"s"]
+		if !exists {
+			continue
+		}
+		var source struct {
+			Results []relatedTitle `json:"results"`
+		}
+		if err := json.Unmarshal(payload, &source); err != nil {
+			continue
+		}
+		// The English snapshot establishes the current list. Arabic is applied
+		// afterward to complete localized fields for the same stable IDs.
+		if strings.HasPrefix(strings.ToLower(meta.Locale), "en") {
+			if _, err := r.db.ExecContext(ctx, `DELETE FROM media_related_titles WHERE source_media_item_id=$1 AND provider='tmdb' AND relation_type=$2`, mediaID, relationType); err != nil {
+				return err
+			}
+		}
+		for rank, item := range source.Results {
+			if item.ID <= 0 || fmt.Sprint(item.ID) == meta.ExternalID {
+				continue
+			}
+			kind := "movie"
+			if strings.TrimSpace(item.Name) != "" && strings.TrimSpace(item.Title) == "" {
+				kind = "tv"
+			}
+			title := firstNonEmpty(item.Title, item.Name)
+			originalTitle := firstNonEmpty(item.OriginalTitle, item.OriginalName)
+			date := firstNonEmpty(item.ReleaseDate, item.FirstAirDate)
+			year := 0
+			if len(date) >= 4 {
+				year, _ = strconv.Atoi(date[:4])
+			}
+			poster := firstNonEmpty(item.LocalPosterPath, item.PosterPath)
+			locale := strings.ToLower(meta.Locale)
+			_, err := r.db.ExecContext(ctx, `
+				INSERT INTO media_related_titles (source_media_item_id,provider,target_external_id,target_kind,relation_type,provider_rank,title_ar,title_en,original_title,overview_ar,overview_en,poster_path,release_year,rating,fetched_at,updated_at)
+				VALUES ($1,'tmdb',$2,$3,$4,$5,
+					CASE WHEN $6 LIKE 'ar%' THEN NULLIF($7,'') ELSE NULL END,
+					CASE WHEN $6 LIKE 'ar%' THEN NULL ELSE NULLIF($7,'') END,
+					NULLIF($8,''),
+					CASE WHEN $6 LIKE 'ar%' THEN NULLIF($9,'') ELSE NULL END,
+					CASE WHEN $6 LIKE 'ar%' THEN NULL ELSE NULLIF($9,'') END,
+					NULLIF($10,''),NULLIF($11,0),NULLIF($12,0),CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
+				ON CONFLICT (source_media_item_id,provider,target_kind,target_external_id,relation_type) DO UPDATE SET
+					provider_rank=EXCLUDED.provider_rank, title_ar=COALESCE(EXCLUDED.title_ar,media_related_titles.title_ar),
+					title_en=COALESCE(EXCLUDED.title_en,media_related_titles.title_en), original_title=COALESCE(EXCLUDED.original_title,media_related_titles.original_title),
+					overview_ar=COALESCE(EXCLUDED.overview_ar,media_related_titles.overview_ar), overview_en=COALESCE(EXCLUDED.overview_en,media_related_titles.overview_en),
+					poster_path=COALESCE(EXCLUDED.poster_path,media_related_titles.poster_path), release_year=COALESCE(EXCLUDED.release_year,media_related_titles.release_year),
+					rating=COALESCE(EXCLUDED.rating,media_related_titles.rating), fetched_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP`,
+				mediaID, fmt.Sprint(item.ID), kind, relationType, rank+1, locale, title, originalTitle, item.Overview, poster, year, item.VoteAverage)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // SyncCatalogRelationsFromSnapshots rebuilds all derived local relations from
 // previously cached TMDB documents. This is used after introducing the graph
 // tables and can be re-run safely after an import or an upgrade.
@@ -342,6 +425,9 @@ func (r *Repository) SyncCatalogRelationsFromSnapshots(ctx context.Context) (*Ca
 		if err := r.syncCreditsFromMetadata(ctx, mediaID, meta); err != nil {
 			return nil, fmt.Errorf("sync credits for media %d: %w", mediaID, err)
 		}
+		if err := r.syncRelatedFromMetadata(ctx, mediaID, meta); err != nil {
+			return nil, fmt.Errorf("sync related titles for media %d: %w", mediaID, err)
+		}
 		result.SnapshotsProcessed++
 	}
 	if err := rows.Err(); err != nil {
@@ -362,6 +448,9 @@ func (r *Repository) SyncCatalogRelationsFromSnapshots(ctx context.Context) (*Ca
 		return nil, err
 	}
 	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM media_credits`).Scan(&result.CreditsLinked); err != nil {
+		return nil, err
+	}
+	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM media_related_titles`).Scan(&result.RelatedTitlesLinked); err != nil {
 		return nil, err
 	}
 	return result, nil
@@ -576,4 +665,3 @@ func firstNonEmptyLocale(locale string) string {
 	}
 	return locale
 }
-

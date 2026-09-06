@@ -278,6 +278,10 @@ export async function getMediaDetail(mediaId) {
   return requestJSON(`/api/media/${encodeURIComponent(mediaId)}`);
 }
 
+export async function getMediaRelated(mediaId, limit = 18) {
+  return requestJSON(`/api/media/${encodeURIComponent(mediaId)}/related?limit=${encodeURIComponent(limit)}`);
+}
+
 export async function getMediaMetadataSnapshot(mediaId, locale = "ar-SA") {
   return requestJSON(`/api/media/${encodeURIComponent(mediaId)}/metadata/raw?locale=${encodeURIComponent(locale)}`);
 }

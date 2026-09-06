@@ -72,6 +72,31 @@ func (s *Server) handleMediaDetail(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// handleMediaRelated reads the locally persisted provider relationship graph.
+// It deliberately does not call TMDB while a customer is browsing details.
+func (s *Server) handleMediaRelated(w http.ResponseWriter, r *http.Request) {
+	mediaID, ok := parsePositiveID(r.PathValue("id"))
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "media id must be a positive integer"})
+		return
+	}
+	limit := 18
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	if limit > 48 {
+		limit = 48
+	}
+	items, err := s.repository.ListRelatedMedia(r.Context(), mediaID, limit)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"media_id": mediaID, "items": items})
+}
+
 func (s *Server) handleMediaCreate(w http.ResponseWriter, r *http.Request) {
 	var request db.CreateMediaRequest
 	if err := decodeJSON(r, &request); err != nil {
@@ -263,7 +288,9 @@ func (s *Server) handleMediaEnrich(w http.ResponseWriter, r *http.Request) {
 		if arabicErr != nil {
 			lookupWarnings = append(lookupWarnings, "ar-SA: "+arabicErr.Error())
 		} else {
-			results = []metadata.Result{arabic, canonical}
+			// Apply the canonical English document first, then enrich the same
+			// provider-ID records with Arabic presentation fields.
+			results = []metadata.Result{canonical, arabic}
 		}
 	}
 

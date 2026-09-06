@@ -31,6 +31,7 @@
 |--------|---------|-------|
 | `/api/media` | `GET` | استعلام الأعمال مع دعم الفلترة (category, sort, q, limit, offset) |
 | `/api/media/:id` | `GET` | جلب التفاصيل الشاملة لعمل ما (المواسم والحلقات والملفات) |
+| `/api/media/:id/related?limit=18` | `GET` | توصيات وأعمال مشابهة محفوظة محليًا من TMDB؛ تحدد `local_media_id` و`local` بالـ TMDB ID عند توفر العمل في المكتبة |
 | `/api/media` | `POST` | إنشاء عمل جديد يدوياً |
 | `/api/media/:id` | `PUT` | تعديل بيانات عمل |
 | `/api/media/:id` | `DELETE` | حذف عمل وملفاته |
@@ -73,7 +74,7 @@
 | `/api/people?limit=24` | `GET` | الأشخاص الذين لديهم عملان محليان على الأقل |
 | `/api/people/:slug` | `GET` | بيانات شخص محفوظة محلياً |
 | `/api/people/:slug/media` | `GET` | أعمال الشخص الموجودة في مكتبة NEXORA فقط |
-| `/api/admin/catalog/sync-relations` | `POST` | إعادة استخراج السلاسل والاعتمادات من `metadata_snapshots` بدون شبكة؛ آمن للتكرار |
+| `/api/admin/catalog/sync-relations` | `POST` | إعادة استخراج السلاسل والأشخاص والأعمال المرتبطة من `metadata_snapshots` بدون شبكة؛ آمن للتكرار |
 | `/api/admin/franchises/:id` | `PUT` | إبراز/إخفاء/ترتيب سلسلة محلية (`is_featured`, `is_hidden`, `sort_priority`) |
 | `/api/admin/franchises/:id/refresh` | `POST` | تحديث كامل ومقصود لسلسلة واحدة من TMDB باللغتين `en-US` و`ar-SA`، ثم حفظ النصوص والأجزاء والصور محلياً |
 | `/api/admin/franchises/refresh-missing?limit=24` | `POST` | ترقية دفعة محدودة من السلاسل القديمة التي لا تحمل لقطة إنجليزية صالحة؛ لا يُستدعى أثناء التصفح |

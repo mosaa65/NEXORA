@@ -149,9 +149,13 @@ POST /api/index
 explicit enrich / TMDB queue job
   → metadata service
   → TMDB or MAL when configured
-  → PostgreSQL snapshots/metadata
+  → PostgreSQL snapshots/metadata/provider relations
   → local or remote artwork result according to settings
 ```
+
+### 5.4 Related-title graph
+
+بعد إثراء عمل من TMDB، يستخرج Go `recommendations` و`similar` من الـ snapshot إلى `media_related_titles`. تحفظ العلاقة بواسطة `provider + target_external_id + target_kind`، لا بالعنوان. عند `GET /api/media/{id}/related` يطابق PostgreSQL هذا الـ ID مع `media_items.metadata_external_id`، فيعيد `local_media_id` للأعمال المتاحة و`local=false` للأعمال قيد الإضافة. لا يستدعي هذا المسار TMDB أثناء التصفح.
 
 ## 6. Media Flow
 

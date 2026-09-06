@@ -46,7 +46,7 @@ function FranchiseRouteWrapper({ onOpenMedia }) {
 }
 function PersonRouteWrapper({ onOpenMedia }) {
   const { slug } = useParams();
-  return <PersonPage slug={slug} onOpenMedia={onOpenMedia} />;
+  return <PersonPage key={slug} slug={slug} onOpenMedia={onOpenMedia} />;
 }
 
 // Helper Wrapper for Media Details View

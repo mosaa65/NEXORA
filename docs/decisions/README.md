@@ -10,5 +10,6 @@
 | [ADR-004](ADR-004-postgresql-catalogue-source-of-truth.md) | PostgreSQL as Catalogue Source of Truth | Existing / Verified |
 | [ADR-005](ADR-005-meilisearch-derived-search-index.md) | Meilisearch as Derived Search Index | Existing / Verified |
 | [ADR-006](ADR-006-ffmpeg-ffprobe-media-processing.md) | FFmpeg and FFprobe as External Media Processing Tools | Existing / Verified |
+| [ADR-007](ADR-007-provider-id-related-titles.md) | Provider-ID Related Titles Graph | Accepted / Implemented |
 
 أي اقتراح غير منفذ (مثل HLS/DASH أو transcoding أو Redis integration) لا يوثق هنا كـ ADR قائم حتى توجد موافقة وتنفيذ قابل للتحقق.

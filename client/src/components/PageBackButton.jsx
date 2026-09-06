@@ -1,9 +1,11 @@
 import Icon from "./Icon.jsx";
 
 /** A visible, reliable return action for pages reached from catalogue cards. */
-export default function PageBackButton({ fallback = "/" }) {
+export default function PageBackButton({ fallback = "/", forceFallback = false }) {
   const goBack = () => {
-    if (window.history.length > 1) {
+    if (forceFallback) {
+      window.location.hash = `#${fallback}`;
+    } else if (window.history.length > 1) {
       window.history.back();
     } else {
       window.location.hash = `#${fallback}`;

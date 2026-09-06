@@ -1,14 +1,43 @@
 import React, { useEffect, useState, useMemo } from "react";
 import Icon from "../components/Icon.jsx";
 import SmartHubCard from "../components/SmartHubCard.jsx";
+import FilterToolbar from "../components/FilterToolbar.jsx";
 import { getFranchises, getPeople, getSmartHubs, resolveAPIURL } from "../lib/api.js";
 import { useNavigationState } from "../context/NavigationStateContext.jsx";
 import { useScrollRestoration } from "../hooks/useScrollRestoration.js";
 
 const directoryConfig = {
   hubs: { title: "كل المحاور والمجموعات الذكية", subtitle: "استكشف جميع المحاور الفنية المحفوظة في مكتبتك.", icon: "grid", tone: "fuchsia" },
-  people: { title: "كل الشخصيات وصنّاع السينما", subtitle: "الممثلون والمخرجون وصنّاع الأفلام المرتبطون بأعمال مكتبتك.", icon: "user", tone: "cyan" },
+  people: { title: "أبرز ممثلي المكتبة", subtitle: "الممثلون الرئيسيون وفق ترتيب طاقم TMDB، المرتبطون بأعمال مكتبتك.", icon: "user", tone: "cyan" },
   franchises: { title: "كل سلاسل الأفلام والعوالم", subtitle: "السلاسل السينمائية المرتبطة بالأعمال الموجودة في مكتبتك.", icon: "film", tone: "amber" },
+};
+
+const personWorkFilters = [
+  { id: "all", label: "كل الممثلين الرئيسيين" },
+  { id: "works-2", label: "عملان محليان فأكثر" },
+  { id: "works-5", label: "5 أعمال محلية فأكثر" },
+  { id: "works-10", label: "10 أعمال محلية فأكثر" },
+];
+
+const personSortOptions = [
+  { id: "featured", label: "الأكثر ظهورًا في المكتبة" },
+  { id: "works", label: "الأكثر أعمالًا محلية" },
+  { id: "popular", label: "الأكثر شهرة" },
+  { id: "name", label: "الاسم (أ - ي)" },
+];
+
+const personDepartmentLabels = {
+  Acting: "تمثيل",
+  Directing: "إخراج",
+  Writing: "كتابة",
+  Production: "إنتاج",
+  "Visual Effects": "مؤثرات بصرية",
+  Crew: "طاقم فني",
+  Art: "فن وتصميم",
+  Camera: "تصوير",
+  Sound: "صوت",
+  Creator: "إبداع",
+  Editing: "مونتاج",
 };
 
 function DirectoryCard({ kind, item, onOpen }) {
@@ -68,10 +97,21 @@ export default function DirectoryPage({ kind = "hubs", onOpen }) {
   const cachedState = useMemo(() => getPageState(cacheKey), [cacheKey, getPageState]);
 
   const [items, setItems] = useState(() => cachedState?.items || null);
+  const [query, setQuery] = useState(() => cachedState?.query || "");
+  const [sort, setSort] = useState(() => cachedState?.sort || "featured");
+  const [workFilter, setWorkFilter] = useState(() => cachedState?.workFilter || "all");
+  const [departmentFilter, setDepartmentFilter] = useState(() => cachedState?.departmentFilter || "all");
   const config = directoryConfig[kind] || directoryConfig.hubs;
+  const personDepartmentFilters = useMemo(() => {
+    const departments = [...new Set((items || []).map((person) => person.known_for_department).filter(Boolean))].sort((left, right) => left.localeCompare(right));
+    return [
+      { id: "all", label: "كل التخصصات" },
+      ...departments.map((department) => ({ id: department, label: personDepartmentLabels[department] || department })),
+    ];
+  }, [items]);
 
   // Use Scroll Restoration
-  useScrollRestoration(cacheKey, Boolean(items), { items });
+  useScrollRestoration(cacheKey, Boolean(items), { items, query, sort, workFilter, departmentFilter });
 
   useEffect(() => {
     let alive = true;
@@ -83,7 +123,7 @@ export default function DirectoryPage({ kind = "hubs", onOpen }) {
           if (alive) {
             const list = data?.[kind === "people" ? "people" : kind === "franchises" ? "franchises" : "hubs"] || [];
             setItems(list);
-            savePageState(cacheKey, { items: list });
+            savePageState(cacheKey, { items: list, query, sort, workFilter, departmentFilter });
           }
         })
         .catch(() => {
@@ -94,6 +134,34 @@ export default function DirectoryPage({ kind = "hubs", onOpen }) {
       alive = false;
     };
   }, [kind, cacheKey, getPageState, savePageState]);
+
+  const visibleItems = useMemo(() => {
+    if (kind !== "people") return items || [];
+
+    const normalizedQuery = query.trim().toLocaleLowerCase();
+    const minimumWorks = workFilter === "works-2" ? 2 : workFilter === "works-5" ? 5 : workFilter === "works-10" ? 10 : 0;
+    const people = (items || []).filter((person) => {
+      const searchable = `${person.name_ar || ""} ${person.name_en || ""}`.toLocaleLowerCase();
+      return (
+        (!normalizedQuery || searchable.includes(normalizedQuery)) &&
+        Number(person.local_media_count || 0) >= minimumWorks &&
+        (departmentFilter === "all" || person.known_for_department === departmentFilter)
+      );
+    });
+
+    return [...people].sort((left, right) => {
+      if (sort === "works") {
+        return Number(right.local_media_count || 0) - Number(left.local_media_count || 0) || Number(right.popularity || 0) - Number(left.popularity || 0);
+      }
+      if (sort === "popular") {
+        return Number(right.popularity || 0) - Number(left.popularity || 0) || Number(right.local_media_count || 0) - Number(left.local_media_count || 0);
+      }
+      if (sort === "name") {
+        return (left.name_ar || left.name_en || "").localeCompare(right.name_ar || right.name_en || "", "ar");
+      }
+      return Number(right.local_media_count || 0) - Number(left.local_media_count || 0) || Number(right.popularity || 0) - Number(left.popularity || 0);
+    });
+  }, [items, kind, query, sort, workFilter, departmentFilter]);
 
   if (!items) return <div className="min-h-72 animate-pulse rounded-2xl bg-[var(--bg-surface)]" />;
 
@@ -110,7 +178,9 @@ export default function DirectoryPage({ kind = "hubs", onOpen }) {
         </div>
         <button
           type="button"
-          onClick={() => window.history.back()}
+          onClick={() => {
+            window.location.hash = "#/";
+          }}
           className="inline-flex items-center gap-2 rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] px-4 py-2.5 text-xs font-bold text-[var(--text-primary)] transition hover:bg-[var(--bg-elevated)]"
         >
           <Icon name="arrowRight" className="h-4 w-4" />
@@ -118,7 +188,35 @@ export default function DirectoryPage({ kind = "hubs", onOpen }) {
         </button>
       </header>
 
-      {items.length ? (
+      {kind === "people" && items.length > 0 && (
+        <FilterToolbar
+          showOriginFilter={false}
+          showGenreFilter={false}
+          showTypeFilter={false}
+          formats={personWorkFilters}
+          formatLabel="عدد الأعمال المحلية"
+          activeFormat={workFilter}
+          onSelectFormat={setWorkFilter}
+          statuses={personDepartmentFilters}
+          statusLabel="التخصص في المنصة"
+          activeStatus={departmentFilter}
+          onSelectStatus={setDepartmentFilter}
+          sorts={personSortOptions}
+          activeSort={sort}
+          onSelectSort={setSort}
+          searchQuery={query}
+          onSearchChange={setQuery}
+          resultCount={visibleItems.length}
+          onResetFilters={() => {
+            setQuery("");
+            setWorkFilter("all");
+            setDepartmentFilter("all");
+            setSort("featured");
+          }}
+        />
+      )}
+
+      {items.length ? visibleItems.length ? (
         <div
           className={`grid grid-cols-2 gap-2.5 sm:gap-4 ${
             kind === "people"
@@ -126,9 +224,13 @@ export default function DirectoryPage({ kind = "hubs", onOpen }) {
               : "sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
           }`}
         >
-          {items.map((item) => (
+          {visibleItems.map((item) => (
             <DirectoryCard key={item.slug || item.id} kind={kind} item={item} onOpen={onOpen} />
           ))}
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-dashed border-[var(--border-default)] p-16 text-center text-sm text-[var(--text-muted)]">
+          لا يوجد ممثل رئيسي يطابق البحث أو الفلاتر الحالية.
         </div>
       ) : (
         <div className="rounded-2xl border border-dashed border-[var(--border-default)] p-16 text-center text-sm text-[var(--text-muted)]">

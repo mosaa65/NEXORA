@@ -111,6 +111,9 @@ func (m *mockRepo) ListProviderCollectionMedia(ctx context.Context, slug string,
 func (m *mockRepo) ListProviderCollectionParts(ctx context.Context, slug string) (*db.ProviderCollection, []db.ProviderCollectionPart, error) {
 	return &db.ProviderCollection{ID: 1, Slug: slug, TitleEN: "Test Collection"}, []db.ProviderCollectionPart{{ExternalID: "1", Title: "Part One", Local: true, MediaID: 1}, {ExternalID: "2", Title: "Part Two", Local: false}}, nil
 }
+func (m *mockRepo) ListRelatedMedia(ctx context.Context, mediaID int64, limit int) ([]db.RelatedMedia, error) {
+	return []db.RelatedMedia{{Provider: "tmdb", ExternalID: "42", Kind: "movie", RelationType: "recommendation", TitleEN: "Related title", Local: true, LocalMediaID: 42}}, nil
+}
 func (m *mockRepo) ListPeople(ctx context.Context, limit int) ([]db.Person, error) {
 	return []db.Person{{ID: 1, Slug: "tmdb-person-1", Provider: "tmdb", ExternalID: "1", NameAR: "شخص اختبار", NameEN: "Test Person", LocalMediaCount: 2}}, nil
 }
@@ -191,7 +194,7 @@ func (m *mockRepo) UpdateMediaFull(ctx context.Context, id int64, req db.UpdateM
 func (m *mockRepo) DeleteMediaItem(ctx context.Context, id int64) error {
 	return nil
 }
-func (m *mockRepo) CacheLocalArtwork(sourcePath string) string { return sourcePath }
+func (m *mockRepo) CacheLocalArtwork(sourcePath string) string             { return sourcePath }
 func (m *mockRepo) CleanAndSyncAllGenres(ctx context.Context) (int, error) { return 0, nil }
 func (m *mockRepo) GetTMDBSettings(ctx context.Context) (*metadata.TMDBSettings, error) {
 	settings := metadata.DefaultSettings()
@@ -203,15 +206,27 @@ func (m *mockRepo) SaveTMDBSettings(ctx context.Context, settings metadata.TMDBS
 func (m *mockRepo) GetTMDBUsageSummary(ctx context.Context) (*metadata.TMDBUsageSummary, error) {
 	return &metadata.TMDBUsageSummary{}, nil
 }
-func (m *mockRepo) GetTMDBUsageHistory(ctx context.Context, days int) ([]metadata.TMDBUsageDay, error) { return []metadata.TMDBUsageDay{}, nil }
+func (m *mockRepo) GetTMDBUsageHistory(ctx context.Context, days int) ([]metadata.TMDBUsageDay, error) {
+	return []metadata.TMDBUsageDay{}, nil
+}
 func (m *mockRepo) LogTMDBUsage(ctx context.Context, entry db.TMDBLogEntry) error { return nil }
-func (m *mockRepo) EnqueueTMDBRefresh(ctx context.Context, mediaID int64, priority int) error { return nil }
-func (m *mockRepo) EnqueueStaleTMDBRefreshes(ctx context.Context, staleDays, limit int) error { return nil }
-func (m *mockRepo) EnqueueTMDBRefreshIfStale(ctx context.Context, mediaID int64, staleDays int) error { return nil }
-func (m *mockRepo) ListTMDBQueue(ctx context.Context, limit int) ([]db.TMDBQueueJob, error) { return []db.TMDBQueueJob{}, nil }
-func (m *mockRepo) CancelTMDBQueueJob(ctx context.Context, id int64) error { return nil }
+func (m *mockRepo) EnqueueTMDBRefresh(ctx context.Context, mediaID int64, priority int) error {
+	return nil
+}
+func (m *mockRepo) EnqueueStaleTMDBRefreshes(ctx context.Context, staleDays, limit int) error {
+	return nil
+}
+func (m *mockRepo) EnqueueTMDBRefreshIfStale(ctx context.Context, mediaID int64, staleDays int) error {
+	return nil
+}
+func (m *mockRepo) ListTMDBQueue(ctx context.Context, limit int) ([]db.TMDBQueueJob, error) {
+	return []db.TMDBQueueJob{}, nil
+}
+func (m *mockRepo) CancelTMDBQueueJob(ctx context.Context, id int64) error          { return nil }
 func (m *mockRepo) ClaimTMDBQueueJob(ctx context.Context) (*db.TMDBQueueJob, error) { return nil, nil }
-func (m *mockRepo) FinishTMDBQueueJob(ctx context.Context, id int64, succeeded bool, message string) error { return nil }
+func (m *mockRepo) FinishTMDBQueueJob(ctx context.Context, id int64, succeeded bool, message string) error {
+	return nil
+}
 
 type mockSearch struct{}
 
@@ -369,6 +384,24 @@ func TestMediaListAndDetailEndpoints(t *testing.T) {
 	}
 	if detailRes.TitleEN != "Inception" {
 		t.Errorf("expected TitleEN=Inception, got: %s", detailRes.TitleEN)
+	}
+
+	// 3. Related titles are served from the local provider graph.
+	reqRelated := httptest.NewRequest(http.MethodGet, "/api/media/1/related?limit=12", nil)
+	recRelated := httptest.NewRecorder()
+	handler.ServeHTTP(recRelated, reqRelated)
+	if recRelated.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for related media, got: %d", recRelated.Code)
+	}
+	var relatedRes struct {
+		MediaID int64             `json:"media_id"`
+		Items   []db.RelatedMedia `json:"items"`
+	}
+	if err := json.NewDecoder(recRelated.Body).Decode(&relatedRes); err != nil {
+		t.Fatalf("decode related response: %v", err)
+	}
+	if relatedRes.MediaID != 1 || len(relatedRes.Items) != 1 || !relatedRes.Items[0].Local || relatedRes.Items[0].LocalMediaID != 42 {
+		t.Fatalf("unexpected related response: %#v", relatedRes)
 	}
 }
 
