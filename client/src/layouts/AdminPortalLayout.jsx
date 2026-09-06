@@ -15,6 +15,7 @@ const adminNavItems = [
   { id: "tmdb", path: "/admin/tmdb", label: "إعدادات TMDB", icon: "spark" },
   { id: "quality", path: "/admin/quality", label: "جودة المكتبة", icon: "book" },
   { id: "migration", path: "/admin/migration", label: "الترتيب والنقل", icon: "arrowLeft" },
+  { id: "transfer", path: "/admin/transfer", label: "نسخ USB للهواتف", icon: "spark" },
 ];
 
 export default function AdminPortalLayout({ health, onSyncIndex }) {

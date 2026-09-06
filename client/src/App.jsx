@@ -17,9 +17,13 @@ import AdminIndexerPage from "./pages/admin/AdminIndexerPage.jsx";
 import AdminQualityPage from "./pages/admin/AdminQualityPage.jsx";
 import AdminMigrationPage from "./pages/admin/AdminMigrationPage.jsx";
 import AdminOverviewPage from "./pages/admin/AdminOverviewPage.jsx";
+import AdminTransferPage from "./pages/admin/AdminTransferPage.jsx";
 import TMDBSettingsPage from "./pages/TMDBSettingsPage.jsx";
 import AdminLoginPage from "./pages/AdminLoginPage.jsx";
 import VideoPlayer from "./components/VideoPlayer.jsx";
+import { TransferProvider } from "./context/TransferContext.jsx";
+import TransferModal from "./components/transfer/TransferModal.jsx";
+import MiniTransferCenter from "./components/transfer/MiniTransferCenter.jsx";
 import { categorySeed, getCategoryMeta } from "./data/library.js";
 import { getCategories, getHealth, getMediaDetail, getFileSubtitles, getMediaList, syncIndex, resolveAPIURL } from "./lib/api.js";
 
@@ -133,7 +137,8 @@ export default function App() {
   }
 
   return (
-    <HashRouter>
+    <TransferProvider>
+      <HashRouter>
       <Routes>
         {/* ========================================================================= */}
         {/* 1. CUSTOMER CINEMA LOUNGE LAYOUT ROUTES                                    */}
@@ -235,6 +240,7 @@ export default function App() {
           <Route path="tmdb" element={<TMDBSettingsPage />} />
           <Route path="quality" element={<AdminQualityPage />} />
           <Route path="migration" element={<AdminMigrationPage />} />
+          <Route path="transfer" element={<AdminTransferPage />} />
           <Route path="overview" element={<AdminOverviewPage health={health} onSyncIndex={handleSyncIndex} />} />
         </Route>
 
@@ -250,7 +256,12 @@ export default function App() {
           onClose={() => setPlayingMediaState(null)}
         />
       )}
+
+      {/* Global USB Transfer Experience (Modern Modal, Mini Transfer Center) */}
+      <TransferModal />
+      <MiniTransferCenter />
     </HashRouter>
+    </TransferProvider>
   );
 }
 
