@@ -4,12 +4,19 @@ import { useNavigationState } from "../context/NavigationStateContext.jsx";
 
 /**
  * Custom hook to manage scroll restoration and view state persistence for catalogue pages.
- * Ensures instant (0ms) scroll restoration when returning via Back button (POP navigation),
- * while ensuring fresh visits (PUSH/REPLACE) always start cleanly at the top (0, 0).
+ *
+ * Strategy:
+ * - POP (Back/Forward): Restore saved scroll position once data is ready.
+ * - PUSH/REPLACE (fresh navigation): Always scroll to top (0,0).
+ *
+ * Key fix: hasRestoredRef resets on mount so each page entry gets one restoration attempt.
+ * We defer POP restoration until isDataReady=true so infinite-scroll pages
+ * with lazy-loaded content are scrolled to the right position AFTER data loads.
  */
 export function useScrollRestoration(pageKey, isDataReady = true, customData = {}) {
   const { setActiveKey, savePageState, getPageState } = useNavigationState();
   const navType = useNavigationType();
+  // Reset to false on every mount (new page entry)
   const hasRestoredRef = useRef(false);
   const customDataRef = useRef(customData);
   customDataRef.current = customData;
@@ -22,30 +29,7 @@ export function useScrollRestoration(pageKey, isDataReady = true, customData = {
     };
   }, [pageKey, setActiveKey]);
 
-  // Restore scroll position ONLY when returning back (POP navigation)
-  useLayoutEffect(() => {
-    if (!pageKey || !isDataReady || hasRestoredRef.current) return;
-
-    if (navType === "POP") {
-      const cached = getPageState(pageKey);
-      if (cached && typeof cached.scrollY === "number" && cached.scrollY > 0) {
-        hasRestoredRef.current = true;
-        window.requestAnimationFrame(() => {
-          window.scrollTo({ top: cached.scrollY, behavior: "instant" });
-          window.requestAnimationFrame(() => {
-            window.scrollTo({ top: cached.scrollY, behavior: "instant" });
-          });
-        });
-        return;
-      }
-    }
-
-    // On fresh visits (PUSH or REPLACE) or when no saved scroll: ensure top of page
-    hasRestoredRef.current = true;
-    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
-  }, [pageKey, isDataReady, getPageState, navType]);
-
-  // Save state on unmount
+  // Save scroll position immediately before the component unmounts
   useEffect(() => {
     return () => {
       if (pageKey) {
@@ -56,4 +40,32 @@ export function useScrollRestoration(pageKey, isDataReady = true, customData = {
       }
     };
   }, [pageKey, savePageState]);
+
+  // Restore scroll on POP, or go to top on PUSH/REPLACE.
+  // Waits for isDataReady=true so the page has content before scrolling.
+  useLayoutEffect(() => {
+    if (!pageKey || hasRestoredRef.current) return;
+
+    if (navType === "POP") {
+      // Defer until data is available (avoids scrolling into empty skeleton)
+      if (!isDataReady) return;
+
+      const cached = getPageState(pageKey);
+      if (cached && typeof cached.scrollY === "number" && cached.scrollY > 0) {
+        hasRestoredRef.current = true;
+        // Double rAF to ensure browser has painted content before scrolling
+        window.requestAnimationFrame(() => {
+          window.scrollTo({ top: cached.scrollY, behavior: "instant" });
+          window.requestAnimationFrame(() => {
+            window.scrollTo({ top: cached.scrollY, behavior: "instant" });
+          });
+        });
+        return;
+      }
+    }
+
+    // PUSH/REPLACE or no saved position → scroll to top immediately (no data wait)
+    hasRestoredRef.current = true;
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  }, [pageKey, isDataReady, getPageState, navType]);
 }

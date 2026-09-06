@@ -259,9 +259,12 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
   }, [hasMore, loading, loadingMore, activeSort, items.length, selectedCategory, transformRawItem, totalCount, savePageState, cacheKey, currentFilters, searchQuery]);
 
   // Load items when category or sort changes (unless restored from cache)
+  // NOTE: On POP (back) navigation, skip fetch if we already have cached items —
+  // avoids wiping isDataReady which would prevent scroll position restoration.
   useEffect(() => {
     const cached = getPageState(cacheKey);
-    if (!cached || !cached.items?.length || cached.sort !== activeSort) {
+    const hasCachedItems = cached?.items?.length > 0;
+    if (!hasCachedItems || cached.sort !== activeSort) {
       loadInitialItems();
     }
   }, [selectedCategory, activeSort, cacheKey, getPageState, loadInitialItems]);

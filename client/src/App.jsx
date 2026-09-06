@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useDeferredValue, Suspense } from "react";
+import React, { useEffect, useLayoutEffect, useState, useDeferredValue, Suspense } from "react";
 import { HashRouter, Routes, Route, Navigate, useNavigate, useParams, useLocation, useNavigationType } from "react-router-dom";
 import CustomerCinemaLayout from "./layouts/CustomerCinemaLayout.jsx";
 import AdminPortalLayout from "./layouts/AdminPortalLayout.jsx";
@@ -25,18 +25,18 @@ import { categorySeed, getCategoryMeta } from "./data/library.js";
 import { getCategories, getHealth, getMediaDetail, getFileSubtitles, getMediaList, syncIndex, resolveAPIURL } from "./lib/api.js";
 
 /**
- * Ensures that on fresh navigations (PUSH/REPLACE: clicking menus, cards, links),
- * the window is cleanly scrolled to the top (0, 0).
- * On back navigations (POP), allows the saved scroll restoration to handle position.
+ * Handles scroll-to-top ONLY on fresh navigations (PUSH/REPLACE).
+ * POP (Back/Forward) is intentionally ignored — each page's useScrollRestoration
+ * hook is responsible for restoring the correct scroll position after data loads.
  */
 function ScrollManager() {
   const location = useLocation();
   const navType = useNavigationType();
 
-  useEffect(() => {
-    if (navType !== "POP") {
-      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
-    }
+  useLayoutEffect(() => {
+    // Never interfere with POP (Back/Forward button) — let each page restore itself
+    if (navType === "POP") return;
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
   }, [location.pathname, location.search, navType]);
 
   return null;
