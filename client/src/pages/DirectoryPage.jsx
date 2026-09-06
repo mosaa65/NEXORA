@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import Icon from "../components/Icon.jsx";
 import SmartHubCard from "../components/SmartHubCard.jsx";
 import { getFranchises, getPeople, getSmartHubs, resolveAPIURL } from "../lib/api.js";
+import { useNavigationState } from "../context/NavigationStateContext.jsx";
+import { useScrollRestoration } from "../hooks/useScrollRestoration.js";
 
 const directoryConfig = {
   hubs: { title: "كل المحاور والمجموعات الذكية", subtitle: "استكشف جميع المحاور الفنية المحفوظة في مكتبتك.", icon: "grid", tone: "fuchsia" },
@@ -60,14 +62,38 @@ function DirectoryCard({ kind, item, onOpen }) {
   );
 }
 
-export default function DirectoryPage({ kind, onOpen }) {
-  const [items, setItems] = useState(null);
+export default function DirectoryPage({ kind = "hubs", onOpen }) {
+  const { getPageState, savePageState } = useNavigationState();
+  const cacheKey = `directory:${kind}`;
+  const cachedState = useMemo(() => getPageState(cacheKey), [cacheKey, getPageState]);
+
+  const [items, setItems] = useState(() => cachedState?.items || null);
   const config = directoryConfig[kind] || directoryConfig.hubs;
 
+  // Use Scroll Restoration
+  useScrollRestoration(cacheKey, Boolean(items), { items });
+
   useEffect(() => {
-    const load = kind === "people" ? getPeople(100) : kind === "franchises" ? getFranchises(100) : getSmartHubs();
-    load.then((data) => setItems(data?.[kind === "people" ? "people" : kind === "franchises" ? "franchises" : "hubs"] || [])).catch(() => setItems([]));
-  }, [kind]);
+    let alive = true;
+    const cached = getPageState(cacheKey);
+    if (!cached || !cached.items) {
+      const load = kind === "people" ? getPeople(100) : kind === "franchises" ? getFranchises(100) : getSmartHubs();
+      load
+        .then((data) => {
+          if (alive) {
+            const list = data?.[kind === "people" ? "people" : kind === "franchises" ? "franchises" : "hubs"] || [];
+            setItems(list);
+            savePageState(cacheKey, { items: list });
+          }
+        })
+        .catch(() => {
+          if (alive) setItems([]);
+        });
+    }
+    return () => {
+      alive = false;
+    };
+  }, [kind, cacheKey, getPageState, savePageState]);
 
   if (!items) return <div className="min-h-72 animate-pulse rounded-2xl bg-[var(--bg-surface)]" />;
 

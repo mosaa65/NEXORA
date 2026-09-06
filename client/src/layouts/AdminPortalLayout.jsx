@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import Icon from "../components/Icon.jsx";
 import SideNavigation from "../components/layout/SideNavigation.jsx";
@@ -16,6 +16,15 @@ const adminNavItems = [
   { id: "quality", path: "/admin/quality", label: "جودة المكتبة", icon: "book" },
   { id: "migration", path: "/admin/migration", label: "الترتيب والنقل", icon: "arrowLeft" },
   { id: "transfer", path: "/admin/transfer", label: "نسخ USB للهواتف", icon: "spark" },
+];
+
+const fontOptions = [
+  { id: "plex", label: "Plex" },
+  { id: "cairo", label: "القاهرة" },
+  { id: "changa", label: "Changa" },
+  { id: "messiri", label: "المسيري" },
+  { id: "kufi", label: "كوفي" },
+  { id: "vazir", label: "وزير" },
 ];
 
 export default function AdminPortalLayout({ health, onSyncIndex }) {
@@ -77,7 +86,7 @@ export default function AdminPortalLayout({ health, onSyncIndex }) {
                 <button className="navigation-theme-button" type="button" onClick={toggleTheme} aria-label={theme === "dark" ? "تفعيل المظهر الفاتح" : "تفعيل المظهر الداكن"}>
                   <Icon name={theme === "dark" ? "sun" : "moon"} className="h-4 w-4" />{theme === "dark" ? "فاتح" : "داكن"}
                 </button>
-                <button className="navigation-theme-button" type="button" onClick={() => setFont(font === "plex" ? "cairo" : "plex")} aria-label="تبديل خط الواجهة"><span className="text-sm font-black">ع</span>{font === "plex" ? "القاهرة" : "Plex"}</button>
+                <button className="navigation-theme-button" type="button" onClick={() => { const currentIndex = fontOptions.findIndex((option) => option.id === font); setFont(fontOptions[(currentIndex + 1) % fontOptions.length].id); }} aria-label="تبديل خط الواجهة"><span className="text-sm font-black">ع</span>{fontOptions.find((option) => option.id === font)?.label || "Plex"}</button>
                 <Link className="navigation-icon-button" to="/" aria-label="العودة لواجهة العميل" title="واجهة العميل"><Icon name="play" className="h-4 w-4" /></Link>
               </div>
             </>
@@ -132,7 +141,15 @@ export default function AdminPortalLayout({ health, onSyncIndex }) {
               />
             </div>
           </header>
-          <main className="min-w-0 flex-1"><Outlet /></main>
+          <main className="min-w-0 flex-1">
+            <Suspense fallback={
+              <div className="flex h-64 items-center justify-center">
+                <div className="h-8 w-8 animate-spin rounded-full border-2 border-fuchsia-500 border-t-transparent" />
+              </div>
+            }>
+              <Outlet />
+            </Suspense>
+          </main>
         </div>
       </div>
     </div>

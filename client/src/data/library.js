@@ -75,49 +75,10 @@ export function getMediaTypeLabel(type) {
   return lookup[type] || type;
 }
 
-// Clean mock library placeholder
-export const mockLibrary = [];
-
-export const streamStatusFeed = [
-  {
-    label: "البث المباشر",
-    title: "خادم الوسائط المحلي جاهز",
-    body: "جاهز لدفق ملفات الفيديو مباشرة وبأعلى جودة عبر الشبكة المحلية.",
-    tone: "emerald",
-  },
-  {
-    label: "الفهرسة",
-    title: "مزامنة قاعدة البيانات",
-    body: "يتم تحديث الفهارس وبيانات الأعمال تلقائياً عند إضافة أي محتوى جديد.",
-    tone: "purple",
-  },
-  {
-    label: "الماسح",
-    title: "مراقبة المجلدات نشطة",
-    body: "الخادم يراقب مسارات الوسائط المحددة ويضيف الملفات فور وصولها.",
-    tone: "cyan",
-  },
-];
-
-export const dashboardMetrics = [
-  { label: "إجمالي المحتوى", value: "0", hint: "عنوان مفهرس" },
-  { label: "إجمالي الحجم", value: "0 GB", hint: "سعة الأقراص" },
-  { label: "الأفلام", value: "0", hint: "فيلم سينمائي" },
-  { label: "المسلسلات", value: "0", hint: "مسلسل تلفزيوني" },
-  { label: "الأنمي", value: "0", hint: "أنمي عربي/إنجليزي" },
-  { label: "الحلقات", value: "0", hint: "حلقة محلية" },
-];
-
-export const detailEpisodes = [];
-
 export function buildHeroCopy() {
   return {
     eyebrow: "NEXORA",
     title: "مكتبة الوسائط الرقمية",
     subtitle: "تجربة تصفح وبث سينمائية منزلية متكاملة لجميع أعمالك الفنية.",
   };
-}
-
-export function findMockMedia(id) {
-  return null;
 }

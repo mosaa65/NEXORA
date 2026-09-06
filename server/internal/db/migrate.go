@@ -19,8 +19,9 @@ func Open(ctx context.Context, databaseURL string) (*sql.DB, error) {
 		return nil, err
 	}
 
-	database.SetMaxOpenConns(25)
-	database.SetMaxIdleConns(10)
+	database.SetMaxOpenConns(100)
+	database.SetMaxIdleConns(30)
+	database.SetConnMaxIdleTime(5 * time.Minute)
 	database.SetConnMaxLifetime(30 * time.Minute)
 
 	if err := database.PingContext(ctx); err != nil {

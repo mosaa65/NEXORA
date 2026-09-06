@@ -579,24 +579,34 @@ erDiagram
 NEXORA is built for deployment on a central LAN server machine inside internet lounges or gaming centers.
 
 **Deployment Steps:**
-1. Configure host server with PostgreSQL 16, Meilisearch v1.11, and Redis 7 (via `docker compose up -d`).
-2. Build the Go API production binary: `cd server && go build -o nexora-api.exe ./cmd/api`.
-3. Build the static React frontend bundle: `cd client && npm run build`.
-4. Host the API service on port `8080` and serve static client files via Vite preview or Nginx on local IP.
+1. **Full-Stack Containerized (Recommended):** Run the complete system including database, search, cache, Go server, and Nginx client via Docker:
+   ```bash
+   docker compose --profile full up -d
+   ```
+2. **Hybrid / Local Development:**
+   - Run infrastructure services: `docker compose up -d`
+   - Run Go backend: `cd server && go run ./cmd/api`
+   - Run React frontend: `cd client && npm run dev`
+3. **API Documentation:** Interactive OpenAPI 3.0 specification available at [`docs/api/openapi.json`](docs/api/openapi.json).
 
-**Local Server URL:** `http://localhost:8080` (Backend API) | `http://localhost:5173` (Frontend Web Console)
+**Local Server URL:** `http://localhost:8080` (Backend API) | `http://localhost:5173` (Dev Frontend) | `http://localhost:80` (Production Container)
 
 🇸🇦 **العربية**
 
-صُمم NEXORA للنشر على خادم مركزي داخل الاستراحة أو صالة الألعاب.
+صُمم NEXORA للنشر على خادم مركزي داخل الاستراحة أو صالة الألعاب أو بيئات الإنتاج السحابية.
 
 **خطوات النشر:**
-1. إعداد الخادم الرئيسي بالخدمات (PostgreSQL وMeilisearch وRedis) عبر Docker Compose.
-2. بناء الملف التنفيذي لخادم Go: `cd server && go build -o nexora-api.exe ./cmd/api`.
-3. بناء واجهة الويب: `cd client && npm run build`.
-4. تشغيل خادم Go على المنفذ `8080` وتقديم واجهة الويب على العنوان المحلي.
+1. **النشر الكامل عبر الحاويات (الموصى به):** تشغيل النظام بالكامل (قاعدة البيانات، محرك البحث، الكاش، خادم Go، وواجهة React عبر Nginx) بضغطة زر واحدة:
+   ```bash
+   docker compose --profile full up -d
+   ```
+2. **التطوير المحلي / النشر الهجين:**
+   - تشغيل البنية التحتية: `docker compose up -d`
+   - تشغيل خادم Go: `cd server && go run ./cmd/api`
+   - تشغيل واجهة الويب: `cd client && npm run dev`
+3. **توثيق الـ API:** يتوفر ملف مواصفات OpenAPI 3.0 المحدث داخل [`docs/api/openapi.json`](docs/api/openapi.json).
 
-**العنوان المحلي:** `http://localhost:8080` (الخلفية البرمجية) | `http://localhost:5173` (واجهة المستخدم)
+**العنوان المحلي:** `http://localhost:8080` (الخلفية البرمجية) | `http://localhost:5173` (واجهة التطوير) | `http://localhost:80` (حاوية الإنتاج)
 
 ---
 

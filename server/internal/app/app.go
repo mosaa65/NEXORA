@@ -3,7 +3,7 @@ package app
 import (
 	"context"
 	"errors"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -24,6 +24,10 @@ import (
 )
 
 func Run() {
+	// Initialize default structured logger
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	slog.SetDefault(logger)
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -31,13 +35,15 @@ func Run() {
 
 	sqlDB, err := db.Open(ctx, cfg.DatabaseURL)
 	if err != nil {
-		log.Fatalf("open database: %v", err)
+		slog.Error("open database failed", slog.Any("error", err))
+		os.Exit(1)
 	}
 	defer sqlDB.Close()
 
 	migrationsDir := resolveMigrationsDir(cfg.MigrationsDir)
 	if err := db.RunMigrations(ctx, sqlDB, migrationsDir); err != nil {
-		log.Fatalf("run migrations: %v", err)
+		slog.Error("run migrations failed", slog.Any("error", err))
+		os.Exit(1)
 	}
 
 	repository := db.NewRepository(sqlDB)
@@ -77,17 +83,17 @@ func Run() {
 			err := eventWatcher.Watch(ctx, cfg.MediaRoots, func(event scanner.Event) error {
 				if event.File != nil {
 					if _, err := repository.IngestScannedFiles(ctx, []scanner.FileInfo{*event.File}); err != nil {
-						log.Printf("media %s ingest failed: %s: %v", event.Kind, event.Path, err)
+						slog.Warn("media ingest failed", slog.String("kind", string(event.Kind)), slog.String("path", event.Path), slog.Any("error", err))
 						return nil
 					}
-					log.Printf("media %s indexed: %s -> %s", event.Kind, event.Path, event.File.Parsed.Title)
+					slog.Info("media indexed", slog.String("kind", string(event.Kind)), slog.String("path", event.Path), slog.String("title", event.File.Parsed.Title))
 				} else {
-					log.Printf("media %s: %s", event.Kind, event.Path)
+					slog.Info("media event", slog.String("kind", string(event.Kind)), slog.String("path", event.Path))
 				}
 				return nil
 			})
 			if err != nil && !errors.Is(err, context.Canceled) {
-				log.Printf("media watcher stopped: %v", err)
+				slog.Error("media watcher stopped", slog.Any("error", err))
 			}
 		}()
 	}
@@ -99,9 +105,10 @@ func Run() {
 	}
 
 	go func() {
-		log.Printf("NEXORA API listening on %s", cfg.HTTPAddr)
+		slog.Info("NEXORA API listening", slog.String("addr", cfg.HTTPAddr))
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatalf("listen: %v", err)
+			slog.Error("http server failed", slog.Any("error", err))
+			os.Exit(1)
 		}
 	}()
 
@@ -110,7 +117,9 @@ func Run() {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := server.Shutdown(shutdownCtx); err != nil {
-		log.Printf("shutdown: %v", err)
+		slog.Error("graceful shutdown failed", slog.Any("error", err))
+	} else {
+		slog.Info("server shut down gracefully")
 	}
 }
 
