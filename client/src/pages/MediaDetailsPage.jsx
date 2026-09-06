@@ -50,6 +50,15 @@ export default function MediaDetailsPage({
   onQuickPlay,
 }) {
   const navigate = useNavigate();
+
+  const handleBack = () => {
+    if (window.history.state?.idx > 0 || window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate("/");
+    }
+  };
+
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedSeasonIdx, setSelectedSeasonIdx] = useState(0);
@@ -186,13 +195,7 @@ export default function MediaDetailsPage({
         <div className="flex items-center justify-between gap-4 pb-2">
           <button
             type="button"
-            onClick={() => {
-              if (window.history.length > 1) {
-                navigate(-1);
-              } else {
-                navigate("/");
-              }
-            }}
+            onClick={handleBack}
             className="group inline-flex items-center gap-2.5 rounded-full border border-[var(--border-default)] bg-[var(--bg-card)] px-5 py-2.5 text-xs font-bold text-[var(--text-primary)] shadow-[var(--shadow-md)] backdrop-blur-xl"
           >
             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--bg-elevated)] text-[var(--text-primary)]">‹</span>
@@ -215,13 +218,7 @@ export default function MediaDetailsPage({
         <div className="flex items-center justify-between gap-4 pb-2">
           <button
             type="button"
-            onClick={() => {
-              if (window.history.length > 1) {
-                navigate(-1);
-              } else {
-                navigate("/");
-              }
-            }}
+            onClick={handleBack}
             className="group inline-flex items-center gap-2.5 rounded-full border border-[var(--border-default)] bg-[var(--bg-card)] hover:bg-[var(--bg-elevated)] px-5 py-2.5 text-xs font-bold text-[var(--text-primary)] shadow-[var(--shadow-md)] backdrop-blur-xl transition"
           >
             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--bg-elevated)] text-[var(--text-primary)]">‹</span>
@@ -290,13 +287,7 @@ export default function MediaDetailsPage({
       <div className="flex flex-wrap items-center justify-between gap-3 pb-1">
         <button
           type="button"
-          onClick={() => {
-            if (window.history.length > 1) {
-              navigate(-1);
-            } else {
-              navigate("/");
-            }
-          }}
+          onClick={handleBack}
           className="group inline-flex items-center gap-2.5 rounded-full border border-[var(--border-default)] bg-[var(--bg-card)] px-4 py-2 text-xs font-bold text-[var(--text-primary)] shadow-[var(--shadow-sm)] backdrop-blur-xl transition hover:border-[var(--color-accent)] hover:bg-[var(--bg-elevated)]"
         >
           <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--bg-elevated)] text-lg leading-none text-[var(--text-primary)] transition group-hover:bg-[var(--color-accent)] group-hover:text-white">‹</span>

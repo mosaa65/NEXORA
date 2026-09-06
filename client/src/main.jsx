@@ -7,6 +7,11 @@ import { ThemeProvider } from "./context/ThemeContext.jsx";
 import { NavigationStateProvider } from "./context/NavigationStateContext.jsx";
 import AppErrorBoundary from "./components/AppErrorBoundary.jsx";
 
+// Disable automatic browser scroll restoration to prevent glitches during SPA transitions
+if (typeof window !== "undefined" && "scrollRestoration" in window.history) {
+  window.history.scrollRestoration = "manual";
+}
+
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <AppErrorBoundary>

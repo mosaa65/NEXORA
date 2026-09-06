@@ -56,8 +56,9 @@ export function useScrollRestoration(pageKey, isDataReady = true, customData = {
   }, [pageKey, savePageState]);
 
   // Restore scroll on POP, or go to top on PUSH/REPLACE.
-  // Waits for isDataReady=true so the page has content before scrolling.
-  useLayoutEffect(() => {
+  // Uses useEffect (after paint) so that outgoing views (like MediaDetailsPage)
+  // are never scrolled down before unmounting.
+  useEffect(() => {
     if (!pageKey || hasRestoredRef.current) return;
 
     if (navType === "POP") {
@@ -68,12 +69,9 @@ export function useScrollRestoration(pageKey, isDataReady = true, customData = {
       if (cached && typeof cached.scrollY === "number" && cached.scrollY > 0) {
         hasRestoredRef.current = true;
         const targetY = cached.scrollY;
-        window.scrollTo({ top: targetY, behavior: "instant" });
+        // Defer to animation frame after outgoing page is removed from paint tree
         window.requestAnimationFrame(() => {
           window.scrollTo({ top: targetY, behavior: "instant" });
-          window.requestAnimationFrame(() => {
-            window.scrollTo({ top: targetY, behavior: "instant" });
-          });
         });
         return;
       }

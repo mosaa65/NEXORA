@@ -33,6 +33,12 @@ function ScrollManager() {
   const location = useLocation();
   const navType = useNavigationType();
 
+  useEffect(() => {
+    if (typeof window !== "undefined" && "scrollRestoration" in window.history) {
+      window.history.scrollRestoration = "manual";
+    }
+  }, []);
+
   useLayoutEffect(() => {
     // Never interfere with POP (Back/Forward button) — let each page restore itself
     if (navType === "POP") return;
