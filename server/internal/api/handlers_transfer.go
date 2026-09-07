@@ -194,6 +194,7 @@ func (s *Server) handleTransferCopy(w http.ResponseWriter, r *http.Request) {
 		SourcePath   string   `json:"source_path"`
 		SourcePaths  []string `json:"source_paths"`
 		FileID       int64    `json:"file_id"`
+		FileIDs      []int64  `json:"file_ids"`
 		TargetApp    string   `json:"target_app"`
 		SubFolder    string   `json:"sub_folder"`
 		TargetFolder string   `json:"target_folder"`
@@ -203,13 +204,29 @@ func (s *Server) handleTransferCopy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.FileID > 0 {
+	if len(req.FileIDs) > 0 {
+		for _, fid := range req.FileIDs {
+			if fid <= 0 {
+				continue
+			}
+			path, err := s.repository.GetVideoFilePath(r.Context(), fid)
+			if err == nil && strings.TrimSpace(path) != "" {
+				req.SourcePaths = append(req.SourcePaths, path)
+			}
+		}
+		if len(req.SourcePaths) > 0 && strings.TrimSpace(req.SourcePath) == "" {
+			req.SourcePath = req.SourcePaths[0]
+		}
+	} else if req.FileID > 0 {
 		path, err := s.repository.GetVideoFilePath(r.Context(), req.FileID)
 		if err != nil {
 			writeJSON(w, http.StatusNotFound, map[string]any{"error": "تعذر العثور على ملف الفيديو بالمعرف المحدد"})
 			return
 		}
 		req.SourcePath = path
+		if len(req.SourcePaths) == 0 {
+			req.SourcePaths = []string{path}
+		}
 	}
 	if strings.TrimSpace(req.SourcePath) == "" && len(req.SourcePaths) == 0 {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "مسار الملف المصدر مطلوب"})

@@ -94,7 +94,8 @@ export default function TransferModal() {
         const match = list.find((d) => d.id === prev.id);
         if (match) return match;
       }
-      return list[0] || null;
+      const storageDevice = list.find((d) => d.type === "storage" || d.id?.startsWith("disk_"));
+      return storageDevice || list[0] || null;
     });
   }, [streamedDevices]);
 
@@ -110,7 +111,8 @@ export default function TransferModal() {
           const match = list.find((d) => d.id === prev.id);
           if (match) return match;
         }
-        return list[0] || null;
+        const storageDevice = list.find((d) => d.type === "storage" || d.id?.startsWith("disk_"));
+        return storageDevice || list[0] || null;
       });
     } catch (err) {
       if (showLoading) {
@@ -362,8 +364,10 @@ export default function TransferModal() {
     if (selectedFiles.length === 0) return;
     setOpeningFolder(true);
     try {
+      const first = selectedFiles[0];
       await openFileLocation({
-        path: selectedFiles[0].filePath || selectedFiles[0].file_path || selectedFiles[0].path
+        file_id: first?.fileId || (Number(first?.id) > 0 ? Number(first?.id) : 0),
+        path: first?.filePath || first?.file_path || first?.path || ""
       });
     } catch (err) {
       setErrorMsg("تعذر فتح المجلد: " + (err.message || ""));

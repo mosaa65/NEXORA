@@ -84,13 +84,15 @@ export function TransferProvider({ children }) {
 
   // File Selection Helpers
   const normalizeFile = (file, mediaTitle = "", poster = "") => {
-    const id = file?.id || file?.file_id || file?.file_path || file?.path || Math.random().toString();
+    const rawId = file?.id || file?.file_id;
+    const fileId = Number(rawId) > 0 ? Number(rawId) : null;
     const path = file?.filePath || file?.file_path || file?.path || file?.source_path || "";
     const name = file?.title_ar || file?.title_en || (file?.episode_number ? `الحلقة ${file.episode_number}` : file?.file_name || "ملف فيديو");
     const size = Number(file?.file_size || file?.size || 0);
     const resolution = file?.resolution || "1080p";
     return {
-      id: String(id),
+      id: String(rawId || path || Math.random().toString()),
+      fileId,
       filePath: path,
       title: name,
       episodeNumber: file?.episode_number || null,
@@ -171,14 +173,20 @@ export function TransferProvider({ children }) {
         .map((f) => f.filePath || f.file_path || f.path || f.source_path)
         .filter((p) => Boolean(p && String(p).trim()));
 
-      if (sourcePaths.length === 0) {
-        throw new Error("لم يتم العثور على مسارات صالحة للملفات المحددة");
+      const fileIds = filesToTransfer
+        .map((f) => f.fileId || (Number(f.id) > 0 ? Number(f.id) : null))
+        .filter(Boolean);
+
+      if (sourcePaths.length === 0 && fileIds.length === 0) {
+        throw new Error("لم يتم العثور على مسارات أو معرفات صالحة للملفات المحددة");
       }
 
       const payload = {
         device_id: deviceId,
-        source_path: sourcePaths[0],
+        source_path: sourcePaths[0] || "",
         source_paths: sourcePaths,
+        file_id: fileIds[0] || 0,
+        file_ids: fileIds,
         target_app: targetApp,
         target_folder: targetFolder,
         sub_folder: subFolder
