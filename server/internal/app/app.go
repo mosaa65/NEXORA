@@ -20,6 +20,7 @@ import (
 	"nexora/server/internal/quality"
 	"nexora/server/internal/scanner"
 	"nexora/server/internal/search"
+	"nexora/server/internal/transfer"
 )
 
 func Run() {
@@ -71,6 +72,10 @@ func Run() {
 	mediaProcessor := media.NewProcessor(cfg.FFmpegPath, cfg.FFprobePath)
 	migrationService := migration.New(migration.Options{})
 	qualityService := quality.NewService(sqlDB, cfg.FFmpegPath, cfg.FFprobePath)
+	transferService := transfer.NewService(transfer.Options{
+		AndroidTargetFolder: cfg.AndroidTargetFolder,
+		IOSBundleID:         cfg.IOSBundleID,
+	})
 
 	if len(cfg.MediaRoots) > 0 {
 		eventWatcher := scanner.NewEventWatcher(scannerService, cfg.WatchRecursive)
@@ -95,7 +100,7 @@ func Run() {
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           api.NewServer(cfg, repository, scannerService, searchClient, metadataService, mediaProcessor, migrationService, qualityService),
+		Handler:           api.NewServer(cfg, repository, scannerService, searchClient, metadataService, mediaProcessor, migrationService, qualityService, transferService),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

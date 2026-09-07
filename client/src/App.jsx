@@ -5,7 +5,6 @@ import AdminPortalLayout from "./layouts/AdminPortalLayout.jsx";
 import DashboardPage from "./pages/DashboardPage.jsx";
 import CategoryPage from "./pages/CategoryPage.jsx";
 import SmartHubPage from "./pages/SmartHubPage.jsx";
-
 const FranchisePage = React.lazy(() => import("./pages/FranchisePage.jsx"));
 const PersonPage = React.lazy(() => import("./pages/PersonPage.jsx"));
 const DirectoryPage = React.lazy(() => import("./pages/DirectoryPage.jsx"));
@@ -18,9 +17,14 @@ const AdminIndexerPage = React.lazy(() => import("./pages/admin/AdminIndexerPage
 const AdminQualityPage = React.lazy(() => import("./pages/admin/AdminQualityPage.jsx"));
 const AdminMigrationPage = React.lazy(() => import("./pages/admin/AdminMigrationPage.jsx"));
 const AdminOverviewPage = React.lazy(() => import("./pages/admin/AdminOverviewPage.jsx"));
+const AdminTransferPage = React.lazy(() => import("./pages/admin/AdminTransferPage.jsx"));
 const TMDBSettingsPage = React.lazy(() => import("./pages/TMDBSettingsPage.jsx"));
 const AdminLoginPage = React.lazy(() => import("./pages/AdminLoginPage.jsx"));
+
 import VideoPlayer from "./components/VideoPlayer.jsx";
+import { TransferProvider } from "./context/TransferContext.jsx";
+import TransferModal from "./components/transfer/TransferModal.jsx";
+import MiniTransferCenter from "./components/transfer/MiniTransferCenter.jsx";
 import { categorySeed, getCategoryMeta } from "./data/library.js";
 import { getCategories, getHealth, getMediaDetail, getFileSubtitles, getMediaList, syncIndex, resolveAPIURL } from "./lib/api.js";
 
@@ -266,6 +270,7 @@ function AppRoutes() {
           <Route path="tmdb" element={<TMDBSettingsPage />} />
           <Route path="quality" element={<AdminQualityPage />} />
           <Route path="migration" element={<AdminMigrationPage />} />
+          <Route path="transfer" element={<AdminTransferPage />} />
           <Route path="overview" element={<AdminOverviewPage health={health} onSyncIndex={handleSyncIndex} />} />
         </Route>
 
@@ -281,15 +286,21 @@ function AppRoutes() {
           onClose={() => setPlayingMediaState(null)}
         />
       )}
+
+      {/* Global USB Transfer Experience (Modern Modal, Mini Transfer Center) */}
+      <TransferModal />
+      <MiniTransferCenter />
     </>
   );
 }
 
 export default function App() {
   return (
+    <TransferProvider>
     <HashRouter>
       <AppRoutes />
     </HashRouter>
+    </TransferProvider>
   );
 }
 

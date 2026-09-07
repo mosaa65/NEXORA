@@ -28,10 +28,12 @@ function cacheTTL(path) {
   return READ_CACHE_TTL;
 }
 
-function isCacheableRequest(path, options) {
+function isCacheableRequest(path, options = {}) {
   return (!options.method || options.method.toUpperCase() === "GET")
+    && options.cache !== "no-store"
     && !path.startsWith("/api/admin/")
-    && !path.startsWith("/api/stream/");
+    && !path.startsWith("/api/stream/")
+    && !path.startsWith("/api/transfer/");
 }
 
 function readCachedResponse(key) {
@@ -429,6 +431,75 @@ export async function adminLogout() {
 
 export async function getFileSubtitles(fileId) {
   return requestJSON(`/api/stream/file/${encodeURIComponent(fileId)}/subtitles`);
+}
+
+// USB Transfer API
+export async function getTransferDevices() {
+  return requestJSON("/api/transfer/devices", { cache: "no-store" });
+}
+
+export async function getTransferDeviceApps(deviceId) {
+  return requestJSON(`/api/transfer/device-apps?device_id=${encodeURIComponent(deviceId || "")}`, {
+    cache: "no-store"
+  });
+}
+
+export async function getTransferAppFolders(deviceId, bundleId) {
+  return requestJSON(`/api/transfer/device-app-folders?device_id=${encodeURIComponent(deviceId || "")}&bundle_id=${encodeURIComponent(bundleId || "")}`, {
+    cache: "no-store"
+  });
+}
+
+export async function startDeviceTransfer(payload) {
+  return requestJSON("/api/transfer/copy", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function getTransferJobs() {
+  return requestJSON("/api/transfer/jobs", { cache: "no-store" });
+}
+
+export async function getTransferJob(jobId) {
+  return requestJSON(`/api/transfer/job/${encodeURIComponent(jobId)}`, { cache: "no-store" });
+}
+
+export async function cancelTransferJob(jobId) {
+  return requestJSON(`/api/transfer/cancel/${encodeURIComponent(jobId)}`, {
+    method: "POST"
+  });
+}
+
+export async function browseTransferPath(deviceId, path = "", deviceType = "", bundleId = "") {
+  const params = new URLSearchParams({
+    device_id: deviceId || "",
+    path: path || ""
+  });
+  if (deviceType) params.set("device_type", deviceType);
+  if (bundleId) params.set("bundle_id", bundleId);
+  return requestJSON(`/api/transfer/browse?${params.toString()}`, { cache: "no-store" });
+}
+
+export async function createTransferFolder(payload) {
+  return requestJSON("/api/transfer/mkdir", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function ejectTransferDevice(deviceId) {
+  return requestJSON("/api/transfer/eject", {
+    method: "POST",
+    body: JSON.stringify({ device_id: deviceId })
+  });
+}
+
+export async function openFileLocation(payload) {
+  return requestJSON("/api/system/open-file-location", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
 }
 
 // All catalogue graph reads are local API reads. TMDB is used only by the
