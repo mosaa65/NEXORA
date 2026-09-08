@@ -94,7 +94,7 @@ type VideoFile struct {
 	EpisodeNumber         int             `json:"episode_number,omitempty"`
 	TitleAR               string          `json:"title_ar,omitempty"`
 	TitleEN               string          `json:"title_en,omitempty"`
-	FilePath              string          `json:"-"`
+	FilePath              string          `json:"file_path,omitempty"`
 	FileSize              int64           `json:"file_size"`
 	Duration              int             `json:"duration,omitempty"`
 	Resolution            string          `json:"resolution,omitempty"`

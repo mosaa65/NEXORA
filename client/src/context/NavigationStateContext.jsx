@@ -38,10 +38,16 @@ export function NavigationStateProvider({ children }) {
   const savePageState = useCallback((key, state) => {
     if (!key) return;
     const existing = memoryCache.current.get(key) || {};
+    // Never overwrite an existing positive scroll position with 0 during unmount transitions
+    const resolvedScrollY =
+      typeof state.scrollY === "number" && state.scrollY > 0
+        ? state.scrollY
+        : (window.scrollY > 0 ? window.scrollY : (existing.scrollY || 0));
+
     const updated = {
       ...existing,
       ...state,
-      scrollY: state.scrollY !== undefined ? state.scrollY : (window.scrollY || existing.scrollY || 0),
+      scrollY: resolvedScrollY,
       savedAt: Date.now(),
     };
     memoryCache.current.set(key, updated);

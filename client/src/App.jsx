@@ -1,11 +1,10 @@
-import React, { useEffect, useState, useDeferredValue, Suspense } from "react";
-import { HashRouter, Routes, Route, Navigate, useNavigate, useParams } from "react-router-dom";
+import React, { useEffect, useLayoutEffect, useState, useDeferredValue, Suspense } from "react";
+import { HashRouter, Routes, Route, Navigate, useNavigate, useParams, useLocation, useNavigationType } from "react-router-dom";
 import CustomerCinemaLayout from "./layouts/CustomerCinemaLayout.jsx";
 import AdminPortalLayout from "./layouts/AdminPortalLayout.jsx";
 import DashboardPage from "./pages/DashboardPage.jsx";
 import CategoryPage from "./pages/CategoryPage.jsx";
 import SmartHubPage from "./pages/SmartHubPage.jsx";
-
 const FranchisePage = React.lazy(() => import("./pages/FranchisePage.jsx"));
 const PersonPage = React.lazy(() => import("./pages/PersonPage.jsx"));
 const DirectoryPage = React.lazy(() => import("./pages/DirectoryPage.jsx"));
@@ -18,17 +17,47 @@ const AdminIndexerPage = React.lazy(() => import("./pages/admin/AdminIndexerPage
 const AdminQualityPage = React.lazy(() => import("./pages/admin/AdminQualityPage.jsx"));
 const AdminMigrationPage = React.lazy(() => import("./pages/admin/AdminMigrationPage.jsx"));
 const AdminOverviewPage = React.lazy(() => import("./pages/admin/AdminOverviewPage.jsx"));
+const AdminTransferPage = React.lazy(() => import("./pages/admin/AdminTransferPage.jsx"));
 const TMDBSettingsPage = React.lazy(() => import("./pages/TMDBSettingsPage.jsx"));
 const AdminLoginPage = React.lazy(() => import("./pages/AdminLoginPage.jsx"));
+
 import VideoPlayer from "./components/VideoPlayer.jsx";
+import { TransferProvider } from "./context/TransferContext.jsx";
+import TransferModal from "./components/transfer/TransferModal.jsx";
+import MiniTransferCenter from "./components/transfer/MiniTransferCenter.jsx";
 import { categorySeed, getCategoryMeta } from "./data/library.js";
 import { getCategories, getHealth, getMediaDetail, getFileSubtitles, getMediaList, syncIndex, resolveAPIURL } from "./lib/api.js";
 
-// Helper Wrapper for Category View
+/**
+ * Handles scroll-to-top ONLY on fresh navigations (PUSH/REPLACE).
+ * POP (Back/Forward) is intentionally ignored — each page's useScrollRestoration
+ * hook is responsible for restoring the correct scroll position after data loads.
+ */
+function ScrollManager() {
+  const location = useLocation();
+  const navType = useNavigationType();
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && "scrollRestoration" in window.history) {
+      window.history.scrollRestoration = "manual";
+    }
+  }, []);
+
+  useLayoutEffect(() => {
+    // Never interfere with POP (Back/Forward button) — let each page restore itself
+    if (navType === "POP") return;
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  }, [location.pathname, location.search, navType]);
+
+  return null;
+}
+
+// Helper Wrapper for Category View with unique key per category
 function CategoryRouteWrapper({ onOpenMedia, onQuickPlay }) {
   const { category = "series" } = useParams();
   return (
     <CategoryPage
+      key={category}
       selectedCategory={category}
       onOpenMedia={onOpenMedia}
       onQuickPlay={onQuickPlay}
@@ -38,18 +67,18 @@ function CategoryRouteWrapper({ onOpenMedia, onQuickPlay }) {
 
 function SmartHubRouteWrapper({ onOpenMedia }) {
   const { slug } = useParams();
-  return <SmartHubPage slug={slug} onOpenMedia={onOpenMedia} />;
+  return <SmartHubPage key={slug} slug={slug} onOpenMedia={onOpenMedia} />;
 }
 function FranchiseRouteWrapper({ onOpenMedia }) {
   const { slug } = useParams();
-  return <FranchisePage slug={slug} onOpenMedia={onOpenMedia} />;
+  return <FranchisePage key={slug} slug={slug} onOpenMedia={onOpenMedia} />;
 }
 function PersonRouteWrapper({ onOpenMedia }) {
   const { slug } = useParams();
   return <PersonPage key={slug} slug={slug} onOpenMedia={onOpenMedia} />;
 }
 
-// Helper Wrapper for Media Details View
+// Helper Wrapper for Media Details View with unique key per media id
 function MediaDetailsRouteWrapper({ onOpenCategory, onQuickPlay }) {
   const { id } = useParams();
 
@@ -57,6 +86,7 @@ function MediaDetailsRouteWrapper({ onOpenCategory, onQuickPlay }) {
 
   return (
     <MediaDetailsPage
+      key={id}
       media={{ id: parseInt(id, 10) }}
       onOpenCategory={onOpenCategory}
       onQuickPlay={onQuickPlay}
@@ -64,7 +94,8 @@ function MediaDetailsRouteWrapper({ onOpenCategory, onQuickPlay }) {
   );
 }
 
-export default function App() {
+function AppRoutes() {
+  const navigate = useNavigate();
   const [health, setHealth] = useState(null);
   const [categories, setCategories] = useState(categorySeed);
   const [searchQuery, setSearchQuery] = useState("");
@@ -134,7 +165,8 @@ export default function App() {
   }
 
   return (
-    <HashRouter>
+    <>
+      <ScrollManager />
       <Routes>
         {/* ========================================================================= */}
         {/* 1. CUSTOMER CINEMA LOUNGE LAYOUT ROUTES                                    */}
@@ -148,7 +180,7 @@ export default function App() {
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
               searchResults={searchResults}
-              onOpenMedia={(item) => (window.location.hash = `#/media/${item.id}`)}
+              onOpenMedia={(item) => navigate(`/media/${item.id}`)}
               onQuickPlay={handleQuickPlay}
             />
           }
@@ -161,9 +193,9 @@ export default function App() {
                 searchQuery={searchQuery}
                 onSearchChange={setSearchQuery}
                 searchResults={searchResults}
-                onOpenMedia={(item) => (window.location.hash = `#/media/${item.id}`)}
+                onOpenMedia={(item) => navigate(`/media/${item.id}`)}
                 onQuickPlay={handleQuickPlay}
-                onNavigateCategory={(slug) => (window.location.hash = `#/catalog/${slug}`)}
+                onNavigateCategory={(slug) => navigate(`/catalog/${slug}`)}
               />
             }
           />
@@ -173,24 +205,24 @@ export default function App() {
             path="catalog/:category"
             element={
               <CategoryRouteWrapper
-                onOpenMedia={(item) => (window.location.hash = `#/media/${item.id}`)}
+                onOpenMedia={(item) => navigate(`/media/${item.id}`)}
                 onQuickPlay={handleQuickPlay}
               />
             }
           />
-          <Route path="hub/:slug" element={<SmartHubRouteWrapper onOpenMedia={(item) => (window.location.hash = `#/media/${item.id}`)} />} />
-          <Route path="franchise/:slug" element={<FranchiseRouteWrapper onOpenMedia={(item) => (window.location.hash = `#/media/${item.id}`)} />} />
-          <Route path="person/:slug" element={<PersonRouteWrapper onOpenMedia={(item) => (window.location.hash = `#/media/${item.id}`)} />} />
-          <Route path="directory/hubs" element={<DirectoryPage kind="hubs" onOpen={(hub) => (window.location.hash = `#/hub/${hub.slug}`)} />} />
-          <Route path="directory/people" element={<DirectoryPage kind="people" onOpen={(person) => (window.location.hash = `#/person/${person.slug}`)} />} />
-          <Route path="directory/franchises" element={<DirectoryPage kind="franchises" onOpen={(franchise) => (window.location.hash = `#/franchise/${franchise.slug}`)} />} />
+          <Route path="hub/:slug" element={<SmartHubRouteWrapper onOpenMedia={(item) => navigate(`/media/${item.id}`)} />} />
+          <Route path="franchise/:slug" element={<FranchiseRouteWrapper onOpenMedia={(item) => navigate(`/media/${item.id}`)} />} />
+          <Route path="person/:slug" element={<PersonRouteWrapper onOpenMedia={(item) => navigate(`/media/${item.id}`)} />} />
+          <Route path="directory/hubs" element={<DirectoryPage kind="hubs" onOpen={(hub) => navigate(`/hub/${hub.slug}`)} />} />
+          <Route path="directory/people" element={<DirectoryPage kind="people" onOpen={(person) => navigate(`/person/${person.slug}`)} />} />
+          <Route path="directory/franchises" element={<DirectoryPage kind="franchises" onOpen={(franchise) => navigate(`/franchise/${franchise.slug}`)} />} />
 
           {/* Favorites Route */}
           <Route
             path="favorites"
             element={
               <CategoryRouteWrapper
-                onOpenMedia={(item) => (window.location.hash = `#/media/${item.id}`)}
+                onOpenMedia={(item) => navigate(`/media/${item.id}`)}
                 onQuickPlay={handleQuickPlay}
               />
             }
@@ -201,7 +233,7 @@ export default function App() {
             path="media/:id"
             element={
               <MediaDetailsRouteWrapper
-                onOpenCategory={(slug) => (window.location.hash = `#/catalog/${slug}`)}
+                onOpenCategory={(slug) => navigate(`/catalog/${slug}`)}
                 onQuickPlay={handleQuickPlay}
               />
             }
@@ -216,7 +248,7 @@ export default function App() {
           element={
             <Suspense fallback={<div className="min-h-screen bg-[var(--bg-base)]" />}>
               <AdminLoginPage
-                onLoginSuccess={() => (window.location.hash = "#/admin/categories")}
+                onLoginSuccess={() => navigate("/admin/categories")}
               />
             </Suspense>
           }
@@ -230,7 +262,7 @@ export default function App() {
           element={<AdminPortalLayout health={health} onSyncIndex={handleSyncIndex} />}
         >
           <Route index element={<Navigate to="/admin/categories" replace />} />
-          <Route path="categories" element={<AdminCategoriesPage onNavigateToMedia={(slug) => (window.location.hash = `#/admin/media`)} />} />
+          <Route path="categories" element={<AdminCategoriesPage onNavigateToMedia={() => navigate("/admin/media")} />} />
           <Route path="collections" element={<AdminCollectionsPage />} />
           <Route path="hubs" element={<AdminSmartHubsPage />} />
           <Route path="media" element={<AdminMediaPage />} />
@@ -238,6 +270,7 @@ export default function App() {
           <Route path="tmdb" element={<TMDBSettingsPage />} />
           <Route path="quality" element={<AdminQualityPage />} />
           <Route path="migration" element={<AdminMigrationPage />} />
+          <Route path="transfer" element={<AdminTransferPage />} />
           <Route path="overview" element={<AdminOverviewPage health={health} onSyncIndex={handleSyncIndex} />} />
         </Route>
 
@@ -253,7 +286,21 @@ export default function App() {
           onClose={() => setPlayingMediaState(null)}
         />
       )}
+
+      {/* Global USB Transfer Experience (Modern Modal, Mini Transfer Center) */}
+      <TransferModal />
+      <MiniTransferCenter />
+    </>
+  );
+}
+
+export default function App() {
+  return (
+    <TransferProvider>
+    <HashRouter>
+      <AppRoutes />
     </HashRouter>
+    </TransferProvider>
   );
 }
 

@@ -1,55 +1,64 @@
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 
-// Catalogue data changes far less often than users navigate between pages. Keep
-// successful GET responses briefly in memory and session storage so back/forward
-// navigation (and an accidental page refresh) does not repeatedly hit the API.
-const READ_CACHE_TTL = 2 * 60 * 1000;
-const HEALTH_CACHE_TTL = 15 * 1000;
-const CACHE_PREFIX = "nexora:api-cache:";
+// Fast in-memory cache with smart TTLs and zero JSON serialization overhead.
+// Instant (0ms) access when navigating back and forth across catalogue surfaces.
+const READ_CACHE_TTL = 3 * 60 * 1000;       // 3 minutes for catalogue listings
+const DETAIL_CACHE_TTL = 8 * 60 * 1000;     // 8 minutes for media details & snapshots
+const STATIC_CACHE_TTL = 15 * 60 * 1000;    // 15 minutes for categories, hubs, showcases
+const HEALTH_CACHE_TTL = 15 * 1000;         // 15 seconds for health
+const MAX_CACHE_ENTRIES = 250;
+
 const responseCache = new Map();
 const pendingRequests = new Map();
 
 function cacheTTL(path) {
-  return path.startsWith("/api/health") ? HEALTH_CACHE_TTL : READ_CACHE_TTL;
+  if (path.startsWith("/api/health")) return HEALTH_CACHE_TTL;
+  if (
+    path.startsWith("/api/categories") ||
+    path.startsWith("/api/showcases") ||
+    path.startsWith("/api/hubs") ||
+    path.startsWith("/api/franchises") ||
+    path.startsWith("/api/people")
+  ) {
+    return STATIC_CACHE_TTL;
+  }
+  if (path.startsWith("/api/media/") || path.startsWith("/api/stream/file/")) {
+    return DETAIL_CACHE_TTL;
+  }
+  return READ_CACHE_TTL;
 }
 
-function isCacheableRequest(path, options) {
+function isCacheableRequest(path, options = {}) {
   return (!options.method || options.method.toUpperCase() === "GET")
+    && options.cache !== "no-store"
     && !path.startsWith("/api/admin/")
-    && !path.startsWith("/api/stream/");
+    && !path.startsWith("/api/stream/")
+    && !path.startsWith("/api/transfer/");
 }
 
 function readCachedResponse(key) {
-  const now = Date.now();
   const memory = responseCache.get(key);
-  if (memory && memory.expiresAt > now) return memory.data;
-  if (memory) responseCache.delete(key);
-
-  try {
-    const saved = JSON.parse(sessionStorage.getItem(`${CACHE_PREFIX}${key}`));
-    if (saved?.expiresAt > now) {
-      responseCache.set(key, saved);
-      return saved.data;
+  if (memory) {
+    if (memory.expiresAt > Date.now()) {
+      return memory.data;
     }
-    sessionStorage.removeItem(`${CACHE_PREFIX}${key}`);
-  } catch {}
+    responseCache.delete(key);
+  }
   return undefined;
 }
 
 function saveCachedResponse(key, data, ttl) {
-  const entry = { data, expiresAt: Date.now() + ttl };
-  responseCache.set(key, entry);
-  try { sessionStorage.setItem(`${CACHE_PREFIX}${key}`, JSON.stringify(entry)); } catch {}
+  if (responseCache.size >= MAX_CACHE_ENTRIES && !responseCache.has(key)) {
+    const oldestKey = responseCache.keys().next().value;
+    if (oldestKey) responseCache.delete(oldestKey);
+  }
+  responseCache.set(key, { data, expiresAt: Date.now() + ttl });
 }
 
 // Exported for admin save/delete workflows and future live-refresh events.
 export function invalidateAPICache() {
   responseCache.clear();
-  try {
-    Object.keys(sessionStorage)
-      .filter((key) => key.startsWith(CACHE_PREFIX))
-      .forEach((key) => sessionStorage.removeItem(key));
-  } catch {}
+  pendingRequests.clear();
 }
 
 async function requestJSON(path, options = {}) {
@@ -426,6 +435,75 @@ export async function adminLogout() {
 
 export async function getFileSubtitles(fileId) {
   return requestJSON(`/api/stream/file/${encodeURIComponent(fileId)}/subtitles`);
+}
+
+// USB Transfer API
+export async function getTransferDevices() {
+  return requestJSON("/api/transfer/devices", { cache: "no-store" });
+}
+
+export async function getTransferDeviceApps(deviceId) {
+  return requestJSON(`/api/transfer/device-apps?device_id=${encodeURIComponent(deviceId || "")}`, {
+    cache: "no-store"
+  });
+}
+
+export async function getTransferAppFolders(deviceId, bundleId) {
+  return requestJSON(`/api/transfer/device-app-folders?device_id=${encodeURIComponent(deviceId || "")}&bundle_id=${encodeURIComponent(bundleId || "")}`, {
+    cache: "no-store"
+  });
+}
+
+export async function startDeviceTransfer(payload) {
+  return requestJSON("/api/transfer/copy", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function getTransferJobs() {
+  return requestJSON("/api/transfer/jobs", { cache: "no-store" });
+}
+
+export async function getTransferJob(jobId) {
+  return requestJSON(`/api/transfer/job/${encodeURIComponent(jobId)}`, { cache: "no-store" });
+}
+
+export async function cancelTransferJob(jobId) {
+  return requestJSON(`/api/transfer/cancel/${encodeURIComponent(jobId)}`, {
+    method: "POST"
+  });
+}
+
+export async function browseTransferPath(deviceId, path = "", deviceType = "", bundleId = "") {
+  const params = new URLSearchParams({
+    device_id: deviceId || "",
+    path: path || ""
+  });
+  if (deviceType) params.set("device_type", deviceType);
+  if (bundleId) params.set("bundle_id", bundleId);
+  return requestJSON(`/api/transfer/browse?${params.toString()}`, { cache: "no-store" });
+}
+
+export async function createTransferFolder(payload) {
+  return requestJSON("/api/transfer/mkdir", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function ejectTransferDevice(deviceId) {
+  return requestJSON("/api/transfer/eject", {
+    method: "POST",
+    body: JSON.stringify({ device_id: deviceId })
+  });
+}
+
+export async function openFileLocation(payload) {
+  return requestJSON("/api/system/open-file-location", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
 }
 
 // All catalogue graph reads are local API reads. TMDB is used only by the

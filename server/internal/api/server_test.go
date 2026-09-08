@@ -325,7 +325,7 @@ func setupTestServer() http.Handler {
 	mig := &mockMigration{}
 	qual := &mockQuality{}
 
-	return NewServer(cfg, repo, sc, searchSvc, metaSvc, proc, mig, qual)
+	return NewServer(cfg, repo, sc, searchSvc, metaSvc, proc, mig, qual, nil)
 }
 
 func TestHealthEndpoint(t *testing.T) {
@@ -481,7 +481,7 @@ func TestDisksEndpoint(t *testing.T) {
 func TestMediaVerifyPersistsIndexedFileResult(t *testing.T) {
 	cfg := config.Config{}
 	repo := &mockRepo{}
-	handler := NewServer(cfg, repo, scanner.New(scanner.Options{}), &mockSearch{}, &mockMetadata{}, &mockProcessor{}, &mockMigration{}, &mockQuality{})
+	handler := NewServer(cfg, repo, scanner.New(scanner.Options{}), &mockSearch{}, &mockMetadata{}, &mockProcessor{}, &mockMigration{}, &mockQuality{}, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/media/verify", bytes.NewBufferString(`{"fileId":1}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -518,6 +518,7 @@ func TestIndexStreamsFilesInBoundedBatches(t *testing.T) {
 		&mockProcessor{},
 		&mockMigration{},
 		&mockQuality{},
+		nil,
 	)
 	payload, err := json.Marshal(map[string][]string{"roots": []string{root}})
 	if err != nil {

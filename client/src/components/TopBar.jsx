@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import Icon from "./Icon.jsx";
 import useTheme from "../hooks/useTheme.js";
 import { resolveAPIURL } from "../lib/api.js";
@@ -7,11 +8,13 @@ export default function TopBar({
   searchQuery = "",
   onSearchChange = () => {},
   searchResults = [],
-  onOpenMedia = (item) => { window.location.hash = `#/media/${item.id}`; },
+  onOpenMedia,
   onQuickPlay = () => {},
   onToggleSidebar,
   isCollapsed = false,
 }) {
+  const navigate = useNavigate();
+  const handleOpenMedia = onOpenMedia || ((item) => navigate(`/media/${item.id}`));
   const { theme, toggleTheme } = useTheme();
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
   const searchContainerRef = useRef(null);
@@ -27,11 +30,19 @@ export default function TopBar({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  function handleSearchSubmit(event) {
+    event.preventDefault();
+    if (searchResults.length > 0) {
+      handleOpenMedia(searchResults[0]);
+      setShowSearchDropdown(false);
+    }
+  };
+
   const handleKeyDown = (e) => {
     if (e.key === "Escape") {
       setShowSearchDropdown(false);
     } else if (e.key === "Enter" && searchResults.length > 0) {
-      onOpenMedia(searchResults[0]);
+      handleOpenMedia(searchResults[0]);
       setShowSearchDropdown(false);
     }
   };
@@ -142,7 +153,7 @@ export default function TopBar({
                       <button
                         type="button"
                         onClick={() => {
-                          onOpenMedia(item);
+                          handleOpenMedia(item);
                           setShowSearchDropdown(false);
                         }}
                         className="flex flex-1 items-center gap-3 text-right min-w-0 text-[var(--text-primary)]"
@@ -188,7 +199,7 @@ export default function TopBar({
           src="/nexora-brand-logo.PNG"
           alt="NEXORA"
           className="h-7 sm:h-9 md:h-10 w-auto object-contain cursor-pointer transition-transform duration-200 hover:scale-105 select-none"
-          onClick={() => { window.location.hash = "#/"; }}
+          onClick={() => navigate("/")}
           title="NEXORA الرئيسية"
         />
       </div>

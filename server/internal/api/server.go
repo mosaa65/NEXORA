@@ -23,6 +23,7 @@ import (
 	"nexora/server/internal/quality"
 	"nexora/server/internal/scanner"
 	"nexora/server/internal/search"
+	"nexora/server/internal/transfer"
 )
 
 type repository interface {
@@ -130,6 +131,22 @@ type qualityService interface {
 	ListCorruptedFiles(ctx context.Context) ([]quality.CorruptedFileDetail, error)
 }
 
+type transferService interface {
+	ListDevices(ctx context.Context) ([]transfer.Device, error)
+	ListDeviceApps(ctx context.Context, deviceID string) ([]transfer.DeviceApp, error)
+	ListAppFolders(ctx context.Context, deviceID, bundleID string) ([]transfer.AppFolder, error)
+	StartCopy(ctx context.Context, req transfer.CopyRequest) (*transfer.TransferJob, error)
+	GetJob(jobID string) (*transfer.TransferJob, bool)
+	ListJobs() []*transfer.TransferJob
+	CancelJob(jobID string) bool
+	ListDevicePath(ctx context.Context, deviceID, path string, deviceType transfer.DeviceType, appID string) ([]transfer.RemoteEntry, error)
+	StatDevicePath(ctx context.Context, deviceID, path string, deviceType transfer.DeviceType, appID string) (transfer.RemoteEntry, error)
+	CreateDeviceFolder(ctx context.Context, deviceID, path string, deviceType transfer.DeviceType, appID string) error
+	EjectDevice(ctx context.Context, deviceID string) error
+	SubscribeEvents(buffer int) (<-chan transfer.TransferEvent, func())
+	SnapshotDevices() []transfer.Device
+}
+
 type Server struct {
 	config      config.Config
 	repository  repository
@@ -139,6 +156,7 @@ type Server struct {
 	processor   mediaProcessor
 	migration   migrationService
 	quality     qualityService
+	transfer    transferService
 	diskManager *disks.Manager
 	mux         *http.ServeMux
 	cache       *responseCache
@@ -153,6 +171,7 @@ func NewServer(
 	processor mediaProcessor,
 	migrationService migrationService,
 	qualityService qualityService,
+	transferService transferService,
 ) http.Handler {
 	server := &Server{
 		config:      config,
@@ -163,6 +182,7 @@ func NewServer(
 		processor:   processor,
 		migration:   migrationService,
 		quality:     qualityService,
+		transfer:    transferService,
 		diskManager: disks.NewManager(),
 		mux:         http.NewServeMux(),
 		cache:       newResponseCache(config.RedisAddr, config.RedisPassword, config.RedisDB),
@@ -278,6 +298,22 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/media/checksums", s.handleChecksums)
 	s.mux.HandleFunc("POST /api/migration/preview", s.requireAdminAuth(s.handleMigrationPreview))
 	s.mux.HandleFunc("POST /api/migration/copy", s.requireAdminAuth(s.handleMigrationCopy))
+
+	// Transfer (USB, Android, iOS) Endpoints
+	s.mux.HandleFunc("GET /api/transfer/devices", s.handleTransferDevices)
+	s.mux.HandleFunc("GET /api/transfer/device-apps", s.handleTransferDeviceApps)
+	s.mux.HandleFunc("GET /api/transfer/device-app-folders", s.handleTransferDeviceAppFolders)
+	s.mux.HandleFunc("POST /api/transfer/copy", s.handleTransferCopy)
+	s.mux.HandleFunc("GET /api/transfer/jobs", s.handleTransferJobsList)
+	s.mux.HandleFunc("GET /api/transfer/job/{id}", s.handleTransferJobGet)
+	s.mux.HandleFunc("POST /api/transfer/cancel/{id}", s.handleTransferJobCancel)
+	s.mux.HandleFunc("GET /api/transfer/events", s.handleTransferEvents)
+
+	// Phase 3 — File Browser & Eject
+	s.mux.HandleFunc("GET /api/transfer/browse", s.handleTransferBrowse)
+	s.mux.HandleFunc("POST /api/transfer/mkdir", s.handleTransferMkdir)
+	s.mux.HandleFunc("POST /api/transfer/eject", s.handleTransferEject)
+
 	s.mux.HandleFunc("GET /api/stream", s.handleStream)
 	s.mux.HandleFunc("GET /api/stream/image", s.handleStreamImage)
 	s.mux.HandleFunc("GET /api/stream/file/{id}", s.handleStreamByID)
@@ -302,6 +338,7 @@ func (s *Server) routes() {
 	// System Directory Tree Explorer & Admin Auth Endpoints
 	s.mux.HandleFunc("GET /api/system/drives", s.requireAdminAuth(s.handleSystemDrives))
 	s.mux.HandleFunc("GET /api/system/browse", s.requireAdminAuth(s.handleSystemBrowse))
+	s.mux.HandleFunc("POST /api/system/open-file-location", s.handleOpenFileLocation)
 	s.mux.HandleFunc("POST /api/admin/maintenance/clean-genres", s.requireAdminAuth(s.handleCleanGenres))
 	s.mux.HandleFunc("POST /api/admin/login", s.handleAdminLogin)
 	s.mux.HandleFunc("GET /api/admin/session", s.handleAdminSession)

@@ -11,11 +11,12 @@ export default function CustomerCinemaLayout({
   searchQuery = "",
   onSearchChange,
   searchResults = [],
-  onOpenMedia = (item) => { window.location.hash = `#/media/${item.id}`; },
+  onOpenMedia,
   onQuickPlay = () => {},
 }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const handleOpenMedia = onOpenMedia || ((item) => navigate(`/media/${item.id}`));
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(() => {
     try {
@@ -94,7 +95,7 @@ export default function CustomerCinemaLayout({
             searchQuery={searchQuery}
             onSearchChange={onSearchChange}
             searchResults={searchResults}
-            onOpenMedia={onOpenMedia}
+            onOpenMedia={handleOpenMedia}
             onQuickPlay={onQuickPlay}
             isCollapsed={isCollapsed}
             onToggleSidebar={handleToggleSidebar}

@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Icon from "../components/Icon.jsx";
 import RelatedMediaRail from "../components/RelatedMediaRail.jsx";
+import PlayableFilesExplorer from "../components/PlayableFilesExplorer.jsx";
+import { useTransfer } from "../context/TransferContext.jsx";
 import { getMediaDetail, enrichMedia, getMediaMetadataSnapshot, getMediaSeasonMetadata, getMediaRelated, resolveAPIURL } from "../lib/api.js";
 import { horizontalWheel } from "../lib/horizontalScroll.js";
 
@@ -52,6 +55,16 @@ export default function MediaDetailsPage({
   onOpenCategory,
   onQuickPlay,
 }) {
+  const navigate = useNavigate();
+
+  const handleBack = () => {
+    if (window.history.state?.idx > 0 || window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate("/");
+    }
+  };
+
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedSeasonIdx, setSelectedSeasonIdx] = useState(0);
@@ -63,6 +76,7 @@ export default function MediaDetailsPage({
   const [englishSeasonSnapshots, setEnglishSeasonSnapshots] = useState([]);
   const [selectedMetadataSeason, setSelectedMetadataSeason] = useState(0);
   const [relatedItems, setRelatedItems] = useState([]);
+  const { openTransferModal, selectMultipleFiles } = useTransfer();
 
   useEffect(() => {
     let alive = true;
@@ -196,13 +210,7 @@ export default function MediaDetailsPage({
         <div className="flex items-center justify-between gap-4 pb-2">
           <button
             type="button"
-            onClick={() => {
-              if (window.history.length > 1) {
-                window.history.back();
-              } else {
-                window.location.hash = "#/";
-              }
-            }}
+            onClick={handleBack}
             className="group inline-flex items-center gap-2.5 rounded-full border border-[var(--border-default)] bg-[var(--bg-card)] px-5 py-2.5 text-xs font-bold text-[var(--text-primary)] shadow-[var(--shadow-md)] backdrop-blur-xl"
           >
             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--bg-elevated)] text-[var(--text-primary)]">‹</span>
@@ -225,13 +233,7 @@ export default function MediaDetailsPage({
         <div className="flex items-center justify-between gap-4 pb-2">
           <button
             type="button"
-            onClick={() => {
-              if (window.history.length > 1) {
-                window.history.back();
-              } else {
-                window.location.hash = "#/";
-              }
-            }}
+            onClick={handleBack}
             className="group inline-flex items-center gap-2.5 rounded-full border border-[var(--border-default)] bg-[var(--bg-card)] hover:bg-[var(--bg-elevated)] px-5 py-2.5 text-xs font-bold text-[var(--text-primary)] shadow-[var(--shadow-md)] backdrop-blur-xl transition"
           >
             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--bg-elevated)] text-[var(--text-primary)]">‹</span>
@@ -295,19 +297,25 @@ export default function MediaDetailsPage({
   const hasArAudio = current.hasArabicAudio || (current.highlights || []).some((h) => h.includes("مدبلج") || h.includes("دبلجة") || h.includes("سبيستون") || h.includes("عربي"));
   const hasArSubs = current.hasArabicSubtitles || true; // NEXORA default subtitle engine
 
+  // Wire the File-Explorer "نسخ" actions into the existing global transfer flow.
+  const handleCopyFiles = (files) => {
+    const list = Array.isArray(files) ? files : [files];
+    const mediaTitle = current.titleAr || current.titleEn || "";
+    if (list.length === 1) {
+      openTransferModal(list[0], mediaTitle, posterURL);
+    } else if (list.length > 1) {
+      selectMultipleFiles(list, mediaTitle, posterURL);
+      openTransferModal();
+    }
+  };
+
   return (
     <div className="relative mx-auto max-w-[1500px] space-y-7 pb-16 text-right" dir="rtl">
       {/* Navigation Top Action */}
       <div className="flex flex-wrap items-center justify-between gap-3 pb-1">
         <button
           type="button"
-          onClick={() => {
-            if (window.history.length > 1) {
-              window.history.back();
-            } else {
-              window.location.hash = "#/";
-            }
-          }}
+          onClick={handleBack}
           className="group inline-flex items-center gap-2.5 rounded-full border border-[var(--border-default)] bg-[var(--bg-card)] px-4 py-2 text-xs font-bold text-[var(--text-primary)] shadow-[var(--shadow-sm)] backdrop-blur-xl transition hover:border-[var(--color-accent)] hover:bg-[var(--bg-elevated)]"
         >
           <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--bg-elevated)] text-lg leading-none text-[var(--text-primary)] transition group-hover:bg-[var(--color-accent)] group-hover:text-white">‹</span>
@@ -428,6 +436,23 @@ export default function MediaDetailsPage({
 
               <button
                 type="button"
+                onClick={() => {
+                  const firstPlayable = (activeEpisodes && activeEpisodes[0]) || (current.files && current.files[0]) || null;
+                  if (activeEpisodes && activeEpisodes.length > 0) {
+                    selectMultipleFiles(activeEpisodes, current.titleAr || current.titleEn, posterURL);
+                    openTransferModal();
+                  } else if (firstPlayable) {
+                    openTransferModal(firstPlayable, current.titleAr || current.titleEn, posterURL);
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 shrink-0 rounded-xl sm:rounded-2xl border border-emerald-500/40 bg-emerald-950/60 px-3 sm:px-4 py-2 sm:py-3 text-[11px] sm:text-xs font-black text-emerald-200 transition hover:bg-emerald-900/80 active:scale-95 shadow-md whitespace-nowrap"
+              >
+                <span>📲</span>
+                <span>نسخ إلى الهاتف</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={handleEnrichMetadata}
                 disabled={isEnriching}
                 className="inline-flex items-center gap-1 shrink-0 rounded-xl sm:rounded-2xl border border-fuchsia-500/40 bg-fuchsia-950/50 px-2.5 sm:px-3.5 py-2 sm:py-3 text-[11px] sm:text-xs font-bold text-fuchsia-200 transition hover:bg-fuchsia-900/60 disabled:cursor-not-allowed disabled:opacity-60 whitespace-nowrap"
@@ -533,47 +558,18 @@ export default function MediaDetailsPage({
             ))}
           </div>
 
-          {/* Compact, Beautiful Local Episodes Grid */}
-          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 pt-2">
-            {activeEpisodes.map((ep, epIdx) => (
-              <button
-                key={ep.id || epIdx}
-                type="button"
-                onClick={() => onQuickPlay(current, ep)}
-                className="group flex items-center gap-3 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)] p-2.5 text-right transition hover:border-fuchsia-500/60 hover:bg-[var(--bg-card)] hover:shadow-md active:scale-95"
-              >
-                {/* Compact Episode Thumbnail */}
-                <div className="relative h-14 w-20 shrink-0 overflow-hidden rounded-xl bg-black/40 border border-white/10">
-                  <img
-                    src={posterURL}
-                    alt=""
-                    className="h-full w-full object-cover opacity-75 group-hover:scale-105 transition duration-300"
-                  />
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/35 group-hover:bg-black/10 transition">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-tr from-fuchsia-600 to-purple-600 text-white shadow text-[10px] font-black">
-                      ▶
-                    </span>
-                  </div>
-                </div>
-
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <span className="rounded-md bg-gradient-to-r from-fuchsia-600 to-purple-600 px-2 py-0.5 text-[10px] font-black text-white shadow-sm shrink-0">
-                      حلقة {ep.episode_number || epIdx + 1}
-                    </span>
-                    <span className="rounded bg-white/10 px-1.5 py-0.2 text-[9px] font-bold text-[var(--text-muted)] truncate">
-                      {ep.resolution || "1080p"}
-                    </span>
-                  </div>
-                  <p className="truncate text-xs font-bold text-[var(--text-primary)] group-hover:text-fuchsia-300 transition">
-                    {ep.title_ar || ep.title_en || `الحلقة ${ep.episode_number || epIdx + 1}`}
-                  </p>
-                  <p className="mt-0.5 text-[10px] text-[var(--text-muted)] truncate">
-                    {ep.video_codec || "HEVC/H264"} • تشغيل فوري
-                  </p>
-                </div>
-              </button>
-            ))}
+          {/* Compact, Beautiful Local Episodes Grid — File-Explorer style */}
+          <div className="pt-2">
+            <PlayableFilesExplorer
+              items={activeEpisodes}
+              title={`حلقات الموسم الحالي`}
+              icon="tv"
+              countBadge={`${activeEpisodes.length} حلقة`}
+              onQuickPlay={(item) => onQuickPlay(current, item)}
+              onCopySelected={handleCopyFiles}
+              storageKey="nexora_episodes_view_mode"
+              defaultMode="medium"
+            />
           </div>
         </section>
       )}
@@ -581,34 +577,16 @@ export default function MediaDetailsPage({
       {/* Direct Video Files list if no seasons */}
       {seasonsList.length === 0 && current.files && current.files.length > 0 && (
         <section className="space-y-4 rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4 sm:p-6 shadow-[var(--shadow-sm)]">
-          <div className="border-b border-[var(--border-subtle)] pb-3">
-            <h2 className="text-base sm:text-lg font-black text-[var(--text-primary)] flex items-center gap-2">
-              <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-fuchsia-500/20 text-fuchsia-400 text-xs">🎬</span>
-              ملفات الفيديو المتاحة للتشغيل
-            </h2>
-          </div>
-          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-            {current.files.map((file, idx) => (
-              <button
-                key={file.id || idx}
-                type="button"
-                onClick={() => onQuickPlay(current, file)}
-                className="group flex items-center gap-3 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)] p-3 text-right transition hover:border-fuchsia-500/60 hover:bg-[var(--bg-card)] shadow-sm active:scale-95"
-              >
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-fuchsia-600 to-purple-600 text-white font-black text-xs group-hover:scale-105 transition shadow">
-                  ▶
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-xs font-bold text-[var(--text-primary)] group-hover:text-fuchsia-300">
-                    {file.title_ar || file.title_en || `ملف التشغيل #${idx + 1}`}
-                  </p>
-                  <p className="mt-0.5 text-[10px] text-[var(--text-muted)]">
-                    {file.resolution || "1080p"} • {(Number(file.file_size || 0) / (1024 * 1024)).toFixed(1)} MB
-                  </p>
-                </div>
-              </button>
-            ))}
-          </div>
+          <PlayableFilesExplorer
+            items={current.files}
+            title="ملفات الفيديو المتاحة للتشغيل"
+            icon="film"
+            countBadge={`${current.files.length} ملف`}
+            onQuickPlay={(item) => onQuickPlay(current, item)}
+            onCopySelected={handleCopyFiles}
+            storageKey="nexora_files_view_mode"
+            defaultMode="medium"
+          />
         </section>
       )}
 
@@ -1103,6 +1081,7 @@ export default function MediaDetailsPage({
           <RelatedMediaRail items={relatedItems} onOpen={(mediaID) => { window.location.hash = `#/media/${mediaID}`; }} />
         </section>
       )}
+
     </div>
   );
 }

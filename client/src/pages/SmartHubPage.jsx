@@ -23,7 +23,7 @@ export default function SmartHubPage({ slug, onOpenMedia }) {
     let alive = true;
     const cached = getPageState(cacheKey);
     if (!cached || !cached.data || cached.sort !== sort) {
-      getSmartHubMedia(slug, { sort: sort === "newest" ? "" : sort, limit: 1000 })
+      getSmartHubMedia(slug, { sort: sort === "newest" ? "" : sort, limit: 48 })
         .then((x) => {
           if (alive) {
             setData(x);

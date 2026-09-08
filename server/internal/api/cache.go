@@ -59,8 +59,8 @@ func newResponseCache(redisAddr, redisPassword string, redisDB int) *responseCac
 			c.redisActive = true
 			log.Printf("[NEXORA Cache] Redis L2 cache successfully connected on %s (DB %d)", redisAddr, redisDB)
 		} else {
-			c.redisClient = rdb
 			c.redisActive = false
+			_ = rdb.Close()
 			log.Printf("[NEXORA Cache] Redis unreachable (%s), running in resilient L1-Memory fallback mode: %v", redisAddr, err)
 		}
 	}

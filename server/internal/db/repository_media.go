@@ -349,9 +349,16 @@ func (r *Repository) ListMediaItems(ctx context.Context, opts ListMediaOptions) 
 	argIdx := 1
 
 	if strings.TrimSpace(opts.CategorySlug) != "" {
-		whereClauses = append(whereClauses, fmt.Sprintf("c.slug = $%d", argIdx))
-		args = append(args, strings.TrimSpace(opts.CategorySlug))
-		argIdx++
+		slug := strings.TrimSpace(opts.CategorySlug)
+		if slug == "kids" {
+			whereClauses = append(whereClauses, fmt.Sprintf("(c.slug = $%d OR COALESCE(mi.genres::text[], ARRAY[]::text[]) && ARRAY['كرتون','رسوم متحركة','أطفال','ديزني','بيكسار','سبيستون','دريم وركس','animation','Animation']::text[])", argIdx))
+			args = append(args, slug)
+			argIdx++
+		} else {
+			whereClauses = append(whereClauses, fmt.Sprintf("c.slug = $%d", argIdx))
+			args = append(args, slug)
+			argIdx++
+		}
 	}
 
 	if strings.TrimSpace(opts.Type) != "" {

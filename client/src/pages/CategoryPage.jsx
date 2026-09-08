@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState, useRef, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import ShowcaseHero from "../components/ShowcaseHero.jsx";
 import FilterToolbar from "../components/FilterToolbar.jsx";
 import MediaCollection from "../components/MediaCollection.jsx";
@@ -12,6 +13,7 @@ import { useScrollRestoration } from "../hooks/useScrollRestoration.js";
 const PAGE_SIZE = 36;
 
 export default function CategoryPage({ selectedCategory = "series", onOpenMedia, onQuickPlay }) {
+  const navigate = useNavigate();
   const { getPageState, savePageState } = useNavigationState();
   const cacheKey = `category:${selectedCategory}`;
 
@@ -136,6 +138,22 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
     genres: item.genres || [],
   }), [selectedCategory]);
 
+  // Safe media opener that captures exact scroll position at the click moment
+  const handleOpenMedia = useCallback((item) => {
+    if (cacheKey) {
+      savePageState(cacheKey, {
+        items,
+        totalCount,
+        filters: currentFilters,
+        sort: activeSort,
+        searchQuery,
+        hasMore,
+        scrollY: window.scrollY,
+      });
+    }
+    onOpenMedia?.(item);
+  }, [savePageState, cacheKey, items, totalCount, currentFilters, activeSort, searchQuery, hasMore, onOpenMedia]);
+
   const loadInitialItems = useCallback(async () => {
     if (isFetchingRef.current) return;
     isFetchingRef.current = true;
@@ -159,8 +177,6 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
         fetchParams.type = "movie";
       } else if (selectedCategory === "series") {
         fetchParams.type = "series";
-      } else if (["family", "kids", "anime"].includes(selectedCategory)) {
-        // Cross-category
       } else {
         fetchParams.category = selectedCategory;
       }
@@ -216,8 +232,6 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
         fetchParams.type = "movie";
       } else if (selectedCategory === "series") {
         fetchParams.type = "series";
-      } else if (["family", "kids", "anime"].includes(selectedCategory)) {
-        // Cross-category
       } else {
         fetchParams.category = selectedCategory;
       }
@@ -257,9 +271,12 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
   }, [hasMore, loading, loadingMore, activeSort, items.length, selectedCategory, transformRawItem, totalCount, savePageState, cacheKey, currentFilters, searchQuery]);
 
   // Load items when category or sort changes (unless restored from cache)
+  // NOTE: On POP (back) navigation, skip fetch if we already have cached items —
+  // avoids wiping isDataReady which would prevent scroll position restoration.
   useEffect(() => {
     const cached = getPageState(cacheKey);
-    if (!cached || !cached.items?.length || cached.sort !== activeSort) {
+    const hasCachedItems = cached?.items?.length > 0;
+    if (!hasCachedItems || cached.sort !== activeSort) {
       loadInitialItems();
     }
   }, [selectedCategory, activeSort, cacheKey, getPageState, loadInitialItems]);
@@ -521,27 +538,25 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
   return (
     <div className="space-y-8 pb-16 text-right" dir="rtl">
       {/* 1. Unified database-backed showcase */}
-      {heroItems.length > 0 && (
-        <ShowcaseHero
-          context="category"
-          category={selectedCategory}
-          fallbackItems={heroItems}
-          onOpenMedia={onOpenMedia}
-          onNavigate={(target) => {
-            if (target?.category && target.category !== selectedCategory) {
-              window.location.hash = `#/catalog/${target.category}`;
-            }
-          }}
-        />
-      )}
+      <ShowcaseHero
+        context="category"
+        category={selectedCategory}
+        fallbackItems={heroItems}
+        onOpenMedia={handleOpenMedia}
+        onNavigate={(target) => {
+          if (target?.category && target.category !== selectedCategory) {
+            navigate(`/catalog/${target.category}`);
+          }
+        }}
+      />
 
       {/* 2. Unified Official Database Smart Hubs Rail */}
       <SmartHubRail
         scope={selectedCategory}
         title={`مجموعات ومحاور ${categoryConfig.titleAr}`}
         description="تصنيفات ذكية ومحاور حقيقية مبنية تلقائيًا ومربوطة بلوحة التحكم."
-        onViewAll={() => (window.location.hash = "#/directory/hubs")}
-        onOpen={(hub) => (window.location.hash = `#/hub/${hub.slug}`)}
+        onViewAll={() => navigate("/directory/hubs")}
+        onOpen={(hub) => navigate(`/hub/${hub.slug}`)}
       />
 
       {/* 3. Multi-Dimensional Context-Aware Filter Toolbar */}
@@ -628,7 +643,7 @@ export default function CategoryPage({ selectedCategory = "series", onOpenMedia,
           </div>
         ) : (
           <>
-            <MediaCollection items={sortedItems} onOpen={onOpenMedia} />
+            <MediaCollection items={sortedItems} onOpen={handleOpenMedia} />
 
             {/* Infinite Scroll Sentinel */}
             {hasMore && (
