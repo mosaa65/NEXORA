@@ -35,7 +35,8 @@ export default defineConfig({
     port: 5173,
     // The browser talks to the same NEXORA hostname it was opened with.
     // Only Vite's server-to-server development proxy uses this internal URL.
-    allowedHosts: ["nexora.local"],
+    // Development can be opened locally or from a device on the LAN.
+    allowedHosts: ["nexora.local", "localhost", "127.0.0.1", "192.168.1.33"],
     proxy: {
       "/api": apiUpstream,
       // TMDB images are cached by the Go server, not Vite. Proxying this

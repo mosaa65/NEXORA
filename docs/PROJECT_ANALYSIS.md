@@ -98,7 +98,10 @@ Go API
 - [VERIFIED] `client/src/lib/api.js` هو طبقة HTTP الواحدة: يرسل JSON، يضيف `Content-Type`، ويحفظ GET العامة في Map ذاكرية و`sessionStorage` لمدة دقيقتين (health 15 ثانية)، مع deduplication للطلبات المتزامنة.
 - [VERIFIED] طلبات `/api/admin/*` و`/api/stream/*` مستثناة من cache الواجهة.
 - [VERIFIED] هناك واجهتا layout: `CustomerCinemaLayout` و`AdminPortalLayout`؛ كلاهما يعتمد React Router `Outlet`.
+- [VERIFIED] صفحة دليل الممثلين تستخدم `FilterToolbar` نفسه الموجود في النظام؛ البحث محلي في الأسماء العربية/الإنجليزية، مع فلترة حد أدنى للأعمال المحلية و`known_for_department` المخزن من TMDB، وفرز الظهور/الأعمال/الشعبية/الاسم للنتائج المحمّلة. لا تحفظ بنية الأشخاص الحالية جنسية أو بلد ميلاد.
+- [VERIFIED] صفحة الشخص تعرض بيانات `people` المتاحة حاليًا (الصورة، الاسم، التخصص، الشهرة وعدد الأعمال المحلية) ثم قائمة الأعمال المحلية المرتبطة عبر `media_credits`؛ لا تعرض سيرة أو جنسية أو تاريخ ميلاد لأن هذه الحقول ليست ضمن response الحالي.
 - [VERIFIED] مسار تفاصيل media في `App.jsx` يستخدم حاليًا `mockLibrary` أو fallback ثابتًا في `MediaDetailsRouteWrapper` بدل استدعاء `getMediaDetail` داخل ذلك wrapper. نافذة التشغيل الفعلية (`RealVideoPlayerModal`) تستدعي `getMediaDetail` و`getFileSubtitles`.
+- [VERIFIED] صفحة تفاصيل العمل تعرض أبرز 24 ممثلًا وفق `billing order` في TMDB، مع شارة تبين إجمالي طاقم العمل؛ بطاقات الممثلين تنقل إلى `/person/tmdb-person-{TMDB ID}`. دليل الأشخاص يستخدم معيار billing نفسه ولا يعرض كل background credits؛ صفحة الشخص تستعلم أعماله المرتبطة محليًا من `media_credits`، ولا تعتمد على مطابقة الاسم.
 
 ## 8. Backend Architecture
 
@@ -155,7 +158,7 @@ User → RealVideoPlayerModal → GET /api/media/{id}
 - [VERIFIED] core schema: `categories` → `media_items` → `seasons` و`video_files`، مع `storage_disks`.
 - [VERIFIED] ingest يجمع الملفات عبر normalized title/type/year، ينشئ/يحدث media item وseason، ويحفظ مسار الملف وحجمه والحلقة. يوجد unique index لمسار الملف وidentity مركب للـ media.
 - [VERIFIED] scanner يبحث عن artwork محلي في مجلد الفيديو ثم الأب، ويعطي أولوية لأسماء مثل poster/cover/folder/banner.
-- [VERIFIED] هناك جداول وrepository لعلاقات provider collections وpeople وcredits وsmart hubs وshowcases، وهي منفصلة عن ملفات الفيديو نفسها.
+- [VERIFIED] هناك جداول وrepository لعلاقات provider collections وpeople وcredits وrelated titles وsmart hubs وshowcases، وهي منفصلة عن ملفات الفيديو نفسها.
 - [VERIFIED] مكتبة `test-media-library/` موجودة للاختبار؛ لا تثبت وجود محتوى إنتاجي.
 
 ## 13. Video Streaming Architecture
@@ -337,6 +340,7 @@ mousemove over timeline
 | External subtitles | Partial | listing + SRT→VTT | `media/subtitles.go` | [VERIFIED] embedded extraction غير منفذ. |
 | Watch progress | Implemented, local-only | Browser localStorage | `VideoPlayer.jsx` | [VERIFIED] |
 | Next episode / fullscreen list | Implemented | current array order and callbacks | `App.jsx`, `VideoPlayer.jsx` | [VERIFIED] |
+| Related / similar titles | Implemented | TMDB-ID-backed relation graph مع مطابقة local/pending | `repository_related.go`, `MediaDetailsPage.jsx` | [VERIFIED] لا يستدعي TMDB أثناء التصفح. |
 | TMDB/MAL enrichment | Implemented, configuration-dependent | HTTP clients + DB snapshots/cache | `metadata/*` | [VERIFIED] يحتاج credentials/network. |
 | TMDB automatic refresh | Implemented, disabled by default | 10-second queue runner | `api/server.go` | [VERIFIED] settings default false. |
 | Redis cache/queue | Missing | Compose service only | `compose.yml` | [VERIFIED] |

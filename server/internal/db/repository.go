@@ -172,14 +172,14 @@ type SeasonDetail struct {
 }
 
 type MediaItemDetail struct {
-	ID           int64          `json:"id"`
-	CategoryID   int64          `json:"category_id"`
-	CategorySlug string         `json:"category_slug,omitempty"`
-	CategoryAR   string         `json:"category_ar,omitempty"`
-	CategoryEN   string         `json:"category_en,omitempty"`
-	TitleAR      string         `json:"title_ar,omitempty"`
-	TitleEN      string         `json:"title_en"`
-	Type         string         `json:"type"`
+	ID            int64          `json:"id"`
+	CategoryID    int64          `json:"category_id"`
+	CategorySlug  string         `json:"category_slug,omitempty"`
+	CategoryAR    string         `json:"category_ar,omitempty"`
+	CategoryEN    string         `json:"category_en,omitempty"`
+	TitleAR       string         `json:"title_ar,omitempty"`
+	TitleEN       string         `json:"title_en"`
+	Type          string         `json:"type"`
 	PlotAR        string         `json:"plot_ar,omitempty"`
 	PlotEN        string         `json:"plot_en,omitempty"`
 	ReleaseYear   int            `json:"release_year,omitempty"`
@@ -238,22 +238,22 @@ type MediaListResult struct {
 // deliberately not the editorial Collection type below: provider identity is
 // stable while an editorial collection is controlled by the library owner.
 type ProviderCollection struct {
-	ID             int64  `json:"id"`
-	Slug           string `json:"slug"`
-	Provider       string `json:"provider"`
-	ExternalID     string `json:"external_id"`
-	Kind           string `json:"kind"`
-	TitleAR        string `json:"title_ar,omitempty"`
-	TitleEN        string `json:"title_en"`
-	OverviewAR     string `json:"overview_ar,omitempty"`
-	OverviewEN     string `json:"overview_en,omitempty"`
-	PosterPath     string `json:"poster_path,omitempty"`
-	BackdropPath   string `json:"backdrop_path,omitempty"`
-	PartsCount     int    `json:"parts_count"`
+	ID             int64   `json:"id"`
+	Slug           string  `json:"slug"`
+	Provider       string  `json:"provider"`
+	ExternalID     string  `json:"external_id"`
+	Kind           string  `json:"kind"`
+	TitleAR        string  `json:"title_ar,omitempty"`
+	TitleEN        string  `json:"title_en"`
+	OverviewAR     string  `json:"overview_ar,omitempty"`
+	OverviewEN     string  `json:"overview_en,omitempty"`
+	PosterPath     string  `json:"poster_path,omitempty"`
+	BackdropPath   string  `json:"backdrop_path,omitempty"`
+	PartsCount     int     `json:"parts_count"`
 	Rating         float64 `json:"rating,omitempty"`
-	LocalItemCount int    `json:"local_item_count"`
-	IsFeatured     bool   `json:"is_featured"`
-	IsHidden       bool   `json:"is_hidden"`
+	LocalItemCount int     `json:"local_item_count"`
+	IsFeatured     bool    `json:"is_featured"`
+	IsHidden       bool    `json:"is_hidden"`
 }
 
 // ProviderCollectionPart is an official TMDB collection member. Local media
@@ -271,6 +271,27 @@ type ProviderCollectionPart struct {
 	PosterPath string  `json:"poster_path,omitempty"`
 	Local      bool    `json:"local"`
 	MediaID    int64   `json:"media_id,omitempty"`
+}
+
+// RelatedMedia is a provider-backed recommendation or similar title. It is
+// matched to LocalMediaID by stable provider identity at read time, rather
+// than by a translated title.
+type RelatedMedia struct {
+	Provider       string  `json:"provider"`
+	ExternalID     string  `json:"external_id"`
+	Kind           string  `json:"kind"`
+	RelationType   string  `json:"relation_type"`
+	TitleAR        string  `json:"title_ar,omitempty"`
+	TitleEN        string  `json:"title_en,omitempty"`
+	OriginalTitle  string  `json:"original_title,omitempty"`
+	OverviewAR     string  `json:"overview_ar,omitempty"`
+	OverviewEN     string  `json:"overview_en,omitempty"`
+	PosterPath     string  `json:"poster_path,omitempty"`
+	ReleaseYear    int     `json:"release_year,omitempty"`
+	Rating         float64 `json:"rating,omitempty"`
+	Local          bool    `json:"local"`
+	LocalMediaID   int64   `json:"local_media_id,omitempty"`
+	LocalMediaType string  `json:"local_media_type,omitempty"`
 }
 
 type Person struct {
@@ -292,9 +313,10 @@ type Person struct {
 // franchise and people graph. It reads metadata_snapshots only; it never calls
 // TMDB and is therefore safe for a disconnected library server.
 type CatalogRelationSyncResult struct {
-	SnapshotsProcessed int `json:"snapshots_processed"`
-	CollectionsLinked  int `json:"collections_linked"`
-	CreditsLinked      int `json:"credits_linked"`
+	SnapshotsProcessed  int `json:"snapshots_processed"`
+	CollectionsLinked   int `json:"collections_linked"`
+	CreditsLinked       int `json:"credits_linked"`
+	RelatedTitlesLinked int `json:"related_titles_linked"`
 }
 
 // CatalogEntityAdminUpdate is shared by provider collections and people. The

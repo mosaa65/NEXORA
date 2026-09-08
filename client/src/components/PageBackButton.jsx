@@ -2,10 +2,12 @@ import Icon from "./Icon.jsx";
 import { useNavigate } from "react-router-dom";
 
 /** A visible, reliable return action for pages reached from catalogue cards. */
-export default function PageBackButton({ fallback = "/" }) {
+export default function PageBackButton({ fallback = "/", forceFallback = false }) {
   const navigate = useNavigate();
   const goBack = () => {
-    if (window.history.length > 1) {
+    if (forceFallback) {
+      navigate(fallback);
+    } else if (window.history.length > 1) {
       navigate(-1);
     } else {
       navigate(fallback);

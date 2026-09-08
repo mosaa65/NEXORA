@@ -243,8 +243,10 @@ func (r *Repository) ListProviderCollectionParts(ctx context.Context, slug strin
 	return collection, parts, nil
 }
 
-// ListPeople exposes only people that have a useful local relationship. The
-// library never needs TMDB at browsing time to render this rail.
+// ListPeople exposes only people with a useful local relationship and a
+// featured TMDB billing position. This keeps the directory aligned with the
+// highlighted cast shown on a media-details page rather than listing every
+// background credit in the library.
 func (r *Repository) ListPeople(ctx context.Context, limit int) ([]Person, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 24
@@ -255,6 +257,11 @@ func (r *Repository) ListPeople(ctx context.Context, limit int) ([]Person, error
 			local_media_count,is_featured,is_hidden
 		FROM people
 		WHERE is_hidden=false AND local_media_count >= 2
+			AND EXISTS (
+				SELECT 1 FROM media_credits mc
+				WHERE mc.person_id=people.id AND mc.credit_kind='cast'
+					AND mc.billing_order BETWEEN 0 AND 23
+			)
 		ORDER BY is_featured DESC, local_media_count DESC, popularity DESC, name_en ASC
 		LIMIT $1`, limit)
 	if err != nil {

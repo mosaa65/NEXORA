@@ -56,6 +56,7 @@ type repository interface {
 	ListProviderCollectionRefreshCandidates(ctx context.Context, limit int) ([]db.ProviderCollection, error)
 	ListProviderCollectionMedia(ctx context.Context, slug string, opts db.ListMediaOptions) (*db.ProviderCollection, *db.MediaListResult, error)
 	ListProviderCollectionParts(ctx context.Context, slug string) (*db.ProviderCollection, []db.ProviderCollectionPart, error)
+	ListRelatedMedia(ctx context.Context, mediaID int64, limit int) ([]db.RelatedMedia, error)
 	UpdateProviderCollectionAdmin(ctx context.Context, id int64, update db.CatalogEntityAdminUpdate) error
 	ListPeople(ctx context.Context, limit int) ([]db.Person, error)
 	GetPerson(ctx context.Context, slug string) (*db.Person, error)
@@ -200,12 +201,18 @@ func (s *Server) runTMDBQueue() {
 			_ = s.repository.EnqueueStaleTMDBRefreshes(context.Background(), settings.RefreshIntervalDays, 100)
 		}
 		workers := settings.QueueMaxConcurrent
-		if workers < 1 { workers = 1 }
-		if workers > 4 { workers = 4 }
+		if workers < 1 {
+			workers = 1
+		}
+		if workers > 4 {
+			workers = 4
+		}
 		var group sync.WaitGroup
 		for index := 0; index < workers; index++ {
 			job, err := s.repository.ClaimTMDBQueueJob(context.Background())
-			if err != nil || job == nil { break }
+			if err != nil || job == nil {
+				break
+			}
 			group.Add(1)
 			go func(job *db.TMDBQueueJob) {
 				defer group.Done()
@@ -217,14 +224,16 @@ func (s *Server) runTMDBQueue() {
 }
 
 func (s *Server) processTMDBQueueJob(job *db.TMDBQueueJob) {
-		request := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/media/%d/enrich", job.MediaItemID), nil)
-		request.SetPathValue("id", strconv.FormatInt(job.MediaItemID, 10))
-		response := httptest.NewRecorder()
-		s.handleMediaEnrich(response, request)
-		succeeded := response.Code >= 200 && response.Code < 300
-		message := ""
-		if !succeeded { message = strings.TrimSpace(response.Body.String()) }
-		_ = s.repository.FinishTMDBQueueJob(context.Background(), job.ID, succeeded, message)
+	request := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/media/%d/enrich", job.MediaItemID), nil)
+	request.SetPathValue("id", strconv.FormatInt(job.MediaItemID, 10))
+	response := httptest.NewRecorder()
+	s.handleMediaEnrich(response, request)
+	succeeded := response.Code >= 200 && response.Code < 300
+	message := ""
+	if !succeeded {
+		message = strings.TrimSpace(response.Body.String())
+	}
+	_ = s.repository.FinishTMDBQueueJob(context.Background(), job.ID, succeeded, message)
 }
 
 func (s *Server) routes() {
@@ -260,6 +269,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("PUT /api/admin/hubs/{slug}", s.requireAdminAuth(s.handleSmartHubSave))
 	s.mux.HandleFunc("POST /api/media", s.requireAdminAuth(s.handleMediaCreate))
 	s.mux.HandleFunc("GET /api/media/{id}", s.handleMediaDetail)
+	s.mux.HandleFunc("GET /api/media/{id}/related", s.handleMediaRelated)
 	s.mux.HandleFunc("PUT /api/media/{id}", s.requireAdminAuth(s.handleMediaUpdateFull))
 	s.mux.HandleFunc("DELETE /api/media/{id}", s.requireAdminAuth(s.handleMediaDelete))
 	s.mux.HandleFunc("GET /api/media/{id}/files", s.handleMediaFiles)

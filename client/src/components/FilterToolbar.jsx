@@ -145,7 +145,9 @@ export default function FilterToolbar({
   genres = defaultGenres,
   types = defaultTypeOptions,
   formats = null,
+  formatLabel = "تنسيق العمل",
   statuses = null,
+  statusLabel = "حالة العرض",
   seasons = null,
   studios = null,
   topics = null,
@@ -335,7 +337,7 @@ export default function FilterToolbar({
       {/* 3. Format / Type */}
       {formats && onSelectFormat && (
         <label className="block text-xs font-bold text-[var(--text-secondary)]">
-          تنسيق العمل
+          {formatLabel}
           <select value={activeFormat} onChange={(e) => onSelectFormat(e.target.value)} className={fieldClassName}>
             {formats.map((item) => (
               <option key={item.id} value={item.id}>
@@ -362,7 +364,7 @@ export default function FilterToolbar({
       {/* 4. Status / Seasons */}
       {statuses && onSelectStatus && (
         <label className="block text-xs font-bold text-[var(--text-secondary)]">
-          حالة العرض
+          {statusLabel}
           <select value={activeStatus} onChange={(e) => onSelectStatus(e.target.value)} className={fieldClassName}>
             {statuses.map((item) => (
               <option key={item.id} value={item.id}>

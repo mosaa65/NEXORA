@@ -111,6 +111,9 @@ func (m *mockRepo) ListProviderCollectionMedia(ctx context.Context, slug string,
 func (m *mockRepo) ListProviderCollectionParts(ctx context.Context, slug string) (*db.ProviderCollection, []db.ProviderCollectionPart, error) {
 	return &db.ProviderCollection{ID: 1, Slug: slug, TitleEN: "Test Collection"}, []db.ProviderCollectionPart{{ExternalID: "1", Title: "Part One", Local: true, MediaID: 1}, {ExternalID: "2", Title: "Part Two", Local: false}}, nil
 }
+func (m *mockRepo) ListRelatedMedia(ctx context.Context, mediaID int64, limit int) ([]db.RelatedMedia, error) {
+	return []db.RelatedMedia{{Provider: "tmdb", ExternalID: "42", Kind: "movie", RelationType: "recommendation", TitleEN: "Related title", Local: true, LocalMediaID: 42}}, nil
+}
 func (m *mockRepo) ListPeople(ctx context.Context, limit int) ([]db.Person, error) {
 	return []db.Person{{ID: 1, Slug: "tmdb-person-1", Provider: "tmdb", ExternalID: "1", NameAR: "شخص اختبار", NameEN: "Test Person", LocalMediaCount: 2}}, nil
 }
@@ -381,6 +384,24 @@ func TestMediaListAndDetailEndpoints(t *testing.T) {
 	}
 	if detailRes.TitleEN != "Inception" {
 		t.Errorf("expected TitleEN=Inception, got: %s", detailRes.TitleEN)
+	}
+
+	// 3. Related titles are served from the local provider graph.
+	reqRelated := httptest.NewRequest(http.MethodGet, "/api/media/1/related?limit=12", nil)
+	recRelated := httptest.NewRecorder()
+	handler.ServeHTTP(recRelated, reqRelated)
+	if recRelated.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for related media, got: %d", recRelated.Code)
+	}
+	var relatedRes struct {
+		MediaID int64             `json:"media_id"`
+		Items   []db.RelatedMedia `json:"items"`
+	}
+	if err := json.NewDecoder(recRelated.Body).Decode(&relatedRes); err != nil {
+		t.Fatalf("decode related response: %v", err)
+	}
+	if relatedRes.MediaID != 1 || len(relatedRes.Items) != 1 || !relatedRes.Items[0].Local || relatedRes.Items[0].LocalMediaID != 42 {
+		t.Fatalf("unexpected related response: %#v", relatedRes)
 	}
 }
 

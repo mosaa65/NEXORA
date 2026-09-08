@@ -1,12 +1,16 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Icon from "../components/Icon.jsx";
+import RelatedMediaRail from "../components/RelatedMediaRail.jsx";
 import PlayableFilesExplorer from "../components/PlayableFilesExplorer.jsx";
 import { useTransfer } from "../context/TransferContext.jsx";
-import { getMediaDetail, enrichMedia, getMediaMetadataSnapshot, getMediaSeasonMetadata, resolveAPIURL } from "../lib/api.js";
+import { getMediaDetail, enrichMedia, getMediaMetadataSnapshot, getMediaSeasonMetadata, getMediaRelated, resolveAPIURL } from "../lib/api.js";
 import { horizontalWheel } from "../lib/horizontalScroll.js";
 
 const hasArabicText = (value) => /[\u0600-\u06FF]/.test(value || "");
+// TMDB orders cast by billing priority. The first 24 are the featured cast
+// presented by NEXORA; the complete cast count remains visible in the badge.
+const FEATURED_CAST_LIMIT = 24;
 
 function getContentRatingInfo(rating) {
   if (!rating) return null;
@@ -71,6 +75,7 @@ export default function MediaDetailsPage({
   const [seasonSnapshots, setSeasonSnapshots] = useState([]);
   const [englishSeasonSnapshots, setEnglishSeasonSnapshots] = useState([]);
   const [selectedMetadataSeason, setSelectedMetadataSeason] = useState(0);
+  const [relatedItems, setRelatedItems] = useState([]);
   const { openTransferModal, selectMultipleFiles } = useTransfer();
 
   useEffect(() => {
@@ -129,8 +134,15 @@ export default function MediaDetailsPage({
         setSeasonSnapshots(arabicSeasons.status === "fulfilled" ? arabicSeasons.value?.items || [] : []);
         setEnglishSeasonSnapshots(englishSeasons.status === "fulfilled" ? englishSeasons.value?.items || [] : []);
       });
+
+      getMediaRelated(media.id).then((data) => {
+        if (alive) setRelatedItems(data.items || []);
+      }).catch(() => {
+        if (alive) setRelatedItems([]);
+      });
     } else {
       setLoading(false);
+      setRelatedItems([]);
     }
 
     return () => {
@@ -244,13 +256,14 @@ export default function MediaDetailsPage({
   const currentSeason = seasonsList[selectedSeasonIdx] || seasonsList[0];
   const activeEpisodes = currentSeason?.episodes || current.files || [];
   const cast = tmdb?.aggregate_credits?.cast || tmdb?.credits?.cast || [];
+  const featuredCast = [...cast]
+    .sort((left, right) => (Number.isFinite(left?.order) ? left.order : Number.MAX_SAFE_INTEGER) - (Number.isFinite(right?.order) ? right.order : Number.MAX_SAFE_INTEGER))
+    .slice(0, FEATURED_CAST_LIMIT);
   const englishCastByID = new Map((tmdbEnglish?.aggregate_credits?.cast || tmdbEnglish?.credits?.cast || []).map((person) => [person.id, person]));
   const trailers = [...(tmdb?.videos?.results || []), ...(tmdbEnglish?.videos?.results || [])].filter(
     (video, index, videos) => String(video.site || "").toLowerCase() === "youtube" && video.key && videos.findIndex((item) => item.key === video.key) === index
   );
   const keywords = tmdb?.keywords?.keywords || tmdb?.keywords?.results || [];
-  const related = tmdb?.recommendations?.results || tmdb?.similar?.results || [];
-  const englishRelatedByID = new Map([...(tmdbEnglish?.recommendations?.results || []), ...(tmdbEnglish?.similar?.results || [])].map((item) => [item.id, item]));
   const crew = tmdb?.credits?.crew || tmdb?.aggregate_credits?.crew || [];
   const imageGallery = [
     ...(tmdbEnglish?.images?.backdrops || tmdb?.images?.backdrops || []).map((image) => ({ ...image, kind: "backdrop", localPath: image.local_backdrop_path })),
@@ -902,30 +915,41 @@ export default function MediaDetailsPage({
       {/* ========================================================================= */}
       {/* 5. Priority 4: طاقم التمثيل وصناع العمل (Cast & Production Crew) */}
       {/* ========================================================================= */}
-      {cast.length > 0 && (
+      {featuredCast.length > 0 && (
         <section className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4 sm:p-6 shadow-[var(--shadow-sm)]">
-          <div className="flex items-center justify-between border-b border-[var(--border-subtle)] pb-3 mb-4">
-            <h2 className="text-base sm:text-lg font-black text-[var(--text-primary)] flex items-center gap-2">
-              <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-teal-500/20 text-teal-400 text-xs">🎭</span>
-              طاقم التمثيل ونجوم العمل
-            </h2>
-            <span className="rounded-full bg-teal-500/10 px-3 py-1 text-xs text-teal-300 font-black border border-teal-500/20">
+          <div className="flex items-center justify-between gap-3 border-b border-[var(--border-subtle)] pb-3 mb-4">
+            <div>
+              <h2 className="text-base sm:text-lg font-black text-[var(--text-primary)] flex items-center gap-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-teal-500/20 text-teal-400 text-xs">🎭</span>
+                طاقم التمثيل ونجوم العمل
+              </h2>
+              <p className="mt-1 text-[11px] font-semibold text-[var(--text-muted)]">أبرز الممثلين حسب ترتيب TMDB الرسمي — اختر ممثلًا لاستعراض أعماله المحلية</p>
+            </div>
+            <span className="shrink-0 rounded-full bg-teal-500/10 px-3 py-1 text-xs text-teal-300 font-black border border-teal-500/20">
               {cast.length} ممثل
             </span>
           </div>
 
-          <div onWheel={horizontalWheel} className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
-            {cast.slice(0, 24).map((person) => {
+          <div onWheel={horizontalWheel} className="flex gap-3 overflow-x-auto px-1 pt-4 pb-5 scrollbar-thin">
+            {featuredCast.map((person, index) => {
               const englishPerson = englishCastByID.get(person.id);
               const profileURL = resolveAPIURL(englishPerson?.local_profile_path || person.local_profile_path) || tmdbImageURL(person.profile_path || englishPerson?.profile_path, "w185");
               return (
-                <article key={person.id} className="w-28 sm:w-32 shrink-0 overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] shadow-sm hover:border-[var(--color-accent)]/50 transition">
-                  <div className="relative aspect-[4/5] bg-gradient-to-br from-cyan-950/40 via-purple-950/20 to-fuchsia-950/30 overflow-hidden">
+                <button
+                  type="button"
+                  key={person.credit_id || `${person.id}-${index}`}
+                  onClick={() => {
+                    if (person.id) window.location.hash = `#/person/tmdb-person-${person.id}`;
+                  }}
+                  className="group w-32 sm:w-36 lg:w-40 shrink-0 overflow-visible rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] text-right shadow-[var(--shadow-sm)] transition-all duration-300 hover:-translate-y-1 hover:border-teal-400/70 hover:shadow-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-300"
+                  aria-label={`استعراض أعمال ${person.name || "الممثل"} المحلية`}
+                >
+                  <div className="relative aspect-[3/4] overflow-hidden rounded-t-2xl bg-gradient-to-br from-cyan-950/40 via-purple-950/20 to-fuchsia-950/30">
                     {profileURL ? (
                       <img
                         src={profileURL}
                         alt={person.name}
-                        className="h-full w-full object-cover"
+                        className="h-full w-full object-cover object-top transition duration-300 group-hover:brightness-110"
                         loading="lazy"
                         onError={(e) => {
                           e.currentTarget.style.display = "none";
@@ -938,12 +962,17 @@ export default function MediaDetailsPage({
                         <Icon name="user" className="h-5 w-5 sm:h-6 sm:w-6" />
                       </span>
                     </div>
+                    <span className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+                    <span className="pointer-events-none absolute bottom-2 right-2 inline-flex translate-y-1 items-center gap-1 rounded-lg border border-white/15 bg-black/45 px-1.5 py-1 text-[9px] font-black text-white opacity-0 backdrop-blur-sm transition duration-200 group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:translate-y-0 group-focus-visible:opacity-100">
+                      <Icon name="film" className="h-3 w-3 text-teal-200" />
+                      أعماله
+                    </span>
                   </div>
-                  <div className="p-2 sm:p-2.5">
-                    <p className="truncate text-xs font-black text-[var(--text-primary)]">{person.name}</p>
-                    <p className="mt-0.5 truncate text-[10px] text-[var(--text-muted)]">{person.character || person.roles?.[0]?.character || "طاقم التمثيل"}</p>
+                  <div className="rounded-b-2xl px-2.5 py-3 sm:px-3">
+                    <p className="truncate text-xs font-black text-[var(--text-primary)] sm:text-sm">{person.name}</p>
+                    <p className="mt-1 truncate text-[10px] font-medium text-[var(--text-muted)] sm:text-[11px]">{person.character || person.roles?.[0]?.character || "طاقم التمثيل"}</p>
                   </div>
-                </article>
+                </button>
               );
             })}
           </div>
@@ -1005,7 +1034,7 @@ export default function MediaDetailsPage({
       {/* 7. Collection (السلسلة السينمائية) & Related Movies (الأعمال المقترحة) */}
       {/* Fully Mobile-Optimized with Dual Arabic/English Titles & Luxury Cards */}
       {/* ========================================================================= */}
-      {(collection || related.length > 0) && (
+      {(collection || relatedItems.length > 0) && (
         <section className="space-y-6">
           {/* Movie Collection Banner Card */}
           {collection && (
@@ -1049,79 +1078,7 @@ export default function MediaDetailsPage({
             </div>
           )}
 
-          {/* Related / Similar Movies & Series - Mobile-First Luxury Carousel */}
-          {related.length > 0 && (
-            <div className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4 sm:p-6 shadow-[var(--shadow-sm)]">
-              <div className="flex items-center justify-between border-b border-[var(--border-subtle)] pb-3 mb-4">
-                <h2 className="text-base sm:text-lg font-black text-[var(--text-primary)] flex items-center gap-2">
-                  <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-fuchsia-500/20 text-fuchsia-400 text-xs">✨</span>
-                  أعمال مقترحة ومميزة ذات صلة
-                </h2>
-                <span className="rounded-full bg-fuchsia-500/10 px-3 py-1 text-xs text-fuchsia-300 font-black border border-fuchsia-500/20">
-                  {related.length} مقترحات
-                </span>
-              </div>
-
-              {/* Responsive Cinema Cards Rail */}
-              <div onWheel={horizontalWheel} className="flex gap-3 sm:gap-4 overflow-x-auto pb-3 scrollbar-thin">
-                {related.slice(0, 14).map((item) => {
-                  const englishItem = englishRelatedByID.get(item.id);
-                  const titleEN = englishItem?.title || englishItem?.name || item.original_title || item.original_name || item.title || item.name;
-                  const titleAR = hasArabicText(item.title || item.name) ? (item.title || item.name) : null;
-                  const relatedPoster = resolveAPIURL(englishItem?.local_poster_path || item.local_poster_path) || tmdbImageURL(item.poster_path || englishItem?.poster_path);
-                  const year = (item.release_date || item.first_air_date || "").slice(0, 4);
-
-                  return (
-                    <article
-                      key={item.id}
-                      className="group relative flex w-32 sm:w-40 shrink-0 flex-col overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] shadow-md transition-all duration-300 hover:border-fuchsia-400/60 hover:shadow-lg"
-                    >
-                      <div className="relative aspect-[2/3] w-full overflow-hidden bg-[#151225]">
-                        {relatedPoster ? (
-                          <img
-                            src={relatedPoster}
-                            alt={titleEN}
-                            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="flex h-full items-center justify-center text-xs text-[var(--text-muted)]">لا توجد صورة</div>
-                        )}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20" />
-                        
-                        {/* Rating Star Badge */}
-                        <div className="absolute top-2 right-2">
-                          <span className="inline-flex items-center gap-1 rounded-md border border-amber-300/30 bg-black/60 backdrop-blur-md px-1.5 py-0.5 text-[9px] font-black text-amber-300">
-                            ★ {Number(item.vote_average || englishItem?.vote_average || 0).toFixed(1)}
-                          </span>
-                        </div>
-
-                        {/* Year Badge */}
-                        {year && (
-                          <div className="absolute bottom-2 right-2">
-                            <span className="rounded-md bg-black/60 backdrop-blur-md px-1.5 py-0.5 text-[9px] font-bold text-white/90">
-                              {year}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="p-2 sm:p-2.5 flex flex-col justify-between flex-1">
-                        <div>
-                          <p dir="ltr" className="truncate text-left text-xs font-black text-[var(--text-primary)] group-hover:text-fuchsia-300 transition">
-                            {titleEN}
-                          </p>
-                          <p className="mt-0.5 truncate text-[10px] text-[var(--text-secondary)]">
-                            {titleAR || "لا تتوفر ترجمة عربية"}
-                          </p>
-                        </div>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+          <RelatedMediaRail items={relatedItems} onOpen={(mediaID) => { window.location.hash = `#/media/${mediaID}`; }} />
         </section>
       )}
 
