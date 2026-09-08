@@ -303,16 +303,16 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/transfer/devices", s.handleTransferDevices)
 	s.mux.HandleFunc("GET /api/transfer/device-apps", s.handleTransferDeviceApps)
 	s.mux.HandleFunc("GET /api/transfer/device-app-folders", s.handleTransferDeviceAppFolders)
-	s.mux.HandleFunc("POST /api/transfer/copy", s.handleTransferCopy)
+	s.mux.HandleFunc("POST /api/transfer/copy", s.requireAdminAuth(s.handleTransferCopy))
 	s.mux.HandleFunc("GET /api/transfer/jobs", s.handleTransferJobsList)
 	s.mux.HandleFunc("GET /api/transfer/job/{id}", s.handleTransferJobGet)
-	s.mux.HandleFunc("POST /api/transfer/cancel/{id}", s.handleTransferJobCancel)
+	s.mux.HandleFunc("POST /api/transfer/cancel/{id}", s.requireAdminAuth(s.handleTransferJobCancel))
 	s.mux.HandleFunc("GET /api/transfer/events", s.handleTransferEvents)
 
 	// Phase 3 — File Browser & Eject
-	s.mux.HandleFunc("GET /api/transfer/browse", s.handleTransferBrowse)
-	s.mux.HandleFunc("POST /api/transfer/mkdir", s.handleTransferMkdir)
-	s.mux.HandleFunc("POST /api/transfer/eject", s.handleTransferEject)
+	s.mux.HandleFunc("GET /api/transfer/browse", s.requireAdminAuth(s.handleTransferBrowse))
+	s.mux.HandleFunc("POST /api/transfer/mkdir", s.requireAdminAuth(s.handleTransferMkdir))
+	s.mux.HandleFunc("POST /api/transfer/eject", s.requireAdminAuth(s.handleTransferEject))
 
 	s.mux.HandleFunc("GET /api/stream", s.handleStream)
 	s.mux.HandleFunc("GET /api/stream/image", s.handleStreamImage)
@@ -338,7 +338,7 @@ func (s *Server) routes() {
 	// System Directory Tree Explorer & Admin Auth Endpoints
 	s.mux.HandleFunc("GET /api/system/drives", s.requireAdminAuth(s.handleSystemDrives))
 	s.mux.HandleFunc("GET /api/system/browse", s.requireAdminAuth(s.handleSystemBrowse))
-	s.mux.HandleFunc("POST /api/system/open-file-location", s.handleOpenFileLocation)
+	s.mux.HandleFunc("POST /api/system/open-file-location", s.requireAdminAuth(s.handleOpenFileLocation))
 	s.mux.HandleFunc("POST /api/admin/maintenance/clean-genres", s.requireAdminAuth(s.handleCleanGenres))
 	s.mux.HandleFunc("POST /api/admin/login", s.handleAdminLogin)
 	s.mux.HandleFunc("GET /api/admin/session", s.handleAdminSession)
@@ -357,9 +357,15 @@ func (s *Server) routes() {
 
 func (s *Server) withMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		allowedOrigin := s.config.CORSOrigin
+		if allowedOrigin == "" {
+			allowedOrigin = "*"
+		}
+		w.Header().Set("Vary", "Origin")
+		w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Max-Age", "600")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return

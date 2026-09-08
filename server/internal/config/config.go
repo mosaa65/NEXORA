@@ -1,6 +1,9 @@
 package config
 
 import (
+	"crypto/rand"
+	"encoding/hex"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -35,6 +38,7 @@ type Config struct {
 	AdminUser           string
 	AdminPass           string
 	AdminSecret         string
+	CORSOrigin          string
 }
 
 func Load() Config {
@@ -65,9 +69,40 @@ func Load() Config {
 		RedisPassword:       os.Getenv("NEXORA_REDIS_PASSWORD"),
 		RedisDB:             envInt("NEXORA_REDIS_DB", 0),
 		AdminUser:           envString("NEXORA_ADMIN_USER", "admin"),
-		AdminPass:           envString("NEXORA_ADMIN_PASS", "admin123"),
-		AdminSecret:         envString("NEXORA_ADMIN_SECRET", "nexora_admin_secret_signing_key_2026"),
+		AdminPass:           adminPassword(),
+		AdminSecret:         adminSigningSecret(),
+		CORSOrigin:          envString("NEXORA_CORS_ORIGIN", "*"),
 	}
+}
+
+// adminPassword never falls back to a hardcoded value. When the operator has
+// not configured one, a random password is generated for this process and
+// printed once to the server log so it can be copied and stored properly.
+func adminPassword() string {
+	if value := strings.TrimSpace(os.Getenv("NEXORA_ADMIN_PASS")); value != "" {
+		return value
+	}
+	generated := randomHex(12)
+	log.Printf("[security] NEXORA_ADMIN_PASS is not set. Temporary admin password for this run: %s", generated)
+	return generated
+}
+
+// adminSigningSecret must never be a shipped constant: a known signing key lets
+// anyone forge a valid admin token.
+func adminSigningSecret() string {
+	if value := strings.TrimSpace(os.Getenv("NEXORA_ADMIN_SECRET")); value != "" {
+		return value
+	}
+	log.Printf("[security] NEXORA_ADMIN_SECRET is not set. Generating an ephemeral signing key; admin sessions end on restart.")
+	return randomHex(32)
+}
+
+func randomHex(size int) string {
+	buffer := make([]byte, size)
+	if _, err := rand.Read(buffer); err != nil {
+		log.Fatalf("[security] unable to generate secure random secret: %v", err)
+	}
+	return hex.EncodeToString(buffer)
 }
 
 func WatchInterval() time.Duration {

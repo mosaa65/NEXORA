@@ -74,9 +74,14 @@ services:
       NEXORA_REDIS_ADDR: "redis:6379"
       NEXORA_MEILI_HOST: "http://meilisearch:7700"
       NEXORA_MEILI_API_KEY: "${NEXORA_MEILI_API_KEY:-}"
+      # Never ship default admin credentials. Set these in a local .env file:
+      #   NEXORA_ADMIN_USER=...  NEXORA_ADMIN_PASS=...  NEXORA_ADMIN_SECRET=$(openssl rand -hex 32)
+      # If left empty the API generates a random password/signing key at startup
+      # and prints the password once in the container logs.
       NEXORA_ADMIN_USER: "${NEXORA_ADMIN_USER:-admin}"
-      NEXORA_ADMIN_PASS: "${NEXORA_ADMIN_PASS:-admin123}"
-      NEXORA_ADMIN_SECRET: "${NEXORA_ADMIN_SECRET:-nexora_admin_secret_signing_key_2026}"
+      NEXORA_ADMIN_PASS: "${NEXORA_ADMIN_PASS:-}"
+      NEXORA_ADMIN_SECRET: "${NEXORA_ADMIN_SECRET:-}"
+      NEXORA_CORS_ORIGIN: "${NEXORA_CORS_ORIGIN:-*}"
     ports:
       - "8080:8080"
     volumes:

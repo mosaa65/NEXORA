@@ -309,7 +309,11 @@ func (m *mockQuality) ListCorruptedFiles(ctx context.Context) ([]quality.Corrupt
 }
 
 func setupTestServer() http.Handler {
-	cfg := config.Config{}
+	cfg := config.Config{
+		AdminUser:   "admin",
+		AdminPass:   "admin123",
+		AdminSecret: "test-admin-signing-secret",
+	}
 	repo := &mockRepo{
 		categories: []db.CategorySummary{
 			{ID: 1, NameAR: "أفلام", NameEN: "Movies", Slug: "movies", MediaCount: 5, FileCount: 5},
@@ -326,6 +330,29 @@ func setupTestServer() http.Handler {
 	qual := &mockQuality{}
 
 	return NewServer(cfg, repo, sc, searchSvc, metaSvc, proc, mig, qual, nil)
+}
+
+// adminToken performs a real login so tests exercise the same auth path as
+// production code (there is no bypass token anymore).
+func adminToken(t *testing.T, handler http.Handler) string {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/login", bytes.NewBufferString(`{"username":"admin","password":"admin123"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("admin login failed: %d %s", rec.Code, rec.Body.String())
+	}
+	var res struct {
+		Token string `json:"token"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&res); err != nil {
+		t.Fatal(err)
+	}
+	if res.Token == "" {
+		t.Fatal("admin login returned an empty token")
+	}
+	return res.Token
 }
 
 func TestHealthEndpoint(t *testing.T) {
@@ -445,7 +472,7 @@ func TestOfflineCatalogGraphEndpoints(t *testing.T) {
 			body = bytes.NewBufferString(`{"is_featured":true}`)
 		}
 		req := httptest.NewRequest(testCase.method, testCase.path, body)
-		req.Header.Set("Authorization", "Bearer nexora_admin_auth_token_active")
+		req.Header.Set("Authorization", "Bearer "+adminToken(t, handler))
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, req)
 		if rec.Code != http.StatusOK {
@@ -479,7 +506,11 @@ func TestDisksEndpoint(t *testing.T) {
 }
 
 func TestMediaVerifyPersistsIndexedFileResult(t *testing.T) {
-	cfg := config.Config{}
+	cfg := config.Config{
+		AdminUser:   "admin",
+		AdminPass:   "admin123",
+		AdminSecret: "test-admin-signing-secret",
+	}
 	repo := &mockRepo{}
 	handler := NewServer(cfg, repo, scanner.New(scanner.Options{}), &mockSearch{}, &mockMetadata{}, &mockProcessor{}, &mockMigration{}, &mockQuality{}, nil)
 
@@ -510,7 +541,12 @@ func TestIndexStreamsFilesInBoundedBatches(t *testing.T) {
 
 	repo := &mockRepo{}
 	handler := NewServer(
-		config.Config{MediaRoots: []string{root}},
+		config.Config{
+			MediaRoots:  []string{root},
+			AdminUser:   "admin",
+			AdminPass:   "admin123",
+			AdminSecret: "test-admin-signing-secret",
+		},
 		repo,
 		scanner.New(scanner.Options{Workers: 2}),
 		&mockSearch{},
@@ -526,7 +562,7 @@ func TestIndexStreamsFilesInBoundedBatches(t *testing.T) {
 	}
 	req := httptest.NewRequest(http.MethodPost, "/api/index", bytes.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer nexora_admin_auth_token_active")
+	req.Header.Set("Authorization", "Bearer "+adminToken(t, handler))
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 

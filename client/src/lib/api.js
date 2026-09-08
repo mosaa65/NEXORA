@@ -80,12 +80,12 @@ async function requestJSON(path, options = {}) {
       }
     }
     const response = await fetch(`${API_BASE}${path}`, {
+      ...options,
       headers: {
         "Content-Type": "application/json",
         ...authHeader,
         ...(options.headers || {})
-      },
-      ...options
+      }
     });
 
   const text = await response.text();
