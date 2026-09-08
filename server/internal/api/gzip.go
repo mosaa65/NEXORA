@@ -29,7 +29,8 @@ func (w *gzipResponseWriter) WriteHeader(statusCode int) {
 
 	// Check if this response should be gzip compressed
 	contentType := w.Header().Get("Content-Type")
-	shouldCompress := !strings.HasPrefix(contentType, "video/") &&
+	shouldCompress := !strings.HasPrefix(contentType, "text/event-stream") &&
+		!strings.HasPrefix(contentType, "video/") &&
 		!strings.HasPrefix(contentType, "image/jpeg") &&
 		!strings.HasPrefix(contentType, "image/png") &&
 		!strings.HasPrefix(contentType, "image/webp") &&
@@ -57,6 +58,21 @@ func (w *gzipResponseWriter) Write(data []byte) (int, error) {
 		return w.writer.Write(data)
 	}
 	return w.ResponseWriter.Write(data)
+}
+
+// Flush implements http.Flusher so live streams (SSE, chunked) are flushed
+// immediately: the gzip stream must be flushed before the network writer,
+// otherwise buffered compressed bytes would never reach the client in time.
+func (w *gzipResponseWriter) Flush() {
+	if !w.wroteHeader {
+		w.WriteHeader(http.StatusOK)
+	}
+	if w.isCompressed && w.writer != nil {
+		_ = w.writer.Flush()
+	}
+	if f, ok := w.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
 }
 
 // withGzip wraps an http.Handler with high-performance, zero-allocation Gzip compression.
