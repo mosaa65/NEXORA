@@ -50,3 +50,4 @@ server/assets/**
 _archive/
 .codebuddy
 .merge-backups/
+.merge-backups/

@@ -165,7 +165,7 @@ function AppRoutes() {
   }
 
   return (
-    <>
+<>
       <ScrollManager />
       <Routes>
         {/* ========================================================================= */}
@@ -287,7 +287,7 @@ function AppRoutes() {
         />
       )}
 
-      {/* Global USB Transfer Experience (Modern Modal, Mini Transfer Center) */}
+{/* Global USB Transfer Experience (Modern Modal, Mini Transfer Center) */}
       <TransferModal />
       <MiniTransferCenter />
     </>
