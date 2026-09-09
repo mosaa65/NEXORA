@@ -3,16 +3,75 @@ package api
 import (
 	"crypto/hmac"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
+
+// Login brute-force protection: a small in-memory throttle per client IP.
+const (
+	maxLoginAttempts = 5
+	loginLockWindow  = 5 * time.Minute
+)
+
+type loginAttempt struct {
+	count       int
+	lastAttempt time.Time
+}
+
+var (
+	loginAttemptsMu sync.Mutex
+	loginAttempts   = map[string]*loginAttempt{}
+)
+
+func clientIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
+}
+
+func loginThrottled(ip string) bool {
+	loginAttemptsMu.Lock()
+	defer loginAttemptsMu.Unlock()
+	entry, ok := loginAttempts[ip]
+	if !ok {
+		return false
+	}
+	if time.Since(entry.lastAttempt) > loginLockWindow {
+		delete(loginAttempts, ip)
+		return false
+	}
+	return entry.count >= maxLoginAttempts
+}
+
+func registerLoginFailure(ip string) {
+	loginAttemptsMu.Lock()
+	defer loginAttemptsMu.Unlock()
+	entry, ok := loginAttempts[ip]
+	if !ok || time.Since(entry.lastAttempt) > loginLockWindow {
+		loginAttempts[ip] = &loginAttempt{count: 1, lastAttempt: time.Now()}
+		return
+	}
+	entry.count++
+	entry.lastAttempt = time.Now()
+}
+
+func clearLoginFailures(ip string) {
+	loginAttemptsMu.Lock()
+	defer loginAttemptsMu.Unlock()
+	delete(loginAttempts, ip)
+}
 
 // System Drives & Directory Tree Explorer
 type SystemDirectoryItem struct {
@@ -97,11 +156,8 @@ func (s *Server) validateAdminToken(authHeader string) bool {
 	token := strings.TrimSpace(authHeader)
 	token = strings.TrimPrefix(token, "Bearer ")
 	token = strings.TrimSpace(token)
-	if token == "" {
+	if token == "" || s.config.AdminSecret == "" {
 		return false
-	}
-	if token == "nexora_admin_auth_token_active" {
-		return true
 	}
 
 	decoded, err := base64.RawURLEncoding.DecodeString(token)
@@ -123,6 +179,10 @@ func (s *Server) validateAdminToken(authHeader string) bool {
 	mac.Write([]byte(payload))
 	expectedSig := hex.EncodeToString(mac.Sum(nil))
 
+	if username == "" {
+		return false
+	}
+
 	return hmac.Equal([]byte(sig), []byte(expectedSig))
 }
 
@@ -141,6 +201,15 @@ func (s *Server) requireAdminAuth(next http.HandlerFunc) http.HandlerFunc {
 }
 
 func (s *Server) handleAdminLogin(w http.ResponseWriter, r *http.Request) {
+	ip := clientIP(r)
+	if loginThrottled(ip) {
+		writeJSON(w, http.StatusTooManyRequests, map[string]any{
+			"ok":    false,
+			"error": "تم تجاوز عدد محاولات الدخول المسموح بها، حاول مرة أخرى بعد قليل",
+		})
+		return
+	}
+
 	var req struct {
 		Username string `json:"username"`
 		Password string `json:"password"`
@@ -151,15 +220,19 @@ func (s *Server) handleAdminLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	adminUser := s.config.AdminUser
-	if adminUser == "" {
-		adminUser = "admin"
-	}
 	adminPass := s.config.AdminPass
-	if adminPass == "" {
-		adminPass = "admin123"
+	if adminUser == "" || adminPass == "" || s.config.AdminSecret == "" {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+			"ok":    false,
+			"error": "لم يتم ضبط بيانات دخول المسؤول على الخادم (NEXORA_ADMIN_USER / NEXORA_ADMIN_PASS)",
+		})
+		return
 	}
 
-	if req.Username == adminUser && req.Password == adminPass {
+	userMatch := subtle.ConstantTimeCompare([]byte(req.Username), []byte(adminUser)) == 1
+	passMatch := subtle.ConstantTimeCompare([]byte(req.Password), []byte(adminPass)) == 1
+	if userMatch && passMatch {
+		clearLoginFailures(ip)
 		token := s.generateAdminToken(adminUser)
 		writeJSON(w, http.StatusOK, map[string]any{
 			"ok":    true,
@@ -173,6 +246,7 @@ func (s *Server) handleAdminLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	registerLoginFailure(ip)
 	writeJSON(w, http.StatusUnauthorized, map[string]any{
 		"ok":    false,
 		"error": "اسم المستخدم أو كلمة المرور غير صحيحة",
