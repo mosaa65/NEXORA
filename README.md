@@ -1,6 +1,7 @@
 <div align="center">
 
-![Inama Soft logo](public/inama-soft-logo.ico)
+![Inama Soft logo](client/public
+/nexora-brand-logo.PNG)
 
 # NEXORA
 
