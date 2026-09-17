@@ -6,7 +6,11 @@ import {
   startDeviceTransfer,
   getTransferJob,
   cancelTransferJob,
-  openFileLocation
+  openFileLocation,
+  resolveTransferStreamURL,
+  getBridgeHealth,
+  isBridgeOfflineError,
+  BRIDGE_OFFLINE_MESSAGE
 } from "../lib/api.js";
 import { normalizeTransferDevices } from "../lib/transferDevices.js";
 
@@ -50,7 +54,6 @@ export default function CopyToPhoneModal({ file, mediaTitle, onClose }) {
   const [deviceApps, setDeviceApps] = useState([]);
   const [loadingApps, setLoadingApps] = useState(false);
   const [selectedApp, setSelectedApp] = useState(null);
-  const [customBundleId, setCustomBundleId] = useState("");
   const [appFolders, setAppFolders] = useState([]);
   const [selectedFolder, setSelectedFolder] = useState("");
   const [loadingFolders, setLoadingFolders] = useState(false);
@@ -62,6 +65,13 @@ export default function CopyToPhoneModal({ file, mediaTitle, onClose }) {
   const [isCopying, setIsCopying] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [openingFolder, setOpeningFolder] = useState(false);
+  const [bridgeOnline, setBridgeOnline] = useState(null);
+
+  const checkBridge = async () => {
+    const health = await getBridgeHealth();
+    setBridgeOnline(health.ok === true);
+    return health.ok === true;
+  };
 
   const fetchDevices = () => {
     if (isCopying) return;
@@ -70,6 +80,7 @@ export default function CopyToPhoneModal({ file, mediaTitle, onClose }) {
     setErrorMsg("");
     getTransferDevices()
       .then((res) => {
+        setBridgeOnline(true);
         const devList = normalizeTransferDevices(res.devices || []);
         setDevices(devList);
         setSelectedDevice((prev) => {
@@ -81,12 +92,16 @@ export default function CopyToPhoneModal({ file, mediaTitle, onClose }) {
         });
       })
       .catch((err) => {
+        if (isBridgeOfflineError(err)) {
+          setBridgeOnline(false);
+        }
         setErrorMsg("تعذر جلب الأجهزة الموصولة: " + (err.message || "تأكد من تشغيل السيرفر"));
       })
       .finally(() => setLoadingDevices(false));
   };
 
   useEffect(() => {
+    checkBridge();
     fetchDevices();
   }, []);
 
@@ -119,9 +134,6 @@ export default function CopyToPhoneModal({ file, mediaTitle, onClose }) {
           setDeviceApps(apps);
           const fallbackApp = apps[0] || null;
           setSelectedApp(fallbackApp);
-          if (fallbackApp) {
-            setCustomBundleId(fallbackApp.bundle_id || "");
-          }
         })
         .catch((err) => {
           setDeviceApps([]);
@@ -134,7 +146,7 @@ export default function CopyToPhoneModal({ file, mediaTitle, onClose }) {
 
   useEffect(() => {
     if (!selectedDevice || !(selectedDevice.type === "ios" || selectedDevice.name?.toLowerCase().includes("iphone"))) return;
-    const bundleId = customBundleId.trim() || selectedApp?.bundle_id || "";
+    const bundleId = selectedApp?.bundle_id || "";
     if (!bundleId) {
       setAppFolders([]);
       setSelectedFolder("");
@@ -153,7 +165,7 @@ export default function CopyToPhoneModal({ file, mediaTitle, onClose }) {
         setSelectedFolder("");
       })
       .finally(() => setLoadingFolders(false));
-  }, [selectedDevice?.id, selectedApp?.bundle_id, customBundleId]);
+  }, [selectedDevice?.id, selectedApp?.bundle_id]);
 
   useEffect(() => {
     if (!activeJob?.id || !isCopying) return;
@@ -179,7 +191,7 @@ export default function CopyToPhoneModal({ file, mediaTitle, onClose }) {
 
   const handleStartCopy = async (customApp, chosenFolder = "") => {
     const appToUse = customApp || selectedApp;
-    const targetBundleId = appToUse?.bundle_id || customBundleId.trim() || "";
+    const targetBundleId = appToUse?.bundle_id || "";
     const selectedDeviceIsIOS = selectedDevice?.type === "ios" || selectedDevice?.name?.toLowerCase().includes("iphone");
 
     if (!selectedDevice) {
@@ -187,11 +199,11 @@ export default function CopyToPhoneModal({ file, mediaTitle, onClose }) {
       return;
     }
     if (selectedDeviceIsIOS && !targetBundleId) {
-      setErrorMsg("اختر تطبيق iPhone أو أدخل Bundle ID يدوي يسمح بالنسخ عبر Documents");
+      setErrorMsg("يرجى اختيار تطبيق iPhone يدعم مشاركة الملفات أولاً");
       return;
     }
-    if (selectedDeviceIsIOS && !customBundleId.trim() && appToUse && !appToUse.file_sharing_enabled) {
-      setErrorMsg("هذا التطبيق لا يتيح مشاركة الملفات عبر Documents. اختر تطبيقاً عليه علامة جاهز أو أدخل Bundle ID يدوي تعرف أنه يدعم File Sharing.");
+    if (selectedDeviceIsIOS && appToUse && !appToUse.file_sharing_enabled) {
+      setErrorMsg("هذا التطبيق لا يتيح مشاركة الملفات عبر Documents.");
       return;
     }
     setErrorMsg("");
@@ -201,10 +213,12 @@ export default function CopyToPhoneModal({ file, mediaTitle, onClose }) {
     setSelectedFolder(destinationFolder);
 
     try {
+      const fileId = file?.id || file?.file_id || 0;
       const payload = {
         device_id: selectedDevice.id,
-        file_id: file?.id || 0,
+        file_id: fileId,
         source_path: file?.filePath || file?.file_path || file?.path || file?.source_path || "",
+        source_url: fileId ? resolveTransferStreamURL(`/api/stream/file/${fileId}`) : "",
         target_app: targetBundleId,
         target_folder: targetFolder,
         sub_folder: destinationFolder
@@ -320,6 +334,28 @@ export default function CopyToPhoneModal({ file, mediaTitle, onClose }) {
         </div>
 
         {/* Alerts */}
+        {bridgeOnline === false && (
+          <div className="mb-4 rounded-xl border border-amber-500/40 bg-amber-950/50 p-3 text-xs text-amber-200">
+            <div className="flex items-start gap-2">
+              <span className="text-base leading-none">🔌</span>
+              <div className="flex-1">
+                <p className="font-black text-amber-300">خدمة NEXORA Copy Bridge غير متصلة</p>
+                <p className="mt-1 leading-relaxed">{BRIDGE_OFFLINE_MESSAGE}</p>
+                <p className="mt-1 text-[11px] text-amber-200/80">
+                  شغّل <span className="font-mono">scripts/install-bridge-service.bat</span> بصلاحيات المسؤول، ثم أعد المحاولة.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={checkBridge}
+                className="shrink-0 rounded-lg border border-amber-400/40 bg-amber-500/20 px-2.5 py-1 font-bold text-amber-100 transition hover:bg-amber-500/30"
+              >
+                إعادة المحاولة
+              </button>
+            </div>
+          </div>
+        )}
+
         {errorMsg && (
           <div className="mb-4 rounded-xl border border-red-500/40 bg-red-950/60 p-3 text-xs font-bold text-red-300">
             ⚠️ {errorMsg}
@@ -461,7 +497,7 @@ export default function CopyToPhoneModal({ file, mediaTitle, onClose }) {
                   <div className="space-y-3">
                     {deviceApps.map((app) => {
                       const isAppSelected = selectedApp?.bundle_id === app.bundle_id;
-                      const isFolderSelected = (customBundleId.trim() || selectedApp?.bundle_id) === app.bundle_id;
+                      const isFolderSelected = selectedApp?.bundle_id === app.bundle_id;
                       const appFoldersList = isFolderSelected
                         ? appFolders.filter((folder) => String(folder.name || "").trim() !== "" && String(folder.name || "").trim() !== "المجلد الرئيسي")
                         : [];
@@ -479,7 +515,6 @@ export default function CopyToPhoneModal({ file, mediaTitle, onClose }) {
                             className="flex cursor-pointer items-center justify-between"
                             onClick={() => {
                               setSelectedApp(app);
-                              setCustomBundleId(app.bundle_id || "");
                             }}
                           >
                             <div className="flex items-center gap-3 text-right">
@@ -512,7 +547,6 @@ export default function CopyToPhoneModal({ file, mediaTitle, onClose }) {
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    setCustomBundleId(app.bundle_id);
                                     setSelectedApp(app);
                                     setSelectedFolder("");
                                   }}
@@ -523,7 +557,6 @@ export default function CopyToPhoneModal({ file, mediaTitle, onClose }) {
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    setCustomBundleId(app.bundle_id);
                                     setSelectedApp(app);
                                     setSelectedFolder("");
                                   }}
@@ -556,20 +589,9 @@ export default function CopyToPhoneModal({ file, mediaTitle, onClose }) {
                     })}
                   </div>
                 )}
-                <div className="grid gap-2 pt-2 sm:grid-cols-2">
+                <div className="pt-2">
                   <label className="block text-[11px] font-bold text-white/70">
-                    Bundle ID يدوي
-                    <input
-                      type="text"
-                      value={customBundleId}
-                      onChange={(e) => setCustomBundleId(e.target.value)}
-                      placeholder="com.example.player"
-                      dir="ltr"
-                      className="mt-1 w-full rounded-xl border border-white/15 bg-black/40 px-3 py-2 text-xs font-bold text-white outline-none focus:border-purple-500"
-                    />
-                  </label>
-                  <label className="block text-[11px] font-bold text-white/70">
-                    المسار داخل التطبيق
+                    المسار أو المجلد الفرعي داخل التطبيق (اختياري)
                     <input
                       type="text"
                       value={subFolder}

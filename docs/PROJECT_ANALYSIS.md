@@ -53,8 +53,12 @@ server/
   internal/quality/             تقارير الجودة والتحقق
   internal/migration/           معاينة/نسخ ملفات مع checksum
   internal/disks/               اكتشاف الأقراص، مع تنفيذ Windows
+  internal/transfer/            واجهة النقل وخلفيات USB Storage / Android MTP / iOS AFC
+  internal/copybridge/          خادم Copy Bridge المحلي (routes، jobs، SSE، CORS)
+  cmd/copybridge/               ثنائي/خدمة Windows لـ Copy Bridge
   migrations/                   SQL migrations مرتبة بالاسم
 compose.yml                     PostgreSQL + Meilisearch + Redis
+scripts/                        install/uninstall-bridge-service.bat
 docs/                           توثيق موجود ودراسات سابقة
 test-media-library/             مكتبة اختبار محلية
 ```
@@ -76,7 +80,9 @@ test-media-library/             مكتبة اختبار محلية
 Browser (React SPA)
   ├─ catalogue/search/admin JSON ───────────────► Go REST API
   ├─ video bytes via native <video> ────────────► Go stream endpoint
-  └─ preview image request ─────────────────────► Go + FFmpeg cache
+  ├─ preview image request ─────────────────────► Go + FFmpeg cache
+  └─ USB device/copy requests ──────────────────► Local Copy Bridge (127.0.0.1:32145)
+                                                        └─ USB Storage / Android MTP / iOS AFC
 
 Go API
   ├─ PostgreSQL: catalogue, files, metadata, settings, queue
@@ -89,6 +95,7 @@ Go API
 
 - [VERIFIED] الخادم يمرر requests إلى interfaces للخزانة والبحث والـ metadata والمعالجة، مما يجعل handlers قابلة للاختبار بواسطة mocks.
 - [INFERRED] البنية Centralized server/thin browser client وليست microservices؛ Compose لا يشغّل Go API أو Vite، بل يعتمد تشغيلهما خارج Compose.
+- [VERIFIED] **Copy Bridge** خدمة محلية اختيارية على جهاز العميل (`cmd/copybridge`) تستمع على `127.0.0.1:32145` فقط، وتنسخ من `/api/stream/file/{id}` بالسيرفر المركزي إلى أجهزة USB الخاصة بجهاز العميل؛ السيرفر المركزي لا يرى هذه الأجهزة.
 
 ## 7. Frontend Architecture
 
@@ -117,6 +124,8 @@ Go API
 - [VERIFIED] مجموعات endpoints الفعلية تشمل: health، categories، media CRUD/detail/files/metadata/enrich، search، hubs/showcases/franchises/people، indexing/scan/ingest، quality/checksum/migration، streaming/subtitles/previews، TMDB settings/queue، disks/system browse، وadmin login/session/logout.
 - [VERIFIED] المسارات الدقيقة المربوطة في `server/internal/api/server.go` هي مصدر الحقيقة؛ `docs/api/ENDPOINTS.md` مرجع مساعد وقد لا يطابق كل تغيير حديث.
 - [VERIFIED] middleware يسمح CORS بـ `Access-Control-Allow-Origin: *`، ويعلن methods `GET, POST, OPTIONS` رغم وجود handlers فعلية لـ `PUT` و`DELETE`.
+- [VERIFIED] مسارات النقل `/api/transfer/*` و`/api/health` تخدمها **خدمة Copy Bridge المحلية** لا السيرفر المركزي (انظر [ENDPOINTS.md](api/ENDPOINTS.md)). نسخة السيرفر المركزي من هذه المسارات معطّلة افتراضيًا وتُفعّل بـ `NEXORA_SERVER_USB_TRANSFER=true`.
+- [VERIFIED] CORS الخاص بالـ Copy Bridge مضيّق: loopback مسموح دائمًا، وعناوين LAN الخاصة افتراضيًا، ورفض 403 لمناشئ غير مصرح بها؛ يُضبط بـ `NEXORA_COPY_BRIDGE_CORS_ORIGIN`.
 
 ## 10. Data Flow
 
@@ -140,7 +149,7 @@ Admin/UI → POST /api/index
 User → RealVideoPlayerModal → GET /api/media/{id}
   → current file → <video src="/api/stream/file/{fileId}">
   → GET /api/stream/file/{fileId} (عادة مع Range)
-  → Repository.GetVideoFilePath → serveMediaPath → os.Open → http.ServeContent
+  → Repository.GetVideoFilePath → serveCataloguePath → os.Open → http.ServeContent
 ```
 
 - [VERIFIED] عند عدم وجود `id` للملف يبني modal بديلًا `/api/stream?path=...`.
@@ -151,6 +160,7 @@ User → RealVideoPlayerModal → GET /api/media/{id}
 - [VERIFIED] roots تأتي من `NEXORA_MEDIA_ROOTS`، وتفصل بـ OS path-list separator؛ Windows هو البيئة المستهدفة بوضوح لوجود `manager_windows.go`.
 - [VERIFIED] Asset directory (`NEXORA_ASSET_IMAGE_DIR`، افتراضي `assets/images`) يحوي صور metadata cached وpreview JPEGs ويخدمها Go تحت `/assets/images/`.
 - [VERIFIED] `mediaPathAllowed` يقارن المسار المطلق مع configured roots، لكنه أيضًا يسمح **بأي مسار موجود على القرص** بعد فشل المطابقة. هذه حقيقة مهمة للأمان وليست allowlist صارمة كما يوحي الاسم.
+- [VERIFIED] `handleStream` (بمسار من العميل `?path=`) و`handleStreamImage` يخضعان لـ `mediaPathAllowed`. أما `handleStreamByID` (بمعرّف قاعدة البيانات) فيستخدم `serveCataloguePath` الذي يتخطى `mediaPathAllowed` لأن المسار مستخرج من الكتالوج ولا يقبل مسارًا من العميل.
 - [VERIFIED] `handleStreamImage` يفتح صورة محلية ويعمل `io.Copy` مع browser cache يوم واحد.
 
 ## 12. Media Library Architecture
@@ -164,8 +174,8 @@ User → RealVideoPlayerModal → GET /api/media/{id}
 ## 13. Video Streaming Architecture
 
 - [VERIFIED] البث المباشر متاح بـ `GET /api/stream?path=...` و`GET /api/stream/file/{id}`.
-- [VERIFIED] endpoint بالـ ID يقرأ المسار من PostgreSQL أولًا؛ endpoint بالـ path يستقبل المسار مباشرة ثم يمر على `mediaPathAllowed`.
-- [VERIFIED] `serveMediaPath` يفتح الملف بـ `os.Open`، يحصل على stat، يحدد MIME حسب extension إن عرفه، يضع `Accept-Ranges: bytes`، ثم يستدعي `http.ServeContent`.
+- [VERIFIED] endpoint بالـ ID يقرأ المسار من PostgreSQL أولًا ثم يمر على `serveCataloguePath` (بلا `mediaPathAllowed`)؛ endpoint بالـ path يستقبل المسار مباشرة ثم يمر على `mediaPathAllowed`.
+- [VERIFIED] `serveMediaFile` يفتح الملف بـ `os.Open`، يحصل على stat، يحدد MIME حسب extension إن عرفه، يضع `Accept-Ranges: bytes`، ثم يستدعي `http.ServeContent`.
 - [VERIFIED] لا يوجد HLS/DASH manifest ولا Transcoding في stream path الحالي.
 - [INFERRED] هذا يناسب LAN وملفات يقدر browser على فك ترميز codecs/containers الخاصة بها؛ التوافق النهائي مع MKV أو codec معين يعتمد على المتصفح والجهاز.
 
@@ -260,6 +270,7 @@ mousemove over timeline
 - [VERIFIED] filesystem watcher يعمل في goroutine ويراجع root غير المتصل كل 5 ثوانٍ، ويشاهد recursively وفق `NEXORA_WATCH_RECURSIVE`.
 - [VERIFIED] TMDB queue ticker كل 10 ثوانٍ؛ إذا auto-refresh مفعّل، يضيف stale items، ويشغل من 1 إلى 4 workers ثم ينتظرها.
 - [VERIFIED] HTTP server يعالج requests وفق نموذج Go المعتاد لكل request goroutine.
+- [VERIFIED] Copy Bridge يشغّل مهام النسخ في goroutines ويرتب المهام المتزامنة حسب الجهاز (device-scoped scheduling)، مع بث التقدم عبر SSE كل ~350ms وبث أحداث الأجهزة عند التوصيل/الفصل.
 - [VERIFIED] لا توجد worker queue للـ preview generation أو locking لكل cache key.
 
 ## 24. External Services
@@ -281,6 +292,7 @@ mousemove over timeline
 | PostgreSQL + Meilisearch | [VERIFIED] Postgres هو authoritative catalogue؛ Meilisearch index للبحث. | [INFERRED] مناسب للبحث العربي/الإنجليزي السريع؛ يتطلب التعامل مع تأخر مزامنة index. |
 | Disk-based media library | [VERIFIED] paths تبقى على أقراص الخادم ولا تنسخ إلى DB. | [INFERRED] متسق مع مكتبة كبيرة محلية؛ يعتمد على استقرار mount letters/paths. |
 | Browser-local watch progress | [VERIFIED] بسيط ولا يحتاج users table. | [INFERRED] مناسب لتجربة جهاز واحد، لا لتقدم موحد متعدد الأجهزة. |
+| Local Copy Bridge للـ USB | [VERIFIED] خدمة محلية loopback على جهاز العميل تنسخ عبر دفق من السيرفر المركزي، مع خلفيات Storage/Android/iOS. | [INFERRED] مناسب لأن الأجهزة محلية ولا يراها السيرفر؛ انظر ADR-008. |
 
 ## 26. Existing Strengths
 
@@ -294,13 +306,16 @@ mousemove over timeline
 
 ## 27. Current Technical Risks
 
-- [VERIFIED] `mediaPathAllowed` يسمح أي مسار موجود على الجهاز حتى إن كان خارج `MediaRoots`; endpoints تعتمد عليه للبث/الصور وبعض عمليات الملفات.
+- [VERIFIED] `mediaPathAllowed` يسمح أي مسار موجود على الجهاز حتى إن كان خارج `MediaRoots`; `handleStream`/`handleStreamImage` يعتمدان عليه. أما `handleStreamByID` فيستخدم `serveCataloguePath` (مسار الكتالوج بلا `mediaPathAllowed`).
 - [VERIFIED] admin login لديه بيانات افتراضية `admin`/`admin123` إذا لم تضبط البيئة، ويعيد token ثابتًا؛ route middleware لا يتحقق من هذا token لحماية بقية admin write endpoints.
 - [VERIFIED] CORS مفتوح `*`، وmethods المعلنة لا تشمل PUT/DELETE رغم استعمالهما.
 - [VERIFIED] لا يوجد auth/authorization ظاهر حول streaming أو غالبية endpoints الإدارية.
 - [VERIFIED] race محتمل لتوليد preview نفسه مع طلبات متزامنة؛ لا توجد single-flight/lock.
 - [VERIFIED] event watcher لا يحذف record عند remove في `app.Run` callback.
 - [VERIFIED] `README.md` يذكر Plyr/MediaInfo وخصائص لا تظهر جميعها كما هي في code path الحالي؛ التباين قد يسبب قرارات تشغيلية خاطئة.
+- [VERIFIED] Copy Bridge الافتراضي يعمل بـ `LocalSystem` (Session 0)؛ Android MTP (Shell COM) قد يتطلب جلسة مستخدم تفاعلية في بعض إصدارات ويندوز.
+- [VERIFIED] Copy Bridge: نسخ Android MTP يخزّن الملف مؤقتًا بحجمه الكامل قبل النسخ (قيد Shell COM)، لذا يحتاج مساحة في `NEXORA_COPY_BRIDGE_TEMP_DIR`.
+- [VERIFIED] Copy Bridge لا يستخدم token مشتركًا لأوامر النسخ/الإخراج/الإنشاء — مُؤجَّل بقرار المالك؛ الحماية الآن loopback + CORS مضيّق.
 
 ## 28. Bottlenecks and Scalability Concerns
 
@@ -344,6 +359,7 @@ mousemove over timeline
 | TMDB/MAL enrichment | Implemented, configuration-dependent | HTTP clients + DB snapshots/cache | `metadata/*` | [VERIFIED] يحتاج credentials/network. |
 | TMDB automatic refresh | Implemented, disabled by default | 10-second queue runner | `api/server.go` | [VERIFIED] settings default false. |
 | Redis cache/queue | Missing | Compose service only | `compose.yml` | [VERIFIED] |
+| USB copy via local bridge | Implemented | `cmd/copybridge` + `internal/copybridge` + `internal/transfer` backends | `server/internal/copybridge/*`, `server/internal/transfer/*` | [VERIFIED] انظر ADR-008؛ Android يخزّن مؤقتًا، Storage/iOS دفق مباشر. |
 | HLS/DASH/transcoding/ABR | Missing | لا توجد manifests أو pipeline | API/media code | [VERIFIED] |
 | Multi-user server-side progress | Missing | لا schema/API ظاهر | DB/player | [VERIFIED] |
 | Production capacity proof | Unknown | لا benchmarks | repository | [UNKNOWN] |
@@ -360,7 +376,7 @@ mousemove over timeline
 > هذه مقترحات لاحقة فقط؛ لم تُنفذ ضمن مهمة التحليل.
 
 1. [PLANNED] وضع حدود/queue وsingle-flight لتوليد preview thumbnails، أو pre-generate اختياريًا وقت الفهرسة للمكتبات المستخدمة بكثافة.
-2. [PLANNED] فصل path authorization الصارم عن وجود الملف على القرص، وإضافة auth حقيقي وحماية routes الإدارية إذا كان الوصول غير موثوق.
+2. [PLANNED] فصل path authorization الصارم عن وجود الملف على القرص، وإضافة auth حقيقي وحماية routes الإدارية إذا كان الوصول غير موثوق. (نُفّذ جزئيًا: البث بمعرّف قاعدة البيانات يستخدم `serveCataloguePath`، وبقي `handleStream`/`handleStreamImage` خاضعين لـ `mediaPathAllowed`.)
 3. [PLANNED] تحويل subtitle formats غير WebVTT فعليًا أو تقييد القائمة إلى formats قابلة للعرض في browser.
 4. [PLANNED] تحديد سياسة واضحة للـ codec compatibility وقرار transcoding/HLS فقط إذا أثبتت الأجهزة المستهدفة عدم دعم الملفات الأصلية.
 5. [PLANNED] إزالة أو تفعيل dependencies/services غير المستخدمة (Plyr/Redis) بعد قرار مقصود، وتحديث README/API docs لتطابق code.
@@ -388,6 +404,13 @@ mousemove over timeline
 | `server/internal/search/client.go` | Meilisearch indexing/search |
 | `server/internal/quality/*` | duplicates/missing/corruption reports |
 | `server/internal/migration/*` | file copy/resume/checksum workflow |
+| `server/internal/transfer/*` | TransferBackend interface + Storage/Android/iOS backends وPutStream |
+| `server/internal/copybridge/*` | loopback HTTP/SSE، tasks، CORS، remote-path resolution |
+| `server/cmd/copybridge/*` | bridge binary + Windows service SCM lifecycle |
+| `client/src/components/CopyToPhoneModal.jsx` | single-media copy UI إلى الهاتف |
+| `client/src/components/transfer/TransferModal.jsx` | multi-file transfer UI |
+| `client/src/context/TransferContext.jsx` | SSE live jobs/devices وbridge offline state |
+| `scripts/install-bridge-service.bat` | تثبيت خدمة Copy Bridge (أمين) |
 | `server/migrations/*.sql` | PostgreSQL schema evolution |
 | `compose.yml` | local PostgreSQL/Meilisearch/Redis services |
 

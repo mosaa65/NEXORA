@@ -437,40 +437,86 @@ export async function getFileSubtitles(fileId) {
   return requestJSON(`/api/stream/file/${encodeURIComponent(fileId)}/subtitles`);
 }
 
-// USB Transfer API
+export const COPY_BRIDGE_BASE = (import.meta.env.VITE_COPY_BRIDGE_URL || "http://127.0.0.1:32145").replace(/\/$/, "");
+
+export const BRIDGE_OFFLINE_MESSAGE =
+  "خدمة NEXORA Copy Bridge غير متصلة على هذا الجهاز (127.0.0.1:32145). يرجى التأكد من تشغيل الخدمة للنسخ عبر USB.";
+
+export function resolveBridgeURL(path = "") {
+  if (!path) return COPY_BRIDGE_BASE;
+  if (/^https?:\/\//i.test(path)) return path;
+  return `${COPY_BRIDGE_BASE}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
+export function isBridgeOfflineError(err) {
+  const message = err?.message || "";
+  return message.includes("Copy Bridge غير متصلة") || message.includes("Failed to fetch") || message.includes("NetworkError") || message.includes("Load failed");
+}
+
+export async function getBridgeHealth() {
+  try {
+    const res = await fetch(resolveBridgeURL("/api/health"), { method: "GET" });
+    if (!res.ok) return { ok: false };
+    const body = await res.json().catch(() => ({}));
+    return { ok: true, ...body };
+  } catch {
+    return { ok: false };
+  }
+}
+
+async function requestBridgeJSON(path, options = {}) {
+  const url = resolveBridgeURL(path);
+  try {
+    const res = await fetch(url, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers || {})
+      }
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || `Bridge HTTP ${res.status}`);
+    }
+    return await res.json();
+  } catch (err) {
+    if (isBridgeOfflineError(err)) {
+      throw new Error(BRIDGE_OFFLINE_MESSAGE);
+    }
+    throw err;
+  }
+}
+
+// USB Transfer API (Communicates locally with NEXORA Copy Bridge on 127.0.0.1:32145)
 export async function getTransferDevices() {
-  return requestJSON("/api/transfer/devices", { cache: "no-store" });
+  return requestBridgeJSON("/api/transfer/devices");
 }
 
 export async function getTransferDeviceApps(deviceId) {
-  return requestJSON(`/api/transfer/device-apps?device_id=${encodeURIComponent(deviceId || "")}`, {
-    cache: "no-store"
-  });
+  return requestBridgeJSON(`/api/transfer/device-apps?device_id=${encodeURIComponent(deviceId || "")}`);
 }
 
 export async function getTransferAppFolders(deviceId, bundleId) {
-  return requestJSON(`/api/transfer/device-app-folders?device_id=${encodeURIComponent(deviceId || "")}&bundle_id=${encodeURIComponent(bundleId || "")}`, {
-    cache: "no-store"
-  });
+  return requestBridgeJSON(`/api/transfer/device-app-folders?device_id=${encodeURIComponent(deviceId || "")}&bundle_id=${encodeURIComponent(bundleId || "")}`);
 }
 
 export async function startDeviceTransfer(payload) {
-  return requestJSON("/api/transfer/copy", {
+  return requestBridgeJSON("/api/transfer/copy", {
     method: "POST",
     body: JSON.stringify(payload)
   });
 }
 
 export async function getTransferJobs() {
-  return requestJSON("/api/transfer/jobs", { cache: "no-store" });
+  return requestBridgeJSON("/api/transfer/jobs");
 }
 
 export async function getTransferJob(jobId) {
-  return requestJSON(`/api/transfer/job/${encodeURIComponent(jobId)}`, { cache: "no-store" });
+  return requestBridgeJSON(`/api/transfer/job/${encodeURIComponent(jobId)}`);
 }
 
 export async function cancelTransferJob(jobId) {
-  return requestJSON(`/api/transfer/cancel/${encodeURIComponent(jobId)}`, {
+  return requestBridgeJSON(`/api/transfer/cancel/${encodeURIComponent(jobId)}`, {
     method: "POST"
   });
 }
@@ -482,18 +528,18 @@ export async function browseTransferPath(deviceId, path = "", deviceType = "", b
   });
   if (deviceType) params.set("device_type", deviceType);
   if (bundleId) params.set("bundle_id", bundleId);
-  return requestJSON(`/api/transfer/browse?${params.toString()}`, { cache: "no-store" });
+  return requestBridgeJSON(`/api/transfer/browse?${params.toString()}`);
 }
 
 export async function createTransferFolder(payload) {
-  return requestJSON("/api/transfer/mkdir", {
+  return requestBridgeJSON("/api/transfer/mkdir", {
     method: "POST",
     body: JSON.stringify(payload)
   });
 }
 
 export async function ejectTransferDevice(deviceId) {
-  return requestJSON("/api/transfer/eject", {
+  return requestBridgeJSON("/api/transfer/eject", {
     method: "POST",
     body: JSON.stringify({ device_id: deviceId })
   });
@@ -532,4 +578,24 @@ export function resolveAPIURL(path) {
     return path;
   }
   return `${API_BASE}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
+// resolveTransferStreamURL builds the absolute http(s) URL that the local Copy
+// Bridge must fetch over LAN. Using the page origin keeps it pointing at the
+// same NEXORA server the browser was opened from (dev proxy or LAN IP alike).
+export function resolveTransferStreamURL(path) {
+  if (!path) {
+    return "";
+  }
+  if (/^(?:https?:\/\/|data:|blob:)/i.test(path)) {
+    return path;
+  }
+  let origin = API_BASE;
+  if (!/^https?:\/\//i.test(origin)) {
+    origin =
+      typeof window !== "undefined" && window.location
+        ? window.location.origin
+        : "";
+  }
+  return `${origin}${path.startsWith("/") ? path : `/${path}`}`;
 }

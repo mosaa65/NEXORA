@@ -494,7 +494,6 @@ func (s *Service) ListAppFolders(ctx context.Context, deviceID, bundleID string)
 	return folders, nil
 }
 
-
 func (s *Service) StartCopy(ctx context.Context, req CopyRequest) (*TransferJob, error) {
 	paths := req.sourcePaths()
 	if len(paths) == 0 {
@@ -898,6 +897,14 @@ func (s *Service) browserBackendFor(ctx context.Context, deviceID, appID string,
 		return nil, dest, err
 	}
 	return backend, dest, nil
+}
+
+// GetBackendFor builds a ready-to-use backend (and its default destination)
+// for the given device/deviceType. It is the exported entry point used by
+// copybridge stream tasks that need a backend for a CopyRequest, and mirrors
+// browserBackendFor for non-browser flows. The caller must Close the backend.
+func (s *Service) GetBackendFor(ctx context.Context, deviceID, appID string, deviceType DeviceType) (TransferBackend, TransferDestination, error) {
+	return s.browserBackendFor(ctx, deviceID, appID, deviceType)
 }
 
 // ListDevicePath lists the entries directly under a remote folder (Phase 3).

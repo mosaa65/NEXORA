@@ -242,3 +242,65 @@ func (b *GoIOSBackend) Close() error {
 }
 
 var _ TransferBackend = (*GoIOSBackend)(nil)
+
+func (b *GoIOSBackend) PutStream(ctx context.Context, reader io.Reader, size int64, destination string, opts PutOptions) error {
+	client, err := b.requireClient()
+	if err != nil {
+		return err
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
+	mode := afc.WRITE_ONLY_CREATE_TRUNC
+	transferred := int64(0)
+	if opts.ResumeOffset > 0 {
+		mode = afc.WRITE_ONLY_CREATE_APPEND
+		transferred = opts.ResumeOffset
+	}
+
+	out, err := client.Open(destination, mode)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	if opts.OnProgress != nil && transferred > 0 {
+		opts.OnProgress(transferred)
+	}
+
+	bufferSize := int(opts.BufferSize)
+	if bufferSize <= 0 {
+		bufferSize = defaultBufferSize
+	}
+	if bufferSize > 512*1024 {
+		bufferSize = 512 * 1024
+	}
+	buffer := make([]byte, bufferSize)
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+		n, readErr := reader.Read(buffer)
+		if n > 0 {
+			written, writeErr := out.Write(buffer[:n])
+			if writeErr != nil {
+				return writeErr
+			}
+			transferred += int64(written)
+			if opts.OnProgress != nil {
+				opts.OnProgress(transferred)
+			}
+		}
+		if readErr == io.EOF {
+			return nil
+		}
+		if readErr != nil {
+			return readErr
+		}
+	}
+}

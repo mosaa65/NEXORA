@@ -84,7 +84,7 @@ func (s *Server) handleStreamByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.serveMediaPath(w, r, path)
+	s.serveCataloguePath(w, r, path)
 }
 
 // handleFilePreview returns a cached FFmpeg frame for timeline hovering. The
@@ -129,6 +129,20 @@ func (s *Server) serveMediaPath(w http.ResponseWriter, r *http.Request, path str
 		return
 	}
 
+	s.serveMediaFile(w, r, path)
+}
+
+// serveCataloguePath streams a file whose path was resolved from the catalogue
+// database (GetVideoFilePath), not from user-supplied query input. Catalogued
+// paths are already validated at scan time and may legitimately live outside
+// the configured MediaRoots (e.g. network shares listed as disks). Re-validating
+// them here caused HTTP 403 failures for playlist/stream-by-id and for the copy
+// bridge fetching /api/stream/file/{id}; the catalogue is the source of truth.
+func (s *Server) serveCataloguePath(w http.ResponseWriter, r *http.Request, path string) {
+	s.serveMediaFile(w, r, path)
+}
+
+func (s *Server) serveMediaFile(w http.ResponseWriter, r *http.Request, path string) {
 	file, err := os.Open(path)
 	if err != nil {
 		status := http.StatusInternalServerError

@@ -1,6 +1,8 @@
 # 📡 NEXORA API Endpoints Reference
 
 > دليل نقاط الاتصال البرمجية الخاصة بخادم NEXORA (Go Backend API).
+>
+> **ملاحظة مهمة:** مسارات النقل عبر USB (`/api/transfer/*`) و`/api/health` الخاصة بالنسخ تُدار بواسطة **خدمة NEXORA Copy Bridge المحلية** على `http://127.0.0.1:32145` وليست من مسارات السيرفر المركزي — راجع قسم **Copy Bridge** بالأسفل. نسخة السيرفر المركزي من `/api/transfer/*` معطّلة افتراضيًا وتُفعّل بـ `NEXORA_SERVER_USB_TRANSFER=true`.
 
 ---
 
@@ -97,5 +99,31 @@
 
 | المسار | الطريقة | الوصف |
 |--------|---------|-------|
-| `/api/stream/file/:fileId` | `GET` | بث مباشر لملف الفيديو مع دعم HTTP Range |
+| `/api/stream?path=...` | `GET` | بث ملف بمسار يُقدّمه العميل، ويخضع لفحص `mediaPathAllowed` |
+| `/api/stream/file/:fileId` | `GET` | بث مباشر لملف الفيديو مع دعم HTTP Range؛ يُستخرج المسار من الكتالوج (`serveCataloguePath`) ولا يقبل مسارًا من العميل |
+| `/api/stream/file/:fileId/subtitles` | `GET` | قائمة الترجمات الخارجية المرافقة للملف |
 | `/api/stream/file/:fileId/subtitles/:index` | `GET` | استخراج وتوفير ملف الترجمة WebVTT |
+| `/api/stream/file/:fileId/preview?at=...` | `GET` | صورة معاينة زمنية (JPEG) للـ timeline |
+
+---
+
+## 🔌 Copy Bridge (خدمة محلية على جهاز العميل)
+
+> Base URL: `http://127.0.0.1:32145`. الخدمة loopback-only افتراضيًا. الطلبات المتقاطعة من مناشئ غير مصرح بها تُرفض بـ `403` (loopback وعناوين LAN الخاصة مسموحة افتراضيًا؛ التحكم عبر `NEXORA_COPY_BRIDGE_CORS_ORIGIN`).
+
+| المسار | الطريقة | الوصف |
+|--------|---------|-------|
+| `/api/health` | `GET` | فحص حالة خدمة الـ Bridge (يُستخدم لكشف الاتصال في الواجهة) |
+| `/api/transfer/devices` | `GET` | قائمة أجهزة USB / Android / iOS الموصولة بجهاز العميل |
+| `/api/transfer/device-apps?device_id=...` | `GET` | تطبيقات iOS التي تدعم File Sharing |
+| `/api/transfer/device-app-folders?device_id=...&bundle_id=...` | `GET` | مجلدات تطبيق iOS |
+| `/api/transfer/browse?device_id=...&path=...` | `GET` | تصفح مسار على الجهاز |
+| `/api/transfer/mkdir` | `POST` | إنشاء مجلد على الجهاز |
+| `/api/transfer/eject` | `POST` | إخراج/فصل الجهاز بأمان |
+| `/api/transfer/copy` | `POST` | بدء مهمة نسخ (يدعم `source_url` و`source_urls`، و`file_id`/`file_ids`، والتقدم) |
+| `/api/transfer/jobs` | `GET` | قائمة مهام النسخ |
+| `/api/transfer/job/:id` | `GET` | تفاصيل مهمة واحدة |
+| `/api/transfer/cancel/:id` | `POST` | إلغاء مهمة |
+| `/api/transfer/events` | `GET` (SSE) | بث مباشر لتقدم المهام وأحداث الأجهزة |
+
+**سلوك النسخ حسب نوع الجهاز:** USB Storage وiOS يبثّان الملف مباشرة (zero-spool)؛ Android MTP يخزّن الملف مؤقتًا في `NEXORA_COPY_BRIDGE_TEMP_DIR` ثم ينسخه (قيد Shell COM).

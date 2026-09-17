@@ -3,7 +3,11 @@ package transfer
 import (
 	"context"
 	"fmt"
+	"io"
+	"os"
 	"os/exec"
+	"path"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -115,7 +119,7 @@ foreach ($name in '%s'.Split('|')) {
 func (b *AndroidBackend) Put(ctx context.Context, source, destination string, opts PutOptions) error {
 	parts := b.targetParts(destination)
 	targetSpec := strings.ReplaceAll(strings.Join(parts, "|"), "'", "''")
-	fileName := pathLeaf(source)
+	fileName := leafName(source)
 	deviceEscaped := strings.ReplaceAll(b.deviceName, "'", "''")
 	sourceEscaped := strings.ReplaceAll(source, "'", "''")
 
@@ -215,6 +219,62 @@ func (b *AndroidBackend) waitForMTPFile(ctx context.Context, targetParts []strin
 			}
 		}
 	}
+}
+
+// PutStream is not directly supported by MTP Shell COM without a temp file.
+// We implement it by writing the reader to a temp file first, as MTP Shell API
+// requires a source file path for CopyHere. The spool file is named after the
+// destination's base name so the file lands on the phone with the correct
+// title, and only the folder part of the destination is passed to Put (the
+// Android backend derives the target name from the source file's leaf).
+func (b *AndroidBackend) PutStream(ctx context.Context, reader io.Reader, size int64, destination string, opts PutOptions) error {
+	dir, base := androidDestinationParts(destination)
+
+	tempFile, err := os.CreateTemp("", "nexora-mtp-stream-*.bin")
+	if err != nil {
+		return err
+	}
+	tempPath := tempFile.Name()
+	defer func() { _ = os.Remove(tempPath) }()
+
+	if _, err := io.Copy(tempFile, reader); err != nil {
+		tempFile.Close()
+		return err
+	}
+	if err := tempFile.Close(); err != nil {
+		return err
+	}
+
+	// Rename the spool to the destination's base name so MTP preserves it.
+	spoolPath := filepath.Join(filepath.Dir(tempPath), base)
+	if spoolPath != tempPath {
+		if err := os.Remove(spoolPath); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		if err := os.Rename(tempPath, spoolPath); err == nil {
+			tempPath = spoolPath
+		}
+	}
+
+	return b.Put(ctx, tempPath, dir, opts)
+}
+
+// androidDestinationParts splits a full destination path into the MTP folder
+// (dir) and the desired file name (base). The Android backend always treats the
+// folder part as the MTP target and derives the file name from the source, so
+// this normalizes both Windows and forward-slash paths.
+func androidDestinationParts(destination string) (dir, base string) {
+	normalized := strings.ReplaceAll(destination, "\\", "/")
+	hasTrailingSlash := strings.HasSuffix(normalized, "/")
+	dir = path.Dir(normalized)
+	base = leafName(normalized)
+	if hasTrailingSlash || base == "" || base == "." || base == "/" || base == ".." {
+		base = "stream-file.bin"
+	}
+	if dir == "." || dir == "" {
+		dir = ""
+	}
+	return dir, base
 }
 
 func (b *AndroidBackend) Stat(ctx context.Context, remotePath string) (RemoteEntry, error) {

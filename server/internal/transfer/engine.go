@@ -34,11 +34,11 @@ type TransferConfig struct {
 // DefaultTransferConfig returns the recommended starting configuration.
 func DefaultTransferConfig() TransferConfig {
 	return TransferConfig{
-		BufferSize:         defaultBufferSize,
-		MaxRetries:         3,
-		RetryInitialDelay:  500 * time.Millisecond,
-		RetryMaxDelay:      4 * time.Second,
-		VerifyMode:         VerifySize,
+		BufferSize:           defaultBufferSize,
+		MaxRetries:           3,
+		RetryInitialDelay:    500 * time.Millisecond,
+		RetryMaxDelay:        4 * time.Second,
+		VerifyMode:           VerifySize,
 		PerDeviceConcurrency: 1,
 	}
 }
@@ -51,13 +51,13 @@ type BackendFactory func(device Device) (TransferBackend, error)
 // workers and a registry of active jobs, and delegates folder/transfer work to
 // the appropriate backend.
 type TransferEngine struct {
-	config   TransferConfig
-	factory  BackendFactory
-	verify   *Verifier
-	sched    *Scheduler
-	mu       sync.RWMutex
-	active   map[string]*TransferJobV2
-	cancels  map[string]context.CancelFunc
+	config  TransferConfig
+	factory BackendFactory
+	verify  *Verifier
+	sched   *Scheduler
+	mu      sync.RWMutex
+	active  map[string]*TransferJobV2
+	cancels map[string]context.CancelFunc
 
 	// notify is invoked on every meaningful job transition (progress tick,
 	// phase/status change, terminal state). It is expected to be set once,
@@ -111,8 +111,8 @@ func (e *TransferEngine) GetJob(id string) (*TransferJobV2, bool) {
 // backendFor builds a backend for the given destination using the factory.
 func (e *TransferEngine) backendFor(d TransferDestination) (TransferBackend, error) {
 	device := Device{
-		ID:        d.DeviceID,
-		Type:      d.DeviceType,
+		ID:   d.DeviceID,
+		Type: d.DeviceType,
 	}
 	return e.factory(device)
 }

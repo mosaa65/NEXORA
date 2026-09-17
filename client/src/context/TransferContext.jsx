@@ -1,9 +1,11 @@
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
 import {
   getTransferJobs,
   startDeviceTransfer,
   cancelTransferJob,
-  resolveAPIURL
+  resolveTransferStreamURL,
+  resolveBridgeURL,
+  getBridgeHealth
 } from "../lib/api.js";
 
 const TransferContext = createContext(null);
@@ -18,6 +20,18 @@ export function TransferProvider({ children }) {
   const [devices, setDevices] = useState([]);
   const [isCenterExpanded, setIsCenterExpanded] = useState(false);
   const [centerDismissed, setCenterDismissed] = useState(false);
+  // null = unknown/checking, true = bridge reachable, false = offline.
+  const [bridgeOnline, setBridgeOnline] = useState(null);
+
+  const checkBridge = useCallback(async () => {
+    const health = await getBridgeHealth();
+    setBridgeOnline(health.ok === true);
+    return health.ok === true;
+  }, []);
+
+  useEffect(() => {
+    checkBridge();
+  }, [checkBridge]);
 
   // Live updates come over a single Server-Sent Events stream: job progress
   // (throttled to ~2 Hz server-side) and instant device hot-plug changes.
@@ -51,35 +65,47 @@ export function TransferProvider({ children }) {
       const res = await getTransferJobs();
       const jobs = Array.isArray(res?.jobs) ? res.jobs : [];
       setActiveJobs(jobs);
+      setBridgeOnline(true);
     } catch {
       // ignore transient network errors
     }
   }, []);
 
   useEffect(() => {
-    const source = new EventSource(resolveAPIURL("/api/transfer/events"));
-    source.addEventListener("jobs", (event) => {
-      try {
-        const payload = JSON.parse(event.data);
-        if (Array.isArray(payload.jobs)) setActiveJobs(payload.jobs);
-      } catch {}
-    });
-    source.addEventListener("job", (event) => {
-      try {
-        const payload = JSON.parse(event.data);
-        applyJobEvent(payload.job);
-      } catch {}
-    });
-    source.addEventListener("devices", (event) => {
-      try {
-        const payload = JSON.parse(event.data);
-        if (Array.isArray(payload.devices)) setDevices(payload.devices);
-      } catch {}
-    });
-    source.onerror = () => {
-      // EventSource reconnects automatically; the server re-seeds snapshots.
+    let source;
+    try {
+      source = new EventSource(resolveBridgeURL("/api/transfer/events"));
+      source.onopen = () => setBridgeOnline(true);
+      source.addEventListener("jobs", (event) => {
+        setBridgeOnline(true);
+        try {
+          const payload = JSON.parse(event.data);
+          if (Array.isArray(payload.jobs)) setActiveJobs(payload.jobs);
+        } catch {}
+      });
+      source.addEventListener("job", (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          applyJobEvent(payload.job);
+        } catch {}
+      });
+      source.addEventListener("devices", (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          if (Array.isArray(payload.devices)) setDevices(payload.devices);
+        } catch {}
+      });
+      source.onerror = () => {
+        // EventSource reconnects automatically when bridge is ready
+        setBridgeOnline(false);
+      };
+    } catch {
+      // Bridge not reachable
+      setBridgeOnline(false);
+    }
+    return () => {
+      if (source) source.close();
     };
-    return () => source.close();
   }, [applyJobEvent]);
 
   // File Selection Helpers
@@ -181,10 +207,19 @@ export function TransferProvider({ children }) {
         throw new Error("لم يتم العثور على مسارات أو معرفات صالحة للملفات المحددة");
       }
 
+      const sourceURLs = filesToTransfer
+        .map((f) => {
+          const id = f.fileId || (Number(f.id) > 0 ? Number(f.id) : null);
+          return id ? resolveTransferStreamURL(`/api/stream/file/${id}`) : "";
+        })
+        .filter(Boolean);
+
       const payload = {
         device_id: deviceId,
         source_path: sourcePaths[0] || "",
         source_paths: sourcePaths,
+        source_url: sourceURLs[0] || "",
+        source_urls: sourceURLs,
         file_id: fileIds[0] || 0,
         file_ids: fileIds,
         target_app: targetApp,
@@ -253,6 +288,8 @@ export function TransferProvider({ children }) {
         activeJobs,
         devices,
         hasRunningJobs,
+        bridgeOnline,
+        checkBridge,
         isCenterExpanded,
         setIsCenterExpanded,
         toggleCenterExpanded: () => setIsCenterExpanded((prev) => !prev),

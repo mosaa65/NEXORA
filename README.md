@@ -453,6 +453,71 @@ npm run dev
 
 ---
 
+## Copy Bridge (USB Transfer) | خدمة النسخ عبر USB
+
+The **NEXORA Copy Bridge** is a small optional Windows service that runs **on the client/viewing PC** (not on the central server). It exposes a loopback-only HTTP API on `http://127.0.0.1:32145` that the NEXORA web UI in the same browser calls to enumerate USB devices (USB storage, Android MTP, iPhone via usbmuxd/AFC), browse them, create folders, eject them, and stream media directly onto them.
+
+Why a local agent instead of the central server: USB devices are physically attached to one machine, and a browser cannot access them. The bridge keeps device access scoped to that one PC, while the central server stays the single catalogue/streaming authority.
+
+### How a copy works
+
+1. The web UI resolves a stream URL for the selected media (`/api/stream/file/{id}` on the central server, HTTP Range capable) and sends it to the bridge.
+2. The bridge opens the source stream and pipes it to the device:
+   - **USB storage** — zero-spool direct stream (`StorageBackend.PutStream`).
+   - **iPhone (AFC)** — direct stream with resume/buffer support (`GoIOSBackend.PutStream`); the destination folder is created first.
+   - **Android (MTP Shell COM)** — the Shell API only accepts a local file, so the stream is spooled to a temporary file named after the target, copied, then deleted. This constraint is documented and accepted.
+
+### Build
+
+```bash
+cd server
+go build -o nexora-bridge.exe ./cmd/copybridge
+```
+
+### Install as a Windows service
+
+Run an elevated (Administrator) prompt:
+
+```bat
+scripts\install-bridge-service.bat
+```
+
+This registers the service name `NEXORACopyBridge`, configures restart-on-failure, and opens firewall port `32145`. To remove it:
+
+```bat
+scripts\uninstall-bridge-service.bat
+```
+
+For manual testing without installing, run:
+
+```bat
+server\nexora-bridge.exe -debug
+```
+
+### Configuration
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `NEXORA_COPY_BRIDGE_ADDR` | `127.0.0.1:32145` | Bind address of the local bridge API. |
+| `NEXORA_COPY_BRIDGE_CORS_ORIGIN` | *(unset)* | Comma-separated allowed browser origins, or `*` to allow all. When unset, loopback origins always work and private/LAN origins (RFC 1918, link-local, ULA) are also allowed; public internet origins are rejected with `403`. |
+| `NEXORA_COPY_BRIDGE_TEMP_DIR` | `%TEMP%\nexora-copybridge` | Root for bridge temporary/spool files. |
+| `NEXORA_ANDROID_TARGET` | `Download` | Default MTP target folder on Android. |
+| `NEXORA_IOS_BUNDLE_ID` | `org.videolan.vlc-ios` | Optional preferred iOS File-Sharing app. |
+| `VITE_COPY_BRIDGE_URL` *(client build)* | `http://127.0.0.1:32145` | Override the bridge URL used by the web UI. |
+
+### Operating constraints
+
+- **Windows Session 0**: the service runs as `LocalSystem` in Session 0. This is ideal for USB storage and iOS (usbmuxd), but some Windows builds require an interactive user session for **Android MTP (Shell COM)**. If MTP devices do not appear, either run the bridge interactively (`nexora-bridge.exe -debug`) or reconfigure the service to log on as the interactive user:
+  `sc.exe config NEXORACopyBridge obj= ".\YourUser" password= "YourPassword"`.
+- **Android MTP spooling**: unlike storage/iOS, Android transfers temporarily store the full file in `NEXORA_COPY_BRIDGE_TEMP_DIR` before the MTP copy. Ensure that drive has free space.
+- **Central server**: `/api/transfer/*` on the central server is disabled unless `NEXORA_SERVER_USB_TRANSFER=true`; leave it off so USB devices remain local to the bridge PC.
+
+### Troubleshooting
+
+If the bridge is not running, the web UI shows a banner explaining that the service is offline and points to `scripts/install-bridge-service.bat`. The same message is returned when a copy/browse request cannot reach `127.0.0.1:32145`.
+
+---
+
 ## Project Structure
 
 ```text
@@ -470,20 +535,24 @@ NEXORA/
 │   └── vite.config.js
 ├── server/
 │   ├── cmd/
-│   │   └── api/             # Go Application Entry Point
+│   │   ├── api/             # Go Application Entry Point
+│   │   └── copybridge/      # Local USB Copy Bridge Windows service entry point
 │   ├── internal/
 │   │   ├── api/             # HTTP Handlers & Streaming endpoints
 │   │   ├── app/             # Application lifecycle
+│   │   ├── copybridge/      # Loopback-only bridge HTTP server, jobs, SSE
 │   │   ├── db/              # Postgres DB connection & queries
 │   │   ├── media/           # FFmpeg video processor & thumbnail generator
 │   │   ├── metadata/        # TMDB/MAL scrapers & image caching
 │   │   ├── migration/       # File preview & multi-threaded copy engine
 │   │   ├── scanner/         # Disk scanner, Regex parser, fsnotify watcher
-│   │   └── search/          # Meilisearch indexing client
+│   │   ├── search/          # Meilisearch indexing client
+│   │   └── transfer/        # USB storage / Android MTP / iOS AFC backends
 │   ├── migrations/          # 0001_init_schema.sql
 │   ├── go.mod
 │   └── go.sum
 ├── Screenshots/             # Application UI Screenshots
+├── scripts/                 # install/uninstall-bridge-service.bat
 ├── compose.yml              # Docker Compose for PostgreSQL, Meilisearch, Redis
 ├── .env.example             # Global Environment Specification
 └── README.md
@@ -499,6 +568,7 @@ NEXORA/
 | Instant Catalog Search | Empowers lounge customers to find any movie or episode in milliseconds in Arabic or English. |
 | Offline Metadata Enrichment | Provides full posters, banners, plot summaries, and IMDB ratings without needing continuous internet access. |
 | High-Speed LAN Streaming | Streams 4K and 1080p content across local network PCs smoothly with full seeking support. |
+| One-Click USB Copy | Copies movies directly to USB drives, Android phones (MTP), and iPhones (AFC) from the browser via the local Copy Bridge, without routing device access through the central server. |
 | Storage Migration & Cleanup | Helps lounge administrators organize chaotic hard drives, detect duplicates, and identify missing episodes. |
 
 ---
@@ -527,6 +597,8 @@ NEXORA/
 | `/api/stream/file/{id}` | `GET` | Streams imported video file by database ID with Range headers. |
 | `/api/migration/preview` | `POST` | Generates disk reorganization diff preview. |
 | `/api/migration/copy` | `POST` | Copies files to a target directory via resumable `.nexora-part` files and SHA-256 validation. Include `"removeSource": true` only to remove originals after verification. |
+
+> **Local Copy Bridge API:** the USB transfer routes (`/api/transfer/devices`, `/api/transfer/browse`, `/api/transfer/mkdir`, `/api/transfer/eject`, `/api/transfer/copy`, `/api/transfer/jobs`, `/api/transfer/job/{id}`, `/api/transfer/cancel/{id}`, `/api/transfer/events`, `/api/health`) are served by the **local bridge** on `http://127.0.0.1:32145`, not by the central Go API. See [Copy Bridge (USB Transfer)](#copy-bridge-usb-transfer--خدمة-النسخ-عبر-usb).
 
 ---
 
@@ -560,14 +632,16 @@ erDiagram
 🇺🇸 **English**
 
 - **LAN Network Isolation:** Designed for internal lounge deployment behind firewalls; external ports are not exposed publicly.
-- **Path Traversal Protection:** Streaming and migration endpoints validate source and target paths against configured `NEXORA_MEDIA_ROOTS` to prevent directory traversal attacks.
+- **Path Traversal Protection:** Streaming and migration endpoints validate source and target paths against configured `NEXORA_MEDIA_ROOTS` to prevent directory traversal attacks. Stream-by-database-ID (`/api/stream/file/{id}`) resolves the path from the catalogue only and never accepts a client-supplied path.
+- **Local Bridge Origin Control:** The Copy Bridge binds to loopback and rejects cross-origin browser requests from unapproved origins (loopback and LAN origins allowed by default; set `NEXORA_COPY_BRIDGE_CORS_ORIGIN` to restrict or `*` to allow all).
 - **Isolated Credentials:** Sensitive database and API keys are managed exclusively via `.env` environment variables.
 - **Input Sanitization:** Search and scan parameters are validated before database execution.
 
 🇸🇦 **العربية**
 
 - **عزل الشبكة المحلية:** صُمّم للنشر الداخلي خلف جدران الحماية بالاستراحات؛ ولا تُعرّض المنافذ للخارج.
-- **الحماية من مسارات الملفات الضارة:** تتحقق نقاط البث والنقل من مسارات المصدر والوجهة مقابل المجلدات المسموحة `NEXORA_MEDIA_ROOTS` لتفادي هجمات القفز بين المجلدات.
+- **الحماية من مسارات الملفات الضارة:** تتحقق نقاط البث والنقل من مسارات المصدر والوجهة مقابل المجلدات المسموحة `NEXORA_MEDIA_ROOTS` لتفادي هجمات القفز بين المجلدات. أما البث عبر معرّف قاعدة البيانات (`/api/stream/file/{id}`) فيستخرج المسار من الكتالوج فقط ولا يقبل مسارًا من العميل.
+- **التحكم بمنشأ الطلبات لخدمة الجسر:** ترتبط خدمة Copy Bridge بالـ loopback وترفض الطلبات المتقاطعة من مناشئ غير مصرح بها (يُسمح افتراضيًا بـ loopback وعناوين الشبكة المحلية، ويمكن التقييد عبر `NEXORA_COPY_BRIDGE_CORS_ORIGIN` أو السماح بالكل عبر `*`).
 - **عزل الاعتمادات:** تُدار الاعتمادات الحساسة عبر ملف `.env` المستثنى من المستودع.
 - **تعقيم المدخلات:** يتم التحقق من كافة معلمات الاستعلام والبحث قبل التنفيذ في قاعدة البيانات.
 
