@@ -12,17 +12,18 @@ Browser
 React Application
   ├─ JSON requests ──────────────────────────────┐
   ├─ native <video> media requests ───────────────┼──► Go API
-  └─ preview image requests ──────────────────────┘      ├─ PostgreSQL
-                                                           ├─ Meilisearch
-                                                           ├─ Media Storage / filesystem
-                                                           ├─ Asset image directory
-                                                           ├─ FFmpeg / FFprobe executables
-                                                           ├─ TMDB / MAL when configured
-                                                           └─ scanner, filesystem watcher, TMDB queue worker
+  ├─ preview image requests ──────────────────────┤      ├─ PostgreSQL
+  └─ USB device requests ───► Local Copy Bridge ──┘      ├─ Meilisearch
+                              (127.0.0.1:32145)          ├─ Media Storage / filesystem
+                                   │                     ├─ Asset image directory
+                                   └─ USB Storage /      ├─ FFmpeg / FFprobe executables
+                                      Android MTP /      ├─ TMDB / MAL when configured
+                                      iOS AFC            └─ scanner, watcher, TMDB queue worker
 ```
 
 - React/Vite يقدم الواجهة، ويستخدم `client/src/lib/api.js` لاستهلاك API.
 - Go (`net/http`) يقدم REST API، streaming، الوصول إلى PostgreSQL، وorchestration لعمليات الوسائط والـ metadata.
+- **Local Copy Bridge** خدمة Go محلية اختيارية على جهاز العميل (`server/cmd/copybridge`) تربط USB وتنسخ إليه عبر دفق من السيرفر المركزي. السيرفر المركزي لا يرى أجهزة العميل.
 - PostgreSQL هو المخزن الدائم للكتالوج والملفات الوصفية والإعدادات والعلاقات.
 - Meilisearch يحتفظ بفهرس بحث مشتق من بيانات PostgreSQL.
 - ملفات الفيديو الأصلية تبقى على نظام الملفات؛ قاعدة البيانات تحتفظ بالـ paths وmetadata فقط.
@@ -101,6 +102,14 @@ React Application
 
 TMDB هو provider الأساسي عند توفر الإعدادات؛ MAL fallback خاص بالـ anime. تحفظ النتائج/snapshots والصور محليًا وفق الكود والإعدادات. فشل network أو credentials ليس سببًا لاستبدال الكتالوج المحلي كمصدر حقيقة.
 
+### 3.9 Local Copy Bridge
+
+**المسؤوليات:** تشغيل خادم HTTP محلي على `127.0.0.1:32145`، تعداد أجهزة USB وAndroid (MTP) وiOS (AFC) على جهاز العميل، تصفحها وإنشاء المجلدات وإخراجها، واستقبال طلبات النسخ وجدولة مهامها وتحديث تقدمها عبر SSE.
+
+**لا مسؤولية له عن:** كتالوج الوسائط، أو مصدر الحقيقة للملفات، أو تشغيل الفيديو، أو تخزين الملفات بشكل دائم. هو **قناة نقل محلية** فقط.
+
+**الحد الفعلي:** `server/cmd/copybridge` (binary + Windows service `NEXORACopyBridge`) و`server/internal/copybridge` (HTTP/SSE/jobs) و`server/internal/transfer` (backends). الواجهة تصل إليه عبر `client/src/lib/api.js` و`TransferContext.jsx`، والسيرفر المركزي يبقى مصدر `/api/stream/file/{id}`.
+
 ## 4. Layer Responsibilities
 
 | Layer | مسؤول عن | ليس مسؤولًا عن |
@@ -110,6 +119,7 @@ TMDB هو provider الأساسي عند توفر الإعدادات؛ MAL fallb
 | PostgreSQL | catalogue and persistent data | media bytes وpreview file cache |
 | Meilisearch | fast derived search | authoritative catalogue ownership |
 | Media storage | original content and external sidecar assets | API authorization وcatalogue identity وحده |
+| Local Copy Bridge | USB/MTP/AFC device access والنسخ المباشر إلى أجهزة العميل | catalogue ownership، streaming، أو permanent storage |
 | FFmpeg/FFprobe | inspection/verification/derived processing | regular streaming/playback engine |
 
 ## 5. Data Flow
@@ -191,7 +201,7 @@ User chooses file
   → VideoPlayer passes URL to native <video>
   → browser requests GET /api/stream/file/{id} (often with Range)
   → Go looks up path in PostgreSQL
-  → mediaPathAllowed
+  → serveCataloguePath (DB-resolved, trusted) or mediaPathAllowed for client-supplied ?path=
   → os.Open + file.Stat
   → Accept-Ranges: bytes + http.ServeContent
   → browser decodes supported container/codec
@@ -210,6 +220,21 @@ timeline hover
   → /api/stream/file/{id}/preview?at={bucket}
   → existing disk JPEG OR FFmpeg single-frame generation
   → redirect to /assets/images/previews/...
+```
+
+### 7.2 Copy-to-device (USB) flow
+
+```text
+User selects media + target device in browser
+  → browser calls local Copy Bridge POST /api/transfer/copy
+  → bridge prepares sources: source_url (/api/stream/file/{id}) or local source_path
+  → bridge opens source stream (HTTP Range from central server, or local file)
+  → backend.Connect + backend.Mkdir(remoteDir)
+  → backend.PutStream(reader, size, remotePath)
+       ├─ Storage: direct write, zero-spool
+       ├─ iOS (AFC): direct write with resume/buffer, folder created first
+       └─ Android (MTP): spool temp file named after target, Shell CopyHere, delete
+  → progress + phase pushed to browser via SSE /api/transfer/events
 ```
 
 ## 8. Caching Responsibilities
@@ -242,6 +267,7 @@ Redis is not assigned a runtime caching responsibility in current application co
 - **Meilisearch:** يصل إليه Go `search.Client`; browser يستخدم `/api/search`.
 - **TMDB/MAL:** يصل إليهما Go metadata layer، لا React مباشرة.
 - **Filesystem/FFmpeg/FFprobe:** ينفذها Go host فقط.
+- **Local Copy Bridge:** browser يتصل بـ `127.0.0.1:32145` مباشرة (loopback)، والـ bridge يقرأ من السيرفر المركزي عبر `/api/stream/file/{id}` أو من ملف محلي. الأجهزة لا تُنقل إلى السيرفر المركزي.
 - **Docker Compose:** يشغّل PostgreSQL وMeilisearch وRedis؛ لا يشغّل frontend أو Go API في ملف Compose الحالي.
 
 ## 11. Decision References
@@ -254,17 +280,22 @@ Redis is not assigned a runtime caching responsibility in current application co
 - ADR-004: PostgreSQL as Catalogue Source of Truth
 - ADR-005: Meilisearch as Derived Search Index
 - ADR-006: FFmpeg and FFprobe as External Media Processing Tools
+- ADR-007: Provider-ID Related Titles Graph
+- ADR-008: Local Copy Bridge for USB Device Transfer
 
 ## 12. Known Risks and Non-Decisions
 
 هذه ليست أوامر إصلاح تلقائية:
 
-- path authorization الحالي يسمح مسارًا موجودًا خارج configured roots في `mediaPathAllowed`.
+- path authorization: `handleStream` (بمسار من العميل `?path=`) و`handleStreamImage` يخضعان لـ `mediaPathAllowed`، بينما البث بمعرّف قاعدة البيانات (`/api/stream/file/{id}`) يستخدم مسار الكتالوج مباشرة عبر `serveCataloguePath` ولا يقبل مسارًا من العميل.
 - admin authentication الحالي token ثابت وroute protection غير ظاهر لمعظم admin writes.
 - preview thumbnail generation لا يستخدم single-flight/lock للطلب الأول المتزامن.
 - subtitle formats الخارجية لا تتحول كلها إلى WebVTT.
 - watch progress محلي للمتصفح فقط.
 - watcher لا يظهر أنه يحذف database record عند file removal.
+- Copy Bridge: الافتراضي يعمل كـ `LocalSystem` (Session 0)، وبعض إصدارات ويندوز قد تتطلب جلسة مستخدم تفاعلية لـ Android MTP (Shell COM).
+- Copy Bridge: نسخ Android MTP يستهلك مساحة مؤقتة بحجم الملف (قيد Shell COM)، ويجب أن تتوفر مساحة في `NEXORA_COPY_BRIDGE_TEMP_DIR`.
+- Copy Bridge: لا يوجد token مشترك للأوامر الحساسة — مُؤجَّل بقرار المالك؛ الحماية الحالية هي loopback + تضييق CORS.
 - توجد فجوة بين بعض docs القديمة والكود الحالي، مثل Plyr/Redis/Transcoding.
 
 راجع [`PROJECT_ANALYSIS.md`](PROJECT_ANALYSIS.md) قبل تغيير أي من هذه المناطق.

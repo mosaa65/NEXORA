@@ -6,7 +6,8 @@ import {
   browseTransferPath,
   createTransferFolder,
   openFileLocation,
-  ejectTransferDevice
+  ejectTransferDevice,
+  BRIDGE_OFFLINE_MESSAGE
 } from "../../lib/api.js";
 import { normalizeTransferDevices } from "../../lib/transferDevices.js";
 
@@ -31,7 +32,9 @@ export default function TransferModal() {
     isTransferModalOpen,
     closeTransferModal,
     startTransfer,
-    devices: streamedDevices
+    devices: streamedDevices,
+    bridgeOnline,
+    checkBridge
   } = useTransfer();
 
   // 1. Devices State
@@ -411,6 +414,28 @@ export default function TransferModal() {
         </header>
 
         {/* Alerts Banner */}
+        {bridgeOnline === false && (
+          <aside aria-label="تنبيه خدمة النسخ" className="mx-6 mt-3 rounded-xl border border-amber-500/40 bg-amber-950/60 p-3 text-xs text-amber-200">
+            <div className="flex items-start gap-2">
+              <span className="text-base leading-none">🔌</span>
+              <div className="flex-1">
+                <p className="font-black text-amber-300">خدمة NEXORA Copy Bridge غير متصلة</p>
+                <p className="mt-1 leading-relaxed">{BRIDGE_OFFLINE_MESSAGE}</p>
+                <p className="mt-1 text-[11px] text-amber-200/80">
+                  شغّل <span className="font-mono">scripts/install-bridge-service.bat</span> بصلاحيات المسؤول، ثم أعد المحاولة.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={checkBridge}
+                className="shrink-0 rounded-lg border border-amber-400/40 bg-amber-500/20 px-2.5 py-1 font-bold text-amber-100 transition hover:bg-amber-500/30"
+              >
+                إعادة المحاولة
+              </button>
+            </div>
+          </aside>
+        )}
+
         {errorMsg && (
           <aside aria-label="تنبيه الأخطاء" className="mx-6 mt-3 rounded-xl border border-red-500/40 bg-red-950/70 p-3 text-xs font-bold text-red-200 flex items-center justify-between">
             <span>⚠️ {errorMsg}</span>

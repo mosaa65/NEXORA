@@ -11,5 +11,6 @@
 | [ADR-005](ADR-005-meilisearch-derived-search-index.md) | Meilisearch as Derived Search Index | Existing / Verified |
 | [ADR-006](ADR-006-ffmpeg-ffprobe-media-processing.md) | FFmpeg and FFprobe as External Media Processing Tools | Existing / Verified |
 | [ADR-007](ADR-007-provider-id-related-titles.md) | Provider-ID Related Titles Graph | Accepted / Implemented |
+| [ADR-008](ADR-008-local-copy-bridge-usb-transfer.md) | Local Copy Bridge for USB Device Transfer | Accepted / Implemented |
 
 أي اقتراح غير منفذ (مثل HLS/DASH أو transcoding أو Redis integration) لا يوثق هنا كـ ADR قائم حتى توجد موافقة وتنفيذ قابل للتحقق.

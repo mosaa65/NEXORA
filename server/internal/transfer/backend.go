@@ -2,6 +2,7 @@ package transfer
 
 import (
 	"context"
+	"io"
 	"time"
 )
 
@@ -67,6 +68,12 @@ type TransferBackend interface {
 
 	// Put streams a local source file to the remote destination path.
 	Put(ctx context.Context, source, destination string, opts PutOptions) error
+
+	// PutStream streams an in-memory reader to the remote destination path.
+	// Backends without native support (e.g. iOS AFC) should implement it by
+	// writing the reader chunk-by-chunk; the caller supplies progress via
+	// opts.OnProgress.
+	PutStream(ctx context.Context, reader io.Reader, size int64, destination string, opts PutOptions) error
 
 	// Delete removes a remote path.
 	Delete(ctx context.Context, path string) error

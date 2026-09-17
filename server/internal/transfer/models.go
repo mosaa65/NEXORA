@@ -74,31 +74,31 @@ const (
 )
 
 type TransferJob struct {
-	ID               string      `json:"id"`
-	DeviceID         string      `json:"device_id"`
-	DeviceName       string      `json:"device_name"`
-	DeviceType       string      `json:"device_type"`
-	SourcePath       string      `json:"source_path"`
-	FileName         string      `json:"file_name"`
-	CurrentFile      string      `json:"current_file,omitempty"`
-	FileSize         int64       `json:"file_size"`
-	TotalBytes       int64       `json:"total_bytes,omitempty"`
-	TransferredBytes int64       `json:"transferred_bytes,omitempty"`
-	FileCount        int64       `json:"file_count,omitempty"`
-	TotalFiles       int64       `json:"total_files,omitempty"`
-	FinishedFiles    int64       `json:"finished_files,omitempty"`
-	CompletedFiles   int64       `json:"completed_files,omitempty"`
-	Transferred      int64       `json:"transferred"`
-	Progress         float64     `json:"progress"` // 0.0 to 100.0
-	SpeedMBps        float64     `json:"speed_mbps"`
-	SpeedBps         int64       `json:"speed_bps,omitempty"`
-	ETASeconds       int64       `json:"eta_seconds,omitempty"`
-	DestinationPath  string      `json:"destination_path,omitempty"`
-	Phase            string      `json:"phase,omitempty"`
-	Status           JobStatus   `json:"status"`
-	Error            string      `json:"error,omitempty"`
-	StartedAt        time.Time   `json:"started_at"`
-	CompletedAt      *time.Time  `json:"completed_at,omitempty"`
+	ID               string     `json:"id"`
+	DeviceID         string     `json:"device_id"`
+	DeviceName       string     `json:"device_name"`
+	DeviceType       string     `json:"device_type"`
+	SourcePath       string     `json:"source_path"`
+	FileName         string     `json:"file_name"`
+	CurrentFile      string     `json:"current_file,omitempty"`
+	FileSize         int64      `json:"file_size"`
+	TotalBytes       int64      `json:"total_bytes,omitempty"`
+	TransferredBytes int64      `json:"transferred_bytes,omitempty"`
+	FileCount        int64      `json:"file_count,omitempty"`
+	TotalFiles       int64      `json:"total_files,omitempty"`
+	FinishedFiles    int64      `json:"finished_files,omitempty"`
+	CompletedFiles   int64      `json:"completed_files,omitempty"`
+	Transferred      int64      `json:"transferred"`
+	Progress         float64    `json:"progress"` // 0.0 to 100.0
+	SpeedMBps        float64    `json:"speed_mbps"`
+	SpeedBps         int64      `json:"speed_bps,omitempty"`
+	ETASeconds       int64      `json:"eta_seconds,omitempty"`
+	DestinationPath  string     `json:"destination_path,omitempty"`
+	Phase            string     `json:"phase,omitempty"`
+	Status           JobStatus  `json:"status"`
+	Error            string     `json:"error,omitempty"`
+	StartedAt        time.Time  `json:"started_at"`
+	CompletedAt      *time.Time `json:"completed_at,omitempty"`
 	cancelFunc       context.CancelFunc
 }
 

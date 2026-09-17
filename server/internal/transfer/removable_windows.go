@@ -10,11 +10,11 @@ import (
 )
 
 var (
-	kernel32Dll            = syscall.NewLazyDLL("kernel32.dll")
-	getLogicalDrivesProc   = kernel32Dll.NewProc("GetLogicalDrives")
-	getDriveTypeWProc      = kernel32Dll.NewProc("GetDriveTypeW")
+	kernel32Dll             = syscall.NewLazyDLL("kernel32.dll")
+	getLogicalDrivesProc    = kernel32Dll.NewProc("GetLogicalDrives")
+	getDriveTypeWProc       = kernel32Dll.NewProc("GetDriveTypeW")
 	getDiskFreeSpaceExWProc = kernel32Dll.NewProc("GetDiskFreeSpaceExW")
-	getVolumeInfoWProc     = kernel32Dll.NewProc("GetVolumeInformationW")
+	getVolumeInfoWProc      = kernel32Dll.NewProc("GetVolumeInformationW")
 )
 
 const (

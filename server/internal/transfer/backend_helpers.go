@@ -44,3 +44,16 @@ func pathLeaf(input string) string {
 	parts := strings.Split(trimmed, "/")
 	return parts[len(parts)-1]
 }
+
+// leafName returns the final path segment of a path on any platform. Unlike
+// pathLeaf it also splits on backslashes so Windows temp/source paths produce
+// the real file name (used by the Android MTP backend for target naming).
+func leafName(input string) string {
+	normalized := strings.ReplaceAll(input, "\\", "/")
+	normalized = strings.Trim(normalized, "/")
+	if normalized == "" {
+		return ""
+	}
+	parts := strings.Split(normalized, "/")
+	return parts[len(parts)-1]
+}

@@ -138,7 +138,57 @@ func (b *StorageBackend) Put(ctx context.Context, source, destination string, op
 	return nil
 }
 
+// PutStream streams data from an io.Reader into the remote destination file.
+func (b *StorageBackend) PutStream(ctx context.Context, reader io.Reader, size int64, destination string, opts PutOptions) error {
+	if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
+		return err
+	}
+
+	out, err := os.OpenFile(destination, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	bufSize := int(opts.BufferSize)
+	if bufSize <= 0 {
+		bufSize = 4 * 1024 * 1024
+	}
+	buf := make([]byte, bufSize)
+
+	var transferred int64
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		n, readErr := reader.Read(buf)
+		if n > 0 {
+			w, writeErr := out.Write(buf[:n])
+			if writeErr != nil {
+				return writeErr
+			}
+			transferred += int64(w)
+			if opts.OnProgress != nil {
+				opts.OnProgress(transferred)
+			}
+		}
+		if readErr != nil {
+			if errors.Is(readErr, io.EOF) {
+				break
+			}
+			return readErr
+		}
+	}
+
+	_ = out.Sync()
+	return nil
+}
+
 func (b *StorageBackend) Delete(ctx context.Context, path string) error {
+
 	return os.Remove(path)
 }
 

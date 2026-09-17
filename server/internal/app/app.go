@@ -72,10 +72,16 @@ func Run() {
 	mediaProcessor := media.NewProcessor(cfg.FFmpegPath, cfg.FFprobePath)
 	migrationService := migration.New(migration.Options{})
 	qualityService := quality.NewService(sqlDB, cfg.FFmpegPath, cfg.FFprobePath)
-	transferService := transfer.NewService(transfer.Options{
-		AndroidTargetFolder: cfg.AndroidTargetFolder,
-		IOSBundleID:         cfg.IOSBundleID,
-	})
+
+	// Central server does NOT expose its local USB devices to the network.
+	// USB transfers are handled locally and securely on each workstation via NEXORA Copy Bridge.
+	var transferService *transfer.Service
+	if os.Getenv("NEXORA_SERVER_USB_TRANSFER") == "true" {
+		transferService = transfer.NewService(transfer.Options{
+			AndroidTargetFolder: cfg.AndroidTargetFolder,
+			IOSBundleID:         cfg.IOSBundleID,
+		})
+	}
 
 	if len(cfg.MediaRoots) > 0 {
 		eventWatcher := scanner.NewEventWatcher(scannerService, cfg.WatchRecursive)
