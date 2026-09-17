@@ -1,7 +1,6 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import Icon from "./Icon";
 import UnifiedMediaCard from "./UnifiedMediaCard";
-import ViewModeMenu from "./ViewModeMenu";
 import CompactActionButton from "./CompactActionButton";
 import useSelection from "../hooks/useSelection.js";
 import useViewMode from "../hooks/useViewMode.js";
@@ -10,14 +9,14 @@ const DEFAULT_VIEW_MAP = { grid: "large", list: "list" };
 
 /**
  * Shared responsive catalogue surface. Use it anywhere a collection of media
- * is shown; it owns only the visual view mode (Windows 11 style menu, persisted
- * in localStorage) and the optional multi-select mode, never the data itself.
+ * is shown; it owns only the visual view mode (a compact grid/list segmented
+ * toggle, persisted in localStorage) and the optional multi-select mode, never
+ * the data itself.
  *
  * @param {Object} props
  * @param {Array<Object>} props.items Media items.
  * @param {(media: Object) => void} [props.onOpen]
- * @param {string} [props.defaultView] "grid" or "list" (legacy values mapped
- *   onto the richer view modes).
+ * @param {string} [props.defaultView] "grid" or "list".
  * @param {Function} [props.cardActions] Renders extra controls over grid items.
  * @param {(items: Array<Object>) => void} [props.onCopySelected] When provided,
  *   enables the "تحديد" (selection mode) toggle plus a "تحديد الكل" bar.
@@ -35,7 +34,7 @@ export default function MediaCollection({
   enableSelection = false,
   storageKey = "nexora_view_mode",
 }) {
-  const { mode, setMode, isGrid, isList, isDetails } = useViewMode(
+  const { setMode, isGrid, isList } = useViewMode(
     storageKey,
     DEFAULT_VIEW_MAP[defaultView] || "large"
   );
@@ -51,14 +50,9 @@ export default function MediaCollection({
   const selectionActive = (enableSelection || Boolean(onCopySelected)) && selectionMode;
   const onCardOpen = selectionActive ? (media) => selection.toggle(media) : onOpen;
 
-  const gridClass =
-    isList || isDetails
-      ? "space-y-2.5 sm:space-y-3"
-      : mode === "extralarge"
-        ? "grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(230px,1fr))] sm:gap-5"
-        : mode === "medium"
-          ? "grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(150px,1fr))] sm:gap-3"
-          : "grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(190px,1fr))] sm:gap-4";
+  const gridClass = isGrid
+    ? "grid grid-cols-2 gap-3 min-[520px]:grid-cols-3 sm:grid-cols-[repeat(auto-fill,minmax(210px,1fr))] sm:gap-4 lg:gap-5"
+    : "space-y-2.5 sm:space-y-3";
 
   return (
     <section className={`media-collection ${className}`} aria-label="نتائج المكتبة" dir="rtl">
@@ -74,7 +68,29 @@ export default function MediaCollection({
               title="وضع التحديد"
             />
           ) : null}
-          <ViewModeMenu mode={mode} onSelect={setMode} />
+          <div
+            className="inline-flex rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-1 shadow-[var(--shadow-sm)]"
+            aria-label="طريقة عرض الأعمال"
+          >
+            <button
+              type="button"
+              onClick={() => setMode("large")}
+              aria-pressed={isGrid}
+              title="عرض شبكي"
+              className={`flex h-8 w-9 items-center justify-center rounded-lg transition ${isGrid ? "bg-[var(--bg-card)] text-[var(--color-accent)] shadow-[var(--shadow-sm)]" : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"}`}
+            >
+              <Icon name="grid" className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("list")}
+              aria-pressed={isList}
+              title="عرض قائمة"
+              className={`flex h-8 w-9 items-center justify-center rounded-lg transition ${isList ? "bg-[var(--bg-card)] text-[var(--color-accent)] shadow-[var(--shadow-sm)]" : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"}`}
+            >
+              <Icon name="list" className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       </div>
 
