@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -71,6 +70,9 @@ func (s *Service) Close() {
 		default:
 			close(s.stopMonitor)
 		}
+	}
+	if s.engine != nil && s.engine.sched != nil {
+		s.engine.sched.Stop(context.Background())
 	}
 }
 
@@ -636,17 +638,15 @@ func (s *Service) executeTransferMulti(ctx context.Context, job *TransferJob, re
 }
 
 // runTransferV2 drives the copy through the v2 engine and the concrete
-// backends, then mirrors the final outcome onto the legacy job. The proven
-// copyTo* helpers remain as a documented fallback (see copyToMTPDevice etc.)
-// if a v2 destination cannot be described.
+// backends, then mirrors the final outcome onto the legacy job.
 func (s *Service) runTransferV2(ctx context.Context, job *TransferJob, req CopyRequest, paths []string) error {
 	files := s.filesFor(paths)
 	if len(files) == 0 {
-		return s.executeTransferLegacy(ctx, job, req, paths)
+		return errors.New("لا توجد ملفات صالحة للنسخ")
 	}
 	v2 := s.buildV2Job(req, files)
 	if v2 == nil {
-		return s.executeTransferLegacy(ctx, job, req, paths)
+		return errors.New("تعذر تحديد وجهة النسخ")
 	}
 
 	// For the engine notifier to find this job in s.jobs, the v2 job must
@@ -655,8 +655,7 @@ func (s *Service) runTransferV2(ctx context.Context, job *TransferJob, req CopyR
 
 	// Route the copy through the engine.
 	if err := s.engine.Submit(v2); err != nil {
-		// Fall back to the legacy path if the engine refuses the job.
-		return s.executeTransferLegacy(ctx, job, req, paths)
+		return fmt.Errorf("تعذر بدء النقل: %w", err)
 	}
 
 	// Publish the queued state immediately; the engine notifier mirrors all
@@ -871,22 +870,6 @@ func legacyTerminalOutcome(j *TransferJob) error {
 	}
 }
 
-// v2Outcome converts a terminal v2 job into the error value expected by the
-// legacy job finaliser.
-func v2Outcome(v2 *TransferJobV2) error {
-	switch v2.Status {
-	case StatusCompleted:
-		return nil
-	case StatusCancelled:
-		return context.Canceled
-	default:
-		if v2.Error != nil {
-			return fmt.Errorf("%s: %s", v2.Error.Code, v2.Error.Message)
-		}
-		return fmt.Errorf("فشل النقل (%s)", v2.Status)
-	}
-}
-
 // browserBackendFor builds a v2 destination from a device ID plus an optional
 // iOS app bundle id and returns a ready-to-use backend for File Browser tasks
 // (Phase 3).
@@ -923,22 +906,6 @@ func (s *Service) ListDevicePath(ctx context.Context, deviceID, path string, dev
 	return backend.List(ctx, path)
 }
 
-// StatDevicePath returns metadata for a single remote path (Phase 3).
-func (s *Service) StatDevicePath(ctx context.Context, deviceID, path string, deviceType DeviceType, appID string) (RemoteEntry, error) {
-	if deviceType == "" {
-		deviceType = deviceTypeOf(deviceID)
-	}
-	backend, _, err := s.browserBackendFor(ctx, deviceID, appID, deviceType)
-	if err != nil {
-		return RemoteEntry{}, err
-	}
-	defer backend.Close()
-	if err := backend.Connect(ctx, Device{ID: deviceID, Type: deviceType}, TransferDestination{DeviceID: deviceID, DeviceType: deviceType, AppID: appID}); err != nil {
-		return RemoteEntry{}, err
-	}
-	return backend.Stat(ctx, path)
-}
-
 // CreateDeviceFolder creates a directory (and missing parents) on a device
 // (Phase 3).
 func (s *Service) CreateDeviceFolder(ctx context.Context, deviceID, path string, deviceType DeviceType, appID string) error {
@@ -968,276 +935,9 @@ func deviceTypeOf(deviceID string) DeviceType {
 	return DeviceAndroid
 }
 
-// executeTransferLegacy is the proven per-device dispatch that predates the v2
-// engine. It is kept as a documented fallback when a v2 destination cannot be
-// described or the engine refuses a job. For a multi-file request it copies the
-// files one at a time (the v2 engine is preferred for true parallel multi-file).
-func (s *Service) executeTransferLegacy(ctx context.Context, job *TransferJob, req CopyRequest, paths []string) error {
-	if len(paths) == 0 {
-		paths = []string{req.SourcePath}
-	}
-	for i, src := range paths {
-		if errors.Is(ctx.Err(), context.Canceled) {
-			return ctx.Err()
-		}
-		err := s.copyOneLegacy(ctx, job, req, src, i, len(paths))
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// copyOneLegacy copies a single source file through the proven per-device
-// helper, temporarily repointing the legacy job's current-file fields.
-func (s *Service) copyOneLegacy(ctx context.Context, job *TransferJob, req CopyRequest, src string, index, total int) error {
-	fileInfo, err := os.Stat(src)
-	if err != nil {
-		return fmt.Errorf("فشل القراءة من الملف المصدر (%s): %w", src, err)
-	}
-	origSource, origName, origSize := job.SourcePath, job.FileName, job.FileSize
-	job.SourcePath = src
-	job.FileName = filepath.Base(src)
-	job.FileSize = fileInfo.Size()
-	defer func() {
-		job.SourcePath = origSource
-		job.FileName = origName
-		if total > 1 {
-			job.FileSize = origSize
-			job.FinishedFiles = int64(index + 1)
-		} else {
-			job.FileSize = origSize
-		}
-	}()
-
-	if strings.HasPrefix(req.DeviceID, "disk_") {
-		driveLetter := strings.TrimPrefix(req.DeviceID, "disk_") + ":\\"
-		target := strings.TrimSpace(req.TargetFolder)
-		targetFolder := driveLetter
-		if target != "" && target != "/" && target != "\\Documents" && target != "/Documents" {
-			if strings.Contains(target, ":") {
-				targetFolder = target
-			} else {
-				targetFolder = filepath.Join(driveLetter, target)
-			}
-		}
-		if sf := safeRelativePath(req.SubFolder); sf != "" {
-			targetFolder = filepath.Join(targetFolder, sf)
-		}
-		return s.copyToLocalPath(ctx, job, src, targetFolder)
-	}
-	if isIOSUDID(req.DeviceID) {
-		return s.copyToIOSDeviceGoIOS(ctx, job, req)
-	}
-	return s.copyToMTPDevice(ctx, job, req)
-}
-
 // jobID generates a stable unique job identifier from a source path.
 func jobID(sourcePath string) string {
 	return fmt.Sprintf("job_%d_%s", time.Now().UnixNano(), filepath.Base(sourcePath))
-}
-
-func (s *Service) copyToIOSDeviceGoIOS(ctx context.Context, job *TransferJob, req CopyRequest) error {
-	bundleID := firstNonEmpty(req.TargetApp, s.options.IOSBundleID, "org.videolan.vlc-ios")
-	remoteDir := iosDocumentsPath(req.SubFolder)
-	remotePath := remoteDir + "/" + safePathComponent(job.FileName)
-	displayPath := fmt.Sprintf("آيفون > %s > %s", bundleID, remotePath)
-	s.updateJob(job.ID, func(j *TransferJob) {
-		j.DestinationPath = displayPath
-		j.Phase = "copying"
-		if j.Progress < 1 {
-			j.Progress = 1
-		}
-	})
-
-	backend := NewGoIOSBackend()
-	defer backend.Close()
-	if err := backend.Connect(ctx, Device{ID: req.DeviceID, Type: DeviceIOS}, TransferDestination{DeviceID: req.DeviceID, DeviceType: DeviceIOS, AppID: bundleID}); err != nil {
-		return err
-	}
-	if err := backend.Mkdir(ctx, remoteDir); err != nil {
-		return err
-	}
-	start := time.Now()
-	if err := backend.Put(ctx, req.SourcePath, remotePath, PutOptions{
-		BufferSize:   defaultBufferSize,
-		ResumeOffset: remoteResumeOffset(ctx, backend, remotePath, job.FileSize),
-		OnProgress:   func(transferred int64) { s.updateProgress(job, transferred, start) },
-	}); err != nil {
-		return err
-	}
-	s.updateJob(job.ID, func(j *TransferJob) { j.Phase = "verifying" })
-	entry, err := backend.Stat(ctx, remotePath)
-	if err != nil {
-		return fmt.Errorf("تعذر التحقق من الملف على الآيفون: %w", err)
-	}
-	if entry.Size != job.FileSize {
-		return fmt.Errorf("حجم الملف على الآيفون (%s) لا يطابق المصدر (%s)", formatBytes(entry.Size), formatBytes(job.FileSize))
-	}
-	return nil
-}
-
-func (s *Service) copyToMTPDevice(ctx context.Context, job *TransferJob, req CopyRequest) error {
-	deviceName := req.DeviceID
-	if strings.HasPrefix(deviceName, "mtp_") || strings.HasPrefix(deviceName, "ios_mtp_") {
-		parts := strings.SplitN(deviceName, "_", 3)
-		if len(parts) == 3 {
-			deviceName = parts[2]
-		}
-	}
-
-	sourceEscaped := strings.ReplaceAll(req.SourcePath, "'", "''")
-	targetFolder := safeRelativePath(req.TargetFolder)
-	if targetFolder == "" {
-		targetFolder = s.options.AndroidTargetFolder
-	}
-	if targetFolder == "" {
-		targetFolder = "Movies"
-	}
-
-	subFolder := safeRelativePath(req.SubFolder)
-	targetParts := append(splitRelativePath(targetFolder), splitRelativePath(subFolder)...)
-	targetSpec := strings.ReplaceAll(strings.Join(targetParts, "|"), "'", "''")
-
-	destPathReadable := fmt.Sprintf("الهاتف > التخزين الداخلي > %s", targetFolder)
-	if subFolder != "" {
-		destPathReadable += fmt.Sprintf(" > %s", subFolder)
-	}
-	destPathReadable += fmt.Sprintf(" > %s", job.FileName)
-
-	s.updateJob(job.ID, func(j *TransferJob) {
-		j.DestinationPath = destPathReadable
-		j.Phase = "copying"
-		if j.Progress < 1 {
-			j.Progress = 1
-		}
-	})
-
-	script := fmt.Sprintf(`
-$ErrorActionPreference = 'Stop'
-$shell = New-Object -ComObject Shell.Application
-$myComp = $shell.NameSpace(17)
-$deviceItem = $null
-
-if ($myComp) {
-    foreach ($item in $myComp.Items()) {
-        if ($item.Name -eq '%s') {
-            $deviceItem = $item
-            break
-        }
-    }
-}
-
-if (-not $deviceItem -and $myComp) {
-    foreach ($item in $myComp.Items()) {
-        if ($item.Type -like '*Portable*' -or $item.Type -like '*هاتف*' -or $item.Type -like '*جهاز*' -or ($item.Path -and $item.Path.StartsWith("::"))) {
-            $deviceItem = $item
-            break
-        }
-    }
-}
-
-if (-not $deviceItem) {
-    Write-Error "لم يتم العثور على الجهاز الموصول عبر USB"
-    exit 1
-}
-
-$storage = $deviceItem.GetFolder
-$firstStorage = $null
-if ($storage) { $firstStorage = $storage.Items() | Select-Object -First 1 }
-
-if (-not $firstStorage) {
-    Write-Error "تعذر الوصول إلى مجلد التخزين بالهاتف"
-    exit 1
-}
-
-$finalTarget = $firstStorage.GetFolder
-$targetSpec = '%s'
-if ($targetSpec -ne '') {
-    foreach ($name in $targetSpec.Split('|')) {
-        if (-not $name) { continue }
-        $nextFolder = $null
-        foreach ($item in $finalTarget.Items()) {
-            if ($item.Name -eq $name) {
-                $nextFolder = $item.GetFolder
-                break
-            }
-        }
-        if (-not $nextFolder) {
-            $finalTarget.NewFolder($name)
-            Start-Sleep -Milliseconds 500
-            foreach ($item in $finalTarget.Items()) {
-                if ($item.Name -eq $name) {
-                    $nextFolder = $item.GetFolder
-                    break
-                }
-            }
-        }
-        if (-not $nextFolder) {
-            Write-Error "تعذر إنشاء أو فتح مجلد الوجهة: $name"
-            exit 1
-        }
-        $finalTarget = $nextFolder
-    }
-}
-
-foreach ($item in $finalTarget.Items()) {
-    if ($item.Name -eq '%s') {
-        try { $item.InvokeVerb('delete') } catch {}
-        Start-Sleep -Milliseconds 300
-        break
-    }
-}
-
-$finalTarget.CopyHere('%s', 16)
-`, deviceName, targetSpec, strings.ReplaceAll(job.FileName, "'", "''"), sourceEscaped)
-
-	cmd := exec.CommandContext(ctx, "powershell", "-NoProfile", "-NonInteractive", "-Command", script)
-	out, err := cmd.CombinedOutput()
-	if err != nil || powershellOutputHasError(out) {
-		reason := strings.TrimSpace(string(out))
-		if reason == "" && err != nil {
-			reason = err.Error()
-		}
-		return fmt.Errorf("فشل بدء نقل USB إلى الهاتف: %s", reason)
-	}
-
-	return s.waitForMTPFile(ctx, job, deviceName, targetParts, job.FileName)
-}
-
-func (s *Service) waitForMTPFile(ctx context.Context, job *TransferJob, deviceName string, targetParts []string, fileName string) error {
-	startTime := time.Now()
-	timeout := transferTimeout(job.FileSize)
-	ticker := time.NewTicker(1200 * time.Millisecond)
-	defer ticker.Stop()
-
-	s.updateJob(job.ID, func(j *TransferJob) {
-		j.Phase = "verifying"
-	})
-
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-ticker.C:
-			size, exists, err := queryMTPFileSize(ctx, deviceName, targetParts, fileName)
-			if err != nil && time.Since(startTime) > 8*time.Second {
-				return fmt.Errorf("تعذر التحقق من الملف داخل الهاتف: %w", err)
-			}
-			if exists {
-				s.updateProgress(job, size, startTime)
-				if size >= job.FileSize {
-					return nil
-				}
-			}
-			if time.Since(startTime) > timeout {
-				if exists {
-					return fmt.Errorf("توقف نقل USB قبل اكتمال الملف: وصل %s من %s", formatBytes(size), formatBytes(job.FileSize))
-				}
-				return fmt.Errorf("لم يظهر الملف داخل الهاتف بعد بدء النسخ خلال %s. غالباً تم رفض العملية أو انقطع اتصال USB", timeout.Round(time.Second))
-			}
-		}
-	}
 }
 
 func queryMTPFileSize(ctx context.Context, deviceName string, targetParts []string, fileName string) (int64, bool, error) {
@@ -1298,111 +998,6 @@ Write-Output 'NEXORA_MISSING_FILE'
 	return 0, false, nil
 }
 
-func (s *Service) copyToIOSDevice(ctx context.Context, job *TransferJob, req CopyRequest) error {
-	return s.copyToIOSDeviceGoIOS(ctx, job, req)
-}
-
-func (s *Service) copyToLocalPath(ctx context.Context, job *TransferJob, source, targetFolder string) error {
-	if err := os.MkdirAll(targetFolder, 0o755); err != nil {
-		return fmt.Errorf("فشل إنشاء مجلد الوجهة: %w", err)
-	}
-
-	targetPath := filepath.Join(targetFolder, filepath.Base(source))
-	s.updateJob(job.ID, func(j *TransferJob) {
-		j.DestinationPath = targetPath
-		j.Phase = "copying"
-		if j.Progress < 1 {
-			j.Progress = 1
-		}
-	})
-	in, err := os.Open(source)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-
-	out, err := os.Create(targetPath)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
-	buf := make([]byte, 1024*1024)
-	var transferred int64
-	startTime := time.Now()
-
-	for {
-		select {
-		case <-ctx.Done():
-			_ = out.Close()
-			_ = os.Remove(targetPath)
-			return ctx.Err()
-		default:
-		}
-
-		n, readErr := in.Read(buf)
-		if n > 0 {
-			w, writeErr := out.Write(buf[:n])
-			if writeErr != nil {
-				return writeErr
-			}
-			transferred += int64(w)
-
-			elapsed := time.Since(startTime).Seconds()
-			speedMBps := 0.0
-			if elapsed > 0 {
-				speedMBps = (float64(transferred) / (1024 * 1024)) / elapsed
-			}
-			progress := (float64(transferred) / float64(job.FileSize)) * 100.0
-
-			s.updateJob(job.ID, func(j *TransferJob) {
-				j.Transferred = transferred
-				j.Progress = progress
-				j.SpeedMBps = speedMBps
-			})
-		}
-
-		if readErr != nil {
-			if errors.Is(readErr, io.EOF) {
-				break
-			}
-			return readErr
-		}
-	}
-
-	return nil
-}
-
-func (s *Service) updateProgress(job *TransferJob, transferred int64, startTime time.Time) {
-	if transferred < 0 {
-		transferred = 0
-	}
-	if job.FileSize > 0 && transferred > job.FileSize {
-		transferred = job.FileSize
-	}
-	elapsed := time.Since(startTime).Seconds()
-	speedMBps := 0.0
-	if elapsed > 0 {
-		speedMBps = (float64(transferred) / (1024 * 1024)) / elapsed
-	}
-	progress := 1.0
-	if job.FileSize > 0 {
-		progress = (float64(transferred) / float64(job.FileSize)) * 100.0
-		if progress < 1 && transferred > 0 {
-			progress = 1
-		}
-		if progress > 99.5 && transferred < job.FileSize {
-			progress = 99.5
-		}
-	}
-
-	s.updateJob(job.ID, func(j *TransferJob) {
-		j.Transferred = transferred
-		j.Progress = progress
-		j.SpeedMBps = speedMBps
-	})
-}
-
 func (s *Service) GetJob(jobID string) (*TransferJob, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -1456,32 +1051,6 @@ func (s *Service) updateJob(jobID string, fn func(j *TransferJob)) {
 	s.mu.Unlock()
 
 	s.events.publish(TransferEvent{Type: EventJob, Job: &cp})
-}
-
-func extractJSONValue(str, key string) string {
-	idx := strings.Index(str, `"`+key+`"`)
-	if idx == -1 {
-		return ""
-	}
-	sub := str[idx+len(key)+3:]
-	colonIdx := strings.Index(sub, ":")
-	if colonIdx == -1 {
-		return ""
-	}
-	valPart := strings.TrimSpace(sub[colonIdx+1:])
-	valPart = strings.TrimPrefix(valPart, `"`)
-	endQuote := strings.Index(valPart, `"`)
-	if endQuote != -1 {
-		return valPart[:endQuote]
-	}
-	return ""
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 func isIOSUDID(deviceID string) bool {

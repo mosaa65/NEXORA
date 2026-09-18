@@ -6,18 +6,14 @@ import "time"
 type TransferPhase string
 
 const (
-	PhaseQueued              TransferPhase = "queued"
 	PhasePreparing           TransferPhase = "preparing"
 	PhaseConnecting          TransferPhase = "connecting"
 	PhaseCheckingDestination TransferPhase = "checking_destination"
 	PhaseCopying             TransferPhase = "copying"
 	PhaseRetrying            TransferPhase = "retrying"
-	PhaseVerifying           TransferPhase = "verifying"
-	PhaseWaitingDevice       TransferPhase = "waiting_device"
 	PhaseCompleted           TransferPhase = "completed"
 	PhaseFailed              TransferPhase = "failed"
 	PhaseCancelled           TransferPhase = "cancelled"
-	PhasePaused              TransferPhase = "paused"
 )
 
 // TransferFile is a single file within a multi-file job.

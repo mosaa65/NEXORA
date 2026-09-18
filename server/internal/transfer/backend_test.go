@@ -55,9 +55,3 @@ func TestStatSize(t *testing.T) {
 		t.Fatalf("statSize(missing) = %d, want 0", got)
 	}
 }
-
-func TestResolveToolFallsBackToName(t *testing.T) {
-	if got := resolveTool("", "ios-tool"); got != "ios-tool" {
-		t.Fatalf("resolveTool = %q, want fallback name", got)
-	}
-}

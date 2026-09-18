@@ -129,30 +129,6 @@ export function TransferProvider({ children }) {
     };
   };
 
-  const isFileSelected = useCallback(
-    (file) => {
-      if (!file) return false;
-      const targetPath = file.filePath || file.file_path || file.path || file.source_path || "";
-      const targetId = String(file.id || file.file_id || "");
-      return selectedFiles.some(
-        (f) => (targetPath && f.filePath === targetPath) || (targetId && f.id === targetId)
-      );
-    },
-    [selectedFiles]
-  );
-
-  const toggleFileSelection = useCallback((file, mediaTitle = "", poster = "") => {
-    if (!file) return;
-    const norm = normalizeFile(file, mediaTitle, poster);
-    setSelectedFiles((prev) => {
-      const exists = prev.some((f) => (norm.filePath && f.filePath === norm.filePath) || f.id === norm.id);
-      if (exists) {
-        return prev.filter((f) => (norm.filePath ? f.filePath !== norm.filePath : f.id !== norm.id));
-      }
-      return [...prev, norm];
-    });
-  }, []);
-
   const selectMultipleFiles = useCallback((filesArray = [], mediaTitle = "", poster = "") => {
     if (!Array.isArray(filesArray) || filesArray.length === 0) return;
     const newItems = filesArray.map((f) => normalizeFile(f, mediaTitle, poster));
@@ -261,25 +237,13 @@ export function TransferProvider({ children }) {
 
   const totalSelectedSize = selectedFiles.reduce((acc, f) => acc + (f.size || 0), 0);
 
-  const hasRunningJobs = activeJobs.some(
-    (j) =>
-      j.status === "processing" ||
-      j.status === "pending" ||
-      j.status === "queued" ||
-      j.status === "retrying" ||
-      j.status === "waiting_device"
-  );
-
   return (
     <TransferContext.Provider
       value={{
         selectedFiles,
         totalSelectedSize,
-        isFileSelected,
-        toggleFileSelection,
         selectMultipleFiles,
         removeFileFromSelection,
-        clearSelection,
 
         isTransferModalOpen,
         openTransferModal,
@@ -287,7 +251,6 @@ export function TransferProvider({ children }) {
 
         activeJobs,
         devices,
-        hasRunningJobs,
         bridgeOnline,
         checkBridge,
         isCenterExpanded,
@@ -296,8 +259,7 @@ export function TransferProvider({ children }) {
         centerDismissed,
         setCenterDismissed,
         startTransfer,
-        cancelJob,
-        refreshJobs: fetchJobs
+        cancelJob
       }}
     >
       {children}

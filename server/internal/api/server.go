@@ -140,7 +140,6 @@ type transferService interface {
 	ListJobs() []*transfer.TransferJob
 	CancelJob(jobID string) bool
 	ListDevicePath(ctx context.Context, deviceID, path string, deviceType transfer.DeviceType, appID string) ([]transfer.RemoteEntry, error)
-	StatDevicePath(ctx context.Context, deviceID, path string, deviceType transfer.DeviceType, appID string) (transfer.RemoteEntry, error)
 	CreateDeviceFolder(ctx context.Context, deviceID, path string, deviceType transfer.DeviceType, appID string) error
 	EjectDevice(ctx context.Context, deviceID string) error
 	SubscribeEvents(buffer int) (<-chan transfer.TransferEvent, func())

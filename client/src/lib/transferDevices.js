@@ -1,4 +1,4 @@
-export function isRealIOSDevice(device) {
+function isRealIOSDevice(device) {
   return Boolean(
     device?.type === "ios" &&
       typeof device.id === "string" &&
@@ -7,7 +7,7 @@ export function isRealIOSDevice(device) {
   );
 }
 
-export function isWindowsIOSPlaceholder(device) {
+function isWindowsIOSPlaceholder(device) {
   const id = String(device?.id || "");
   const name = String(device?.name || "").toLowerCase();
   if (isRealIOSDevice(device)) {

@@ -2,7 +2,6 @@ package transfer
 
 import (
 	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -22,18 +21,6 @@ func splitRemoteDir(remotePath string) []string {
 		}
 	}
 	return parts
-}
-
-func resolveTool(devicePath, toolName string) string {
-	if devicePath != "" {
-		for _, suffix := range []string{"", ".exe"} {
-			candidate := filepath.Join(devicePath, toolName+suffix)
-			if _, err := os.Stat(candidate); err == nil {
-				return candidate
-			}
-		}
-	}
-	return toolName
 }
 
 func pathLeaf(input string) string {
