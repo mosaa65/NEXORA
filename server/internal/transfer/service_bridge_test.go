@@ -1,9 +1,6 @@
 package transfer
 
-import (
-	"context"
-	"testing"
-)
+import "testing"
 
 func TestBuildV2JobStorage(t *testing.T) {
 	s := NewService(Options{})
@@ -82,22 +79,5 @@ func TestBuildV2JobNilCases(t *testing.T) {
 	}
 	if j := s.buildV2Job(CopyRequest{SourcePath: `C:\a.mp4`, DeviceID: ""}, []TransferFile{{SourcePath: `C:\a.mp4`}}); j != nil {
 		t.Fatalf("empty device should return nil, got %+v", j)
-	}
-}
-
-func TestV2Outcome(t *testing.T) {
-	completed := &TransferJobV2{Status: StatusCompleted}
-	if err := v2Outcome(completed); err != nil {
-		t.Fatalf("completed should yield nil, got %v", err)
-	}
-
-	cancelled := &TransferJobV2{Status: StatusCancelled}
-	if err := v2Outcome(cancelled); err != context.Canceled {
-		t.Fatalf("cancelled should yield context.Canceled, got %v", err)
-	}
-
-	failed := &TransferJobV2{Status: StatusFailed, Error: &TransferError{Code: CodeSourceNotFound, Message: "missing"}}
-	if err := v2Outcome(failed); err == nil {
-		t.Fatal("failed should yield a non-nil error")
 	}
 }

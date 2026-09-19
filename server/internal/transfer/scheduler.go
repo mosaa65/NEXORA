@@ -57,6 +57,7 @@ func (s *Scheduler) Stop(ctx context.Context) {
 	for _, w := range s.workers {
 		workers = append(workers, w)
 	}
+	s.workers = make(map[string]*DeviceWorker)
 	s.mu.Unlock()
 	for _, w := range workers {
 		w.Stop()

@@ -42,6 +42,7 @@ type AppFolder struct {
 type windowsPortableRecord struct {
 	ID         string `json:"ID"`
 	Name       string `json:"Name"`
+	Path       string `json:"Path"`
 	Type       string `json:"Type"`
 	Status     string `json:"Status"`
 	FreeSpace  int64  `json:"FreeSpace"`
@@ -68,8 +69,6 @@ const (
 	StatusCompleted  JobStatus = "completed"
 	StatusFailed     JobStatus = "failed"
 	StatusCancelled  JobStatus = "cancelled"
-	StatusPaused     JobStatus = "paused"
-	StatusWaiting    JobStatus = "waiting_device"
 	StatusRetrying   JobStatus = "retrying"
 )
 

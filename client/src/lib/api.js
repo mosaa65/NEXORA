@@ -610,10 +610,6 @@ export async function getTransferDeviceApps(deviceId) {
   return requestBridgeJSON(`/api/transfer/device-apps?device_id=${encodeURIComponent(deviceId || "")}`);
 }
 
-export async function getTransferAppFolders(deviceId, bundleId) {
-  return requestBridgeJSON(`/api/transfer/device-app-folders?device_id=${encodeURIComponent(deviceId || "")}&bundle_id=${encodeURIComponent(bundleId || "")}`);
-}
-
 export async function startDeviceTransfer(payload) {
   return requestBridgeJSON("/api/transfer/copy", {
     method: "POST",
@@ -623,10 +619,6 @@ export async function startDeviceTransfer(payload) {
 
 export async function getTransferJobs() {
   return requestBridgeJSON("/api/transfer/jobs");
-}
-
-export async function getTransferJob(jobId) {
-  return requestBridgeJSON(`/api/transfer/job/${encodeURIComponent(jobId)}`);
 }
 
 export async function cancelTransferJob(jobId) {

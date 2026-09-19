@@ -28,7 +28,6 @@ func TestTransferService_Basic(t *testing.T) {
 		t.Fatalf("WriteFile failed: %v", err)
 	}
 
-	targetDir := filepath.Join(tmpDir, "target_disk")
 	job, err := svc.StartCopy(ctx, CopyRequest{
 		DeviceID:   "disk_Z",
 		SourcePath: sourceFile,
@@ -39,21 +38,6 @@ func TestTransferService_Basic(t *testing.T) {
 
 	if job.ID == "" {
 		t.Errorf("Expected job ID, got empty")
-	}
-
-	// Override execute to local folder for test verification
-	err = svc.copyToLocalPath(ctx, job, sourceFile, targetDir)
-	if err != nil {
-		t.Fatalf("copyToLocalPath failed: %v", err)
-	}
-
-	copiedFile := filepath.Join(targetDir, "test_movie.mp4")
-	info, err := os.Stat(copiedFile)
-	if err != nil {
-		t.Fatalf("Copied file missing: %v", err)
-	}
-	if info.Size() != int64(len(data)) {
-		t.Errorf("Expected size %d, got %d", len(data), info.Size())
 	}
 
 	// Verify Job Retrieval

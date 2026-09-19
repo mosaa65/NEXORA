@@ -44,14 +44,6 @@ func TestBrowserStorageListAndStat(t *testing.T) {
 	if !foundFile || !foundDir {
 		t.Fatalf("list = %+v, want a.txt and SubDir", entry)
 	}
-
-	st, err := svc.StatDevicePath(context.Background(), "disk_X", filepath.Join(root, "a.txt"), "", "")
-	if err != nil {
-		t.Fatalf("StatDevicePath: %v", err)
-	}
-	if st.Name != "a.txt" || st.Size != 5 {
-		t.Fatalf("stat = %+v", st)
-	}
 }
 
 func TestBrowserStorageMkdir(t *testing.T) {

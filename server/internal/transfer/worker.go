@@ -18,8 +18,9 @@ type DeviceWorker struct {
 	queue chan *TransferJobV2
 	done  chan struct{}
 
-	mu      sync.Mutex
-	running bool
+	mu       sync.Mutex
+	running  bool
+	stopOnce sync.Once
 
 	lastProgressCheck time.Time
 	lastTransferred   int64
@@ -53,9 +54,12 @@ func (w *DeviceWorker) Enqueue(job *TransferJobV2) error {
 	return nil
 }
 
-// Stop signals the processor to drain and stop accepting new work.
+// Stop signals the processor to drain and stop accepting new work. It is safe
+// to call more than once.
 func (w *DeviceWorker) Stop() {
-	close(w.done)
+	w.stopOnce.Do(func() {
+		close(w.done)
+	})
 }
 
 // process consumes the queue sequentially, one job at a time.

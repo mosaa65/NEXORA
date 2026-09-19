@@ -35,18 +35,10 @@ func (e *TransferError) Unwrap() error {
 
 // Transfer error codes.
 const (
-	CodeDeviceDisconnected   = "DEVICE_DISCONNECTED"
-	CodeAFCTimeout           = "AFC_TIMEOUT"
-	CodeAFCIOError           = "AFC_IO_ERROR"
-	CodeMuxError             = "MUX_ERROR"
-	CodeDiskFull             = "DISK_FULL"
-	CodeDestinationNotFound  = "DESTINATION_NOT_FOUND"
-	CodePermissionDenied     = "PERMISSION_DENIED"
-	CodeSourceNotFound       = "SOURCE_NOT_FOUND"
-	CodeVerifyFailed         = "VERIFY_FAILED"
-	CodeUserCancelled        = "USER_CANCELLED"
-	CodeUnsupportedOperation = "UNSUPPORTED_OPERATION"
-	CodeInvalidDestination   = "INVALID_DESTINATION"
+	CodeAFCIOError     = "AFC_IO_ERROR"
+	CodeSourceNotFound = "SOURCE_NOT_FOUND"
+	CodeVerifyFailed   = "VERIFY_FAILED"
+	CodeUserCancelled  = "USER_CANCELLED"
 )
 
 // NewTransferError builds a structured TransferError.
@@ -69,44 +61,12 @@ func WrapTransferError(err *TransferError, cause error) error {
 }
 
 // Error helpers for the most common cases.
-func ErrDeviceLost(msg string) *TransferError {
-	return NewTransferError(CodeDeviceDisconnected, msg, true, true)
-}
-
-func ErrAFCTimeout(msg string) *TransferError {
-	return NewTransferError(CodeAFCTimeout, msg, true, false)
-}
-
-func ErrAFCIO(msg string) *TransferError {
-	return NewTransferError(CodeAFCIOError, msg, true, false)
-}
-
-func ErrDiskFull(msg string) *TransferError {
-	return NewTransferError(CodeDiskFull, msg, false, false)
-}
-
-func ErrDestinationNotFound(msg string) *TransferError {
-	return NewTransferError(CodeDestinationNotFound, msg, false, false)
-}
-
-func ErrPermissionDenied(msg string) *TransferError {
-	return NewTransferError(CodePermissionDenied, msg, false, false)
-}
-
 func ErrSourceNotFound(msg string) *TransferError {
 	return NewTransferError(CodeSourceNotFound, msg, false, false)
 }
 
 func ErrVerifyFailed(msg string) *TransferError {
 	return NewTransferError(CodeVerifyFailed, msg, true, false)
-}
-
-func ErrCancelled(msg string) *TransferError {
-	return NewTransferError(CodeUserCancelled, msg, false, false)
-}
-
-func ErrUnsupported(msg string) *TransferError {
-	return NewTransferError(CodeUnsupportedOperation, msg, false, false)
 }
 
 // AsTransferError extracts a *TransferError from err, returning nil if err is
@@ -127,15 +87,6 @@ func IsCancellation(err error) bool {
 	}
 	if te := AsTransferError(err); te != nil && te.Code == CodeUserCancelled {
 		return true
-	}
-	return false
-}
-
-// IsDeviceLost reports whether err indicates the target device became
-// unavailable (transient, resumable after reconnect).
-func IsDeviceLost(err error) bool {
-	if te := AsTransferError(err); te != nil {
-		return te.DeviceLost
 	}
 	return false
 }
