@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import GlassCard from "../../components/GlassCard.jsx";
 import Icon from "../../components/Icon.jsx";
 import DirectoryPickerModal from "../../components/DirectoryPickerModal.jsx";
+import ScanControlCenter from "../../components/admin/ScanControlCenter.jsx";
 import { getDisks, scanDisks, indexLibrary, previewIndex } from "../../lib/api.js";
 
 /**
@@ -22,6 +23,11 @@ export default function AdminIndexerPage() {
   const [disks, setDisks] = useState([]);
   const [disksLoading, setDisksLoading] = useState(false);
   const [isDirPickerOpen, setIsDirPickerOpen] = useState(false);
+
+  // وضع الفهرسة: "incremental" هو الافتراضي المناسب لمكتبة قائمة.
+  const [indexMode, setIndexMode] = useState("incremental");
+  // يُزاد الرقم عند انتهاء فحص لإعادة تحميل قائمة المراجعة تلقائيًا.
+  const [scanCompletionTick, setScanCompletionTick] = useState(0);
 
   useEffect(() => { loadDisks(); }, []);
 
@@ -71,19 +77,33 @@ export default function AdminIndexerPage() {
     setIndexState("loading");
     setIndexError("");
     try {
-      const res = await indexLibrary([indexRoot.trim()]);
+      // الوضع الافتراضي تزايدي: يتخطى الملفات غير المتغيرة ولا يعمل ffprobe
+      // عليها، فيصبح الفحص الثاني أسرع بمراتب. "full" يعيد تقييم كل ملف.
+      const res = await indexLibrary([indexRoot.trim()], {
+        mode: indexMode,
+        inspect: indexMode === "full"
+      });
       setIndexResult(res);
       setIndexState("success");
       setPreviewData(null);
       loadDisks();
     } catch (err) {
-      setIndexError(err?.message || "تعذر إكمال الفهرسة.");
+      const message = err?.message || "تعذر إكمال الفهرسة.";
+      // 409 يعني أن فحصًا آخر يعمل — وهي حماية مقصودة لا خطأ.
+      setIndexError(
+        message.includes("already running")
+          ? "يوجد فحص جارٍ بالفعل. يمكنك متابعته في مركز التحكم بالأعلى، أو إيقافه مؤقتًا أو إلغاؤه."
+          : message
+      );
       setIndexState("error");
     }
   }
 
   return (
     <div className="space-y-6 text-right animate-fadeIn" dir="rtl">
+      {/* مركز التحكم في الفحص — يظهر أثناء عمل الفحص بحالت كل عامل وتقدمه الحقي */}
+      <ScanControlCenter onScanFinished={() => setScanCompletionTick((tick) => tick + 1)} />
+
       {/* Disks Panel */}
       <GlassCard className="p-6">
         <div className="flex items-center justify-between border-b border-white/10 pb-4">
@@ -163,6 +183,37 @@ export default function AdminIndexerPage() {
             className="px-3 py-1.5 rounded-xl bg-white/[0.05] border border-white/10 text-xs font-semibold text-white/80 hover:bg-white/10 transition">
             💾 D:/Media
           </button>
+        </div>
+        {/* اختيار وضع الفهرسة — الفرق جوهري في الوقت والحمل */}
+        <div className="mt-4 flex-wrap items-center gap-2">
+          <span className="self-center text-xs text-white/40">وضع الفهرسة:</span>
+          <button
+            type="button"
+            onClick={() => setIndexMode("incremental")}
+            className={`rounded-xl border px-3.5 py-2 text-xs font-bold transition ${
+              indexMode === "incremental"
+                ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-200"
+                : "border-white/10 bg-white/5 text-white/60 hover:bg-white/10"
+            }`}
+          >
+            ⚡ تزايدي (موصى به)
+          </button>
+          <button
+            type="button"
+            onClick={() => setIndexMode("full")}
+            className={`rounded-xl border px-3.5 py-2 text-xs font-bold transition ${
+              indexMode === "full"
+                ? "border-cyan-500/50 bg-cyan-500/15 text-cyan-200"
+                : "border-white/10 bg-white/5 text-white/60 hover:bg-white/10"
+            }`}
+          >
+            🔍 كامل (إعادة تقييم كل ملف)
+          </button>
+          <span className="text-[11px] text-white/40">
+            {indexMode === "incremental"
+              ? "يتخطى الملفات غير المتغيرة ولا يشغل ffprobe عليها — أسرع بمراتب."
+              : "يعيد تحليل وفحص كل ملف. يستهلك وقتًا و CPU أكثر بكثير."}
+          </span>
         </div>
 
         <div className="mt-4 flex flex-col md:flex-row gap-3">

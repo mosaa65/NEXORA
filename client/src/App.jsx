@@ -14,6 +14,7 @@ const AdminCollectionsPage = React.lazy(() => import("./pages/admin/AdminCollect
 const AdminSmartHubsPage = React.lazy(() => import("./pages/admin/AdminSmartHubsPage.jsx"));
 const AdminMediaPage = React.lazy(() => import("./pages/admin/AdminMediaPage.jsx"));
 const AdminIndexerPage = React.lazy(() => import("./pages/admin/AdminIndexerPage.jsx"));
+const AdminReviewPage = React.lazy(() => import("./pages/admin/AdminReviewPage.jsx"));
 const AdminQualityPage = React.lazy(() => import("./pages/admin/AdminQualityPage.jsx"));
 const AdminMigrationPage = React.lazy(() => import("./pages/admin/AdminMigrationPage.jsx"));
 const AdminOverviewPage = React.lazy(() => import("./pages/admin/AdminOverviewPage.jsx"));
@@ -267,6 +268,7 @@ function AppRoutes() {
           <Route path="hubs" element={<AdminSmartHubsPage />} />
           <Route path="media" element={<AdminMediaPage />} />
           <Route path="indexer" element={<AdminIndexerPage />} />
+          <Route path="review" element={<AdminReviewPage />} />
           <Route path="tmdb" element={<TMDBSettingsPage />} />
           <Route path="quality" element={<AdminQualityPage />} />
           <Route path="migration" element={<AdminMigrationPage />} />
