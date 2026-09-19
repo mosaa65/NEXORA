@@ -140,18 +140,128 @@ React page
 - search: Go يرسل request إلى Meilisearch ويعيد SearchResult؛ index مبني من PostgreSQL documents.
 
 ### 5.2 Indexing
+الفهرسة مسار staged مع حدود واضحة، وتكتب فقط ما تغيّر. التفاصيل الكاملة والقرار في [ADR-009](decisions/ADR-009-incremental-indexing-pipeline.md).
 
 ```text
-POST /api/index
-  → scanner.Walk(media roots)
-  → Repository.IngestScannedFiles in batches
-  → FFprobe inspection
-  → PostgreSQL technical metadata update
-  → PostgreSQL search documents
-  → Meilisearch indexing
+POST /api/index   { roots, mode, inspect, syncSearch }
+  → START SCAN SESSION        (scan_sessions: status = running)
+  → LoadKnownFiles(roots)     (video_files row: size, mtime, file_id)
+  → DISCOVERY                 per-root goroutines, bounded channel, ignore rules, symlink policy
+  → METADATA WORKERS          stat, fingerprint, parse, classify, artwork (directory-cached)
+  → IDENTITY / CHANGE         path → file_id → size+mtime  ⇒ new | changed | renamed | unchanged
+  → emit (single goroutine)   unchanged files are skipped unless mode = full
+  → BATCH PERSISTENCE         one transaction per 256 files, multi-row upsert
+  → FFprobe inspection        only for new/changed files when inspect = true
+  → RECONCILIATION            unobserved records ⇒ MISSING (root readable) or UNAVAILABLE (root not readable)
+  → FINISH SCAN SESSION       (status, duration, structured stats JSONB, per-root state)
+  → search sync               ListSearchDocuments → Meilisearch
 ```
 
-الفهرسة لا تعني جلب TMDB أو إنتاج previews تلقائيًا في المسار الحالي.
+الأنماط المتاحة: `full` و`incremental` (افتراضي) و`reconcile` و`recovery`. الفهرسة لا تعني جلب TMDB ولا إنتاج previews تلقائيًا في هذا المسار.
+
+### 5.2.1 مسار الكتابة الواحد (ResolutionSession)
+**قاعدة إلزامية:** أي ملف يصل الكتالوج يمر عبر **Entity Resolution**، مهما كان مصدره.
+
+المسارات الثلاثة تتشارك جلسة واحدة (`db.ResolutionSession`):
+
+```text
+POST /api/index        ─┐
+watcher (debounced)    ─┼─► ResolutionSession.Ingest ─► ResolveAndIngest ─► works/seasons/episodes
+scheduler (reconcile)  ─┘
+```
+
+السبب: لو كتب أي مسار ملفًا مباشرة، لأعاد إنشاء الأعمال المشوّهة التي وُجد القرار لمنعها. لذلك:
+
+- `ingestWithoutResolution` (المسار القديم) **غير موصول بأي مسار تشغيلي** ويحمل تحذيرًا صريحًا.
+- الجلسة تحتفظ بـ `works` **بمؤشر** كي يرى الملف التالي العمل الذي أنشأه السابق. بدون ذلك، `01.mkv` و`02.mkv` في مجلد واحد يُنشئان عملين منفصلين.
+- الجلسة تحتفظ بخريطة الـ aliases وتحدّثها عند تعلّم alias جديد، فيصبح الاسم المؤكد مطابقة تامة في الملف التالي.
+
+### 5.2.2 واجهة التحكم في الفحص (Control Center)
+الفحص يُدار تعاونيًا، وPause ليس مرادفًا لـ Cancel. المرجع: [ADR-011](decisions/ADR-011-search-projection-and-scan-control.md).
+
+```text
+RUNNING ──(طلب pause)──► PAUSING ──(لا worker وسط عنصر)──► PAUSED
+   ▲                                                        │
+   └────────────────(resume)── RESUMING ◄───────────────────┘
+```
+
+**الضمانة الأساسية:** بوابة الـ pause تقع **قبل سحب عنصر عمل جديد**، وليس في منتصف عنصر:
+
+```go
+for visit := range candidates {
+    // بوابة الـ pause قبل سحب العمل، لذلك فحص متوقف لا يتخلى عن ملف نصف معالج
+    if !control.wait(workCtx) { return }
+    control.markWorker(workerID, RoleMetadata, visit.Path)
+    file, ok := s.processCandidate(...)
+}
+```
+
+النتيجة: **لا يمكن لـ pause أن يُنتج صفًا نصف مكتوب** في قاعدة البيانات.
+
+- `PAUSING` منفصل عن `PAUSED` حتى لا تدّعي الواجهة التوقف بينما workers ما زالت تُنهي عملها.
+- **Cancel عملية مختلفة:** يُطلق أي worker محجوب بالـ pause (وإلا لن يُلاحظ الإلغاء)، وينهي الفحص بحالة `CANCELLED`. استخدام Cancel للتوقف المؤقت يمحو counters وcursor التي يحفظها Pause عمدًا.
+
+**رؤية كل worker:**
+```json
+{"id": 1, "role": "metadata", "active": true,
+ "currentPath": "/media/Disk1/Show/S01E04.mkv", "processed": 812}
+```
+الأدوار: `discovery` · `metadata` · `persistence` · `idle`. الترتيب ثابت بالمعرّف حتى لا تتغير القائمة مع كل poll.
+
+### 5.2.3 Search Projection
+الفهرس البحثي **projection قابل لإعادة البناء**، وليس مصدر حقيقة. المرجع: [ADR-011](decisions/ADR-011-search-projection-and-scan-control.md).
+
+```text
+PostgreSQL (media_items)
+  ↓ ListSearchDocumentPage(afterID, limit)   keyset pagination بمعرّف تصاعدي
+  ↓ IndexDocuments(page)                     يُرسل لكل صفحة
+  ↓ SaveProjectionCursor(afterID)             التقدم يُحفظ بعد كل صفحة
+```
+
+أربع خصائص مُثبتة باختبارات:
+
+| الخاصية | التفصيل |
+|---|---|
+| **بلا حد أقصى** | الصفحات تُقرأ حتى نهاية الكتالوج. مُثبت على **25,000 مستند** (الحد القديم 10,000) |
+| **ذاكرة ثابتة** | صفحة واحدة فقط في الذاكرة؛ الاستهلاك مستقل عن حجم المكتبة |
+| **قابل للاستكمال** | الـ cursor في `search_projection_state` ويُكتب بعد كل صفحة، فإعادة التشغيل تستكمل |
+| **قابل لإعادة البناء من DB** | لا يقرأ نظام الملفات إطلاقًا — إسقاط الفهرس وإعادته لا يمس أي ملف وسائط |
+
+**Keyset pagination وليس offset:** الـ cursor `id > afterID` مع `ORDER BY id`. المؤشر بالإزاحة يُسقط أو يكرر صفوفًا عند الإدراج أثناء إعادة البناء، وهو الحالة الطبيعية لمكتبة حيّة.
+
+**التحديث المستهدف:** `ProjectWork` يُفهرس المستندات المعطاة فقط ولا يلمس أي صفحة — إضافة حلقة واحدة تُحدّث مستندًا واحدًا، لا تُعيد بناء فهرس مليون عمل.
+
+### 5.2.4 Logical Media Model و Entity Resolution
+الملف الفيزيائي ليس العمل. المرجع الكامل في [ADR-010](decisions/ADR-010-logical-media-model.md).
+
+```text
+Filesystem File
+  ↓ parse (اسم/مسار)
+Media Candidate
+  ↓ ENTITY RESOLUTION
+      evidence → ranked candidates → decision
+Logical Work → Season → Episode → Physical File
+```
+
+المرحلة الحاسمة هي **Entity Resolution** وتحكمها القواعد التالية من الكود:
+
+- **محوران مستقلان**: `media_type` (movie | series | unknown) منفصل عن `category` (movies/series/anime/kids/...). `anime` تصنيف ونوعه غالبًا `series` لكن فيلم الأنمي يبقى `movie`.
+- **لا تُنشئ Work فورًا**: ملف جديد يُقارَن بالكيانات الموجودة أولًا (alias متعلَّم ثم مرشحون مُقيَّمون). الإنشاء هو الملاذ الأخير، وفقط عند تأكد `media_type` وقابلية العنوان للاستخدام، ويُوسم الكيان `provisional`.
+- **عند عدم اليقين**: يُكتب الملف في `resolution_queue` بحالة `needs_review` مع المرشحين ودرجاتهم وأسبابها. البيانات غير المؤكدة أفضل من بيانات خاطئة.
+- **`unknown` نتيجة صحيحة** لنوع الوسائط عندما تتقارب أدلة الفيلم والمسلسل، وليس تخمينًا.
+- **ذاكرة قواعدية بلا AI**: `media_aliases` تربط كل تهجئة مؤكدة بعمل واحد (`UNIQUE(alias_normalized)`)، فتصبح `Breaking Bad` و`Breaking.Bad` و`بريكنغ باد` عملًا واحدًا. التقاطع مع كلمة مفتاحية أو تشابه < 0.9 لا يُتعلَّم تلقائيًا.
+- **حل المجموعة (Batch)**: لكل مجلد ملخص محدود (حجم، أشقاء حلقات، أرقام حلقات، توقيع الموسم، عنوان توافقي من ≥2 ملف) ليتمكن النظام من قراءة `01..04.mkv` كفصل واحد. الملخص محدود بـ 20,000 مجلد مع إخلاء الأقدم.
+- **المصدر يحدد الأولوية**: `admin > tmdb > database > resolver > parser > filesystem`. قرار المسؤول لا يعيد الكتابة عليه أي Full Scan.
+- **الحذف غير موجود**: الكيانات المتكررة تُدمج عبر `merged_into_id` مع الحفاظ على السجل للتدقيق.
+
+ملاحظات تشغيلية مثبتة من الكود:
+
+- **Root isolation**: كل media root له حالة مستقلة داخل `scan_roots`; قرص مفقود يسجل `unavailable` ولا يوقف بقية الأقراص، وتصبح حالة الجلسة `partial`.
+- **لا يتم قراءة محتوى الملف أثناء الفحص**: الهوية تعتمد على `file_id` (فهرس ملفات Windows / inode على POSIX) ثم `size + mod_time`. الـ hashing يبقى عملية صريحة منفصلة.
+- **إعادة التسمية تُعالج كـ move** على نفس السجل (`ActionMovePath`) وليس حذفًا وإنشاءً، فتبقى الهوية وتقدم المشاهدة.
+- **الحذف غير موجود داخل الفحص**: السجل يصبح `missing` أو `unavailable` فقط، والتنظيف عملية منفصلة بسياسة عمر أدنى ورفض عند تعذر الوصول لأي root وحد أقصى لكل تشغيل.
+- **Watcher هو المسار السريع فقط**: يعمل مع debounce وstability check، وحدث remove/rename لا يُنفّذ كحذف. Reconciliation الدوري (افتراضيًا كل 15 دقيقة) هو مصدر الحقيقة لأنه يغطي ما فاته fsnotify أثناء التوقف.
+- **جلستان فحص متزامنتان غير مسموحتين**: الطلب الثاني يعيد `409 Conflict`.
 
 ### 5.3 Metadata enrichment
 
