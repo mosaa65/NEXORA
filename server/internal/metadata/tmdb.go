@@ -374,13 +374,13 @@ func (c *TMDBClient) SearchCandidates(ctx context.Context, query Query) ([]Candi
 	for _, item := range results {
 		candidates = append(candidates, Candidate{
 			Provider: "tmdb", ExternalID: strconv.Itoa(item.ID),
-			Title: firstNonEmpty(item.Title, item.Name),
+			Title:         firstNonEmpty(item.Title, item.Name),
 			OriginalTitle: firstNonEmpty(item.OriginalTitle, item.OriginalName),
-			Overview: item.Overview,
-			Year: yearFromDate(firstNonEmpty(item.ReleaseDate, item.FirstAirDate)),
-			Rating: item.VoteAverage,
-			PosterPath: c.imageURL(settings.PosterSize, item.PosterPath),
-			MediaKind: kind,
+			Overview:      item.Overview,
+			Year:          yearFromDate(firstNonEmpty(item.ReleaseDate, item.FirstAirDate)),
+			Rating:        item.VoteAverage,
+			PosterPath:    c.imageURL(settings.PosterSize, item.PosterPath),
+			MediaKind:     kind,
 		})
 	}
 	return candidates, nil

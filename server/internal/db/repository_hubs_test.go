@@ -4,11 +4,11 @@ import "testing"
 
 func TestSmartHubRuleKeyCanonicalizesRuleValues(t *testing.T) {
 	first := smartHubRuleKey("series", HubRule{
-		Types:  []string{"series"},
+		Types:   []string{"series"},
 		TagsAny: []string{"تركي", "دراما"},
 	})
 	second := smartHubRuleKey("series", HubRule{
-		Types:  []string{"series"},
+		Types:   []string{"series"},
 		TagsAny: []string{"دراما", "تركي", "تركي"},
 	})
 

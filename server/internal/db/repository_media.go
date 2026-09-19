@@ -209,9 +209,6 @@ func (r *Repository) ListSearchDocuments(ctx context.Context, limit int) ([]sear
 	return documents, nil
 }
 
-
-
-
 func nullableString(value sql.NullString) string {
 	if value.Valid {
 		return value.String

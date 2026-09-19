@@ -89,7 +89,9 @@ func (p *Processor) Inspect(ctx context.Context, path string) (InspectResult, er
 		return InspectResult{}, fmt.Errorf("inspect media: %w", err)
 	}
 	var probe struct {
-		Format struct { Duration string `json:"duration"` } `json:"format"`
+		Format struct {
+			Duration string `json:"duration"`
+		} `json:"format"`
 		Streams []struct {
 			Index     int               `json:"index"`
 			CodecType string            `json:"codec_type"`
@@ -112,10 +114,14 @@ func (p *Processor) Inspect(ctx context.Context, path string) (InspectResult, er
 		case "video":
 			if result.VideoCodec == "" {
 				result.VideoCodec = stream.CodecName
-				if stream.Width > 0 && stream.Height > 0 { result.Resolution = fmt.Sprintf("%dx%d", stream.Width, stream.Height) }
+				if stream.Width > 0 && stream.Height > 0 {
+					result.Resolution = fmt.Sprintf("%dx%d", stream.Width, stream.Height)
+				}
 			}
-		case "audio": result.AudioTracks = append(result.AudioTracks, track)
-		case "subtitle": result.Subtitles = append(result.Subtitles, track)
+		case "audio":
+			result.AudioTracks = append(result.AudioTracks, track)
+		case "subtitle":
+			result.Subtitles = append(result.Subtitles, track)
 		}
 	}
 	return result, nil

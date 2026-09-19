@@ -339,7 +339,6 @@ func (r *Repository) ListPersonMedia(ctx context.Context, slug string, opts List
 	return person, result, nil
 }
 
-
 func (r *Repository) GetDashboardStats(ctx context.Context) (*DashboardStats, error) {
 	var stats DashboardStats
 
@@ -462,7 +461,6 @@ type CreateMediaRequest struct {
 	BannerPath   string   `json:"banner_path"`
 	Genres       []string `json:"genres"`
 }
-
 
 // CleanAndSyncAllGenres is a library-wide maintenance job that cleans duplicate
 // tags from the genres array and populates content_rating from metadata_snapshots.
