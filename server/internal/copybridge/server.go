@@ -1,6 +1,7 @@
 package copybridge
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -254,8 +255,60 @@ func (s *Server) withMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
+		// A shared token protects the MUTATING commands. Loopback binding does not
+		// stop a local process or an approved LAN page from copying to, or
+		// ejecting, this machine's devices, so this is the only control that does.
+		// Read-only device discovery stays open so the UI can report health before
+		// the operator supplies credentials.
+		if s.cfg.CommandToken != "" && isMutatingBridgeCommand(r) {
+			if !tokenMatches(r, s.cfg.CommandToken) {
+				writeJSON(w, http.StatusUnauthorized, map[string]any{
+					"error": "رمز خدمة NEXORA Copy Bridge مطلوب أو غير صحيح",
+				})
+				return
+			}
+		}
+
 		next.ServeHTTP(w, r)
 	})
+}
+
+// isMutatingBridgeCommand reports whether a request changes state on this
+// machine's devices or filesystem.
+//
+// Only POST/PUT/PATCH/DELETE are considered mutating, so device discovery and
+// job polling remain readable without credentials.
+func isMutatingBridgeCommand(r *http.Request) bool {
+	switch r.Method {
+	case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+		return true
+	}
+	return false
+}
+
+// tokenMatches compares the request's bearer token in constant time.
+//
+// A plain == comparison leaks the token length and matching prefix through
+// timing, which is enough to recover a token byte by byte given enough
+// attempts.
+func tokenMatches(r *http.Request, expected string) bool {
+	provided := strings.TrimSpace(r.Header.Get("Authorization"))
+	if provided == "" {
+		// Also accept the X-Nexora-Bridge-Token header so a caller that cannot set
+		// Authorization (some embedded browsers) still works.
+		provided = strings.TrimSpace(r.Header.Get("X-Nexora-Bridge-Token"))
+	}
+	if provided == "" {
+		return false
+	}
+	const bearer = "Bearer "
+	if len(provided) > len(bearer) && strings.EqualFold(provided[:len(bearer)], bearer) {
+		provided = provided[len(bearer):]
+	}
+	if len(provided) != len(expected) {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(provided), []byte(expected)) == 1
 }
 
 // corsAllow decides whether a browser Origin may talk to the bridge. It returns
