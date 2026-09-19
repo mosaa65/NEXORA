@@ -3,7 +3,11 @@
 # ==============================================================================
 
 # Stage 1: Build binary
-FROM golang:1.24-alpine AS builder
+#
+# The tag must satisfy the `go` directive in go.mod (1.26.0). Using an older
+# builder image fails at compile time with "go.mod requires go >= 1.26.0", so
+# this is kept in step with go.mod rather than pinned arbitrarily.
+FROM golang:1.26-alpine AS builder
 
 WORKDIR /src
 
