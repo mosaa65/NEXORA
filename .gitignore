@@ -37,6 +37,12 @@ client/.env.*
 # === Local caches and logs ===
 .cache/
 .logs/
+# Root-level build artifacts and run logs. The binary is launched from the repo
+# root during local testing, so these appear here rather than under server/.
+*.log
+/nexora-api
+/nexora-api.exe
+/*.exe
 
 # === Local generated assets ===
 server/assets/**
@@ -50,4 +56,7 @@ server/assets/**
 _archive/
 .codebuddy
 .merge-backups/
-.merge-backups/
+
+# === Reference tooling kept out of the release ===
+# The resolution probe is a development aid for inspecting real libraries; it is
+# not part of the server build.
