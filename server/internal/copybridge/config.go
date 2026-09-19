@@ -15,6 +15,17 @@ type Config struct {
 	TempDir             string
 	AndroidTargetFolder string
 	IOSBundleID         string
+	// CommandToken, when set, is required in the Authorization header for every
+	// mutating command (copy, mkdir, eject, cancel).
+	//
+	// Binding to loopback keeps the bridge off the network, but it does NOT stop
+	// a local process, or a web page served from a permitted LAN origin, from
+	// issuing copy/eject commands. A token closes that gap.
+	//
+	// It is optional on purpose: requiring it by default would break every
+	// existing single-PC install on upgrade. When it is empty the bridge behaves
+	// exactly as before and logs a warning once at startup.
+	CommandToken string
 }
 
 func LoadConfig() Config {
@@ -29,6 +40,7 @@ func LoadConfig() Config {
 		TempDir:             tempDir,
 		AndroidTargetFolder: envString("NEXORA_ANDROID_TARGET", "Download"),
 		IOSBundleID:         envString("NEXORA_IOS_BUNDLE_ID", "org.videolan.vlc-ios"),
+		CommandToken:        strings.TrimSpace(os.Getenv("NEXORA_COPY_BRIDGE_TOKEN")),
 	}
 }
 

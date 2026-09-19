@@ -58,9 +58,74 @@
 | المسار | الطريقة | الوصف |
 |--------|---------|-------|
 | `/api/search` | `GET` | البحث الفوري اللحظي عبر Meilisearch (`?q=...`) |
-| `/api/search/sync` | `POST` | مزامنة قاعدة البيانات بالكامل مع محرك البحث الفوري |
-| `/api/indexer/scan` | `POST` | بدء فحص وفهرسة مسار مجلد محدد وإدخال البيانات |
-| `/api/indexer/browse` | `POST` | استعراض مجلدات نظام الملفات لاختيار المسارات |
+| `/api/search/sync` | `POST` | إعادة بناء فهرس البحث كـ projection من PostgreSQL (admin). `?reset=true` يبدأ من الصفر، وبدونه **يستكمل** من الـ cursor |
+| `/api/index` | `POST` | تشغيل مسار الفهرسة (admin). الحقول: `roots`, `mode` (`full`/`incremental`، الافتراضي `incremental`), `inspect`, `syncSearch` |
+| `/api/ingest` | `POST` | مرادف لـ `/api/index` (توافق مع العملاء القدامى) |
+| `/api/index/preview` | `POST` | معاينة Dry-Run بدون أي كتابة لقاعدة البيانات |
+| `/api/scan/status` | `GET` | حالة الفحص الجاري وتقدمه الحقي + `control` + `workers`، أو آخر جلسة مكتملة |
+| `/api/scan/workers` | `GET` | تفصيل كل worker: الدور + الملف الحالي + العدد المُعالج |
+| `/api/scan/pause` | `POST` | طلب توقف تعاوني (admin) — يعيد `pausing` غالبًا |
+| `/api/scan/resume` | `POST` | رفع التوقف ومتابعة من نفس النقطة (admin) |
+| `/api/scan/cancel` | `POST` | طلب إلغاء الفحص الجاري (admin) — عملية مختلفة عن Pause |
+
+### واجهات الإدارة (React)
+
+| المسار | المكوّن | ما يعرضه |
+|---|---|---|
+| `/admin/indexer` | `ScanControlCenter` | تقدم حقي + جدول العوامل + Pause/Resume/Cancel + اختيار وضع الفهرسة |
+| `/admin/review` | `ResolutionReviewCenter` | قائمة المراجعة مجمّعة بالسبب + المرشحين بتفصيل الأدلة + نموذج القرار |
+
+> الـ polling في مركز التحكم **يتوقف** عند انتهاء الفحص أو إغلاق الصفحة، فلا يستمر طلب شبكي بلا داعٍ. والإلغاء يطلب **تأكيدًا صريحًا** لأنه يفقد العدّادات، بينما الإيقاف المؤقت لا يفقد شيئًا.
+| `/api/scan/interrupted` | `POST` | جلسات فحص لم تكتمل (انقطاع السيرفر) (admin) |
+
+### التحكم في الفحص (Pause / Resume / Cancel)
+
+```text
+RUNNING ──(pause)──► PAUSING ──(لا worker وسط عنصر)──► PAUSED
+   ▲                                                    │
+   └──────────────(resume)── RESUMING ◄─────────────────┘
+```
+
+| العملية | المعنى | ماذا يُحفظ |
+|---|---|---|
+| **Pause** | تعليق قابل للاستكمال | counters + cursor + per-root state + worker state |
+| **Resume** | متابعة من نفس النقطة | لا يُفقد أي عمل |
+| **Cancel** | إنهاء نهائي بحالة `CANCELLED` | يُطلق أي worker محجوب بالـ pause أولًا |
+
+**Pause ليس بديلًا عن Cancel.** استخدام Cancel للتوقف المؤقت يمحو التقدم الذي يحفظه Pause عمدًا. تفاصيل القرار: [ADR-011](../decisions/ADR-011-search-projection-and-scan-control.md).
+
+**الضمانة:** بوابة الـ pause تقع قبل سحب عنصر عمل جديد، لذلك **لا يمكن لـ pause أن يُنتج صفًا نصف مكتوب** — الـ worker الذي بدأ ملفًا يُكمله.
+
+#### استجابة `/api/scan/workers`
+```json
+{
+  "running": true,
+  "scanState": "running",
+  "workers": [
+    {"id": 0, "role": "discovery",   "active": true,  "currentPath": "D:/Media", "processed": 12},
+    {"id": 1, "role": "metadata",    "active": true,  "currentPath": "D:/Media/Show/S01E04.mkv", "processed": 812},
+    {"id": 2, "role": "persistence",  "active": true,  "currentPath": "D:/Media/Movies/a.mkv", "processed": 811},
+    {"id": 3, "role": "idle",        "active": false, "processed": 790}
+  ],
+  "activeWorkers": 3,
+  "idleWorkers": 1,
+  "draining": 0
+}
+```
+الأدوار: `discovery` (يمشي المجلدات) · `metadata` (يحلل ملفًا) · `persistence` (يكتب) · `idle`. الترتيب ثابت بالمعرّف.
+| `/api/resolution/queue` | `GET` | الملفات التي رفض Entity Resolution الحسم فيها (admin). معاملات: `reason`, `limit` (حد 500) |
+| `/api/resolution/stats` | `GET` | عدد الملفات المنتظرة مراجعة، مُرتّبة حسب السبب (admin) |
+| `/api/resolution/queue/{id}/decide` | `POST` | قرار المشغّل على ملف غامض (admin). الحقول: `action` (attach/create/ignore/mark_movie/move_season), `work_id`, `season`, `episode`, `new_title`, `learn_alias` |
+
+### قائمة المراجعة (Resolution Queue)
+
+هذه النقاط هي ما يجعل ملفًا غامضًا **قابلًا للمعالجة** بدل أن يبقى عالقًا. الرد يُضمّن المرشحين مع تفصيل أدلتهم (`breakdown`) حتى يرى المشغّل سبب رفض الحسم، ويختار بدل أن يُعيد الكتابة.
+
+قرار المشغّل يُسجّل للتدقيق (`decided_by`، `decided_at`) وعند `learn_alias=true` يُرقّى إلى alias دائم في `media_aliases`، فلا يتكرر نفس الغموض. هذا هو ما يجعل المكتبة **تتعلم بلا AI**.
+
+`POST /api/index` يعيد `report` منظّمًا (مجلدات، ملفات، جديد/متغير/منقول/غير متغير، أخطاء مصنفة، throughput) و`rootStates` لكل قرص و`missing`. جلسة فحص واحدة تعمل في الوقت الواحد؛ الطلب المتزامن يعيد `409 Conflict`.
+
+> ملاحظة: `GET /api/scan` القديم (قائمة JSON لكل الملفات) أُزيل لأنه لم يُستخدم من الواجهة ولا يمكنه التعامل مع مكتبات ضخمة. راجع [ADR-009](../decisions/ADR-009-incremental-indexing-pipeline.md).
 
 ---
 

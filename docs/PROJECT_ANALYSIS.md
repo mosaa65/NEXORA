@@ -115,8 +115,19 @@ Go API
 - [VERIFIED] `api.NewServer` ينشئ `http.ServeMux` ويغلّفه بـ middleware واحد، ويبدأ goroutine لمعالجة طابور TMDB.
 - [VERIFIED] Repository واحد في `internal/db/repository.go` يحتوي SQL للوصول إلى الكتالوج والملفات والإعدادات والعلاقات.
 - [VERIFIED] إعداد `database/sql`: حد أقصى 25 اتصالًا، 10 idle، وعمر اتصال 30 دقيقة.
-- [VERIFIED] Scanner يفصل اكتشاف المسارات عن قراءة metadata: workers متوازية، لكن callback `emit` يستهلك النتيجة في goroutine واحد لحماية ingest الحالي.
-- [VERIFIED] Event watcher يعمل في goroutine عند توفر roots ويعيد فهرسة ملف فيديو عند create/modify؛ حدث remove يسجّل event لكنه لا يظهر في `app.Run` أنه يحذف صف قاعدة البيانات.
+- [VERIFIED] Scanner أُعيد بناؤه كـ pipeline staged (discovery → metadata workers → identity/change → reconcile → persistence) مع حدود واضحة لكل مرحلة. التفاصيل وADR: [ADR-009](../decisions/ADR-009-incremental-indexing-pipeline.md). أُعيد التحقق من كل ما يلي من الكود في `internal/scanner`.
+- [VERIFIED] أُضيفت طبقة **Entity Resolution** (`internal/identity`) تفصل الملف الفيزيائي عن العمل المنطقي: الملف يُقارَن بالكيانات الموجودة بالإدلة قبل أي إنشاء، والحالات الغامضة تذهب إلى `resolution_queue` بحالة `needs_review` بدل إنشاء Work خاطئ. المرجع: [ADR-010](../decisions/ADR-010-logical-media-model.md).
+- [VERIFIED] `media_type` منفصل عن `category`، ويُحدد من البنية (علامات حلقات، مجلد موسم، سلسلة أشقاء متتالية) وليس من الاسم. التقارب بين أدلة الفيلم والمسلسل ينتج `unknown` وليس تخمينًا.
+- [VERIFIED] لكل قيمة مهمة مصدر معلن مع ترتيب أولوية `admin > tmdb > database > resolver > parser > filesystem`، لذا لا يعيد Full Scan كتابة قرار مسؤول (`metadata_locked`).
+- [VERIFIED] `media_aliases` ذاكرة قواعدية بلا AI: `UNIQUE(alias_normalized)` تربط كل تهجئة مؤكدة بعمل واحد، ولا تُتعلَّم من عنصر في قائمة المراجعة.
+- [VERIFIED] `video_files.episode_id` يربط الملف بكيان الحلقة، فيمكن لعدة إصدارات من نفس الحلقة الارتباط بحلقة واحدة بدل إنشاء أعمال متعددة.
+- [VERIFIED] فهرس البحث أصبح **projection مُصفح قابل لإعادة البناء** بـ keyset pagination وcursor محفوظ في `search_projection_state`. أُزيل حد 10,000 المستند الصامت. لا يقرأ نظام الملفات إطلاقًا. مُثبت على 25,000 مستند. المرجع: [ADR-011](../decisions/ADR-011-search-projection-and-scan-control.md).
+- [VERIFIED] الفحص يدعم **Pause/Resume تعاونيًا** منفصلًا عن Cancel، مع رؤية حالة كل worker ودوره وملفه الحالي. بوابة الـ pause قبل سحب العمل، فلا يمكن أن يُنتج صفًا نصف مكتوب.
+- [VERIFIED] كل media root مستقل: له walker خاص وحالة مستقلة (`scan_roots`)؛ قرص مفقود يسجّل `unavailable` ولا يوقف بقية الأقراص. خطأ مجلد واحد يُصنَّف ويُسجَّل ولا يوقف الـ traversal.
+- [VERIFIED] الفحص لا يقرأ محتوى الملف: الهوية تُحدد بـ `path` ثم `file_id` ثم `size+mod_time`. إعادة التسمية تُعالج كـ move على نفس السجل.
+- [VERIFIED] الحذف غير موجود داخل الفحص: السجل يصبح `missing` (عند قراءة الـ root) أو `unavailable` (عند تعذر قراءته)، والتنظيف عملية منفصلة بسياسة عمر وحد أقصى ورفض عند offline root.
+- [VERIFIED] Event watcher يعمل في goroutine عند توفر roots، مع debounce وstability check للكتابة. أحداث remove/rename **لا تُنفَّذ كحذف** بل تُترك للـ reconciliation. فشل watcher لا يوقف النظام؛ يُعاد إنشاؤه.
+- [VERIFIED] Reconciliation دوري (افتراضيًا كل 15 دقيقة عبر `NEXORA_RECONCILE_INTERVAL_SECONDS`) هو مصدر الحقيقة، لأن fsnotify لا يمكنه تغطية فترة توقف السيرفر.
 
 ## 9. API Architecture
 
@@ -307,10 +318,11 @@ mousemove over timeline
 ## 27. Current Technical Risks
 
 - [VERIFIED] `mediaPathAllowed` يسمح أي مسار موجود على الجهاز حتى إن كان خارج `MediaRoots`; `handleStream`/`handleStreamImage` يعتمدان عليه. أما `handleStreamByID` فيستخدم `serveCataloguePath` (مسار الكتالوج بلا `mediaPathAllowed`).
-- [VERIFIED] admin login لديه بيانات افتراضية `admin`/`admin123` إذا لم تضبط البيئة، ويعيد token ثابتًا؛ route middleware لا يتحقق من هذا token لحماية بقية admin write endpoints.
+- [VERIFIED] admin login لم يعد يستخدم بيانات افتراضية ثابتة: عند غياب `NEXORA_ADMIN_PASS` تُولَّد كلمة مرور عشوائية وتُطبع مرة واحدة، وعند غياب `NEXORA_ADMIN_SECRET` يُولَّد مفتاح توقيع مؤقت تنتهي صلاحية كل الجلسات بإعادة التشغيل (`internal/config.go`).
 - [VERIFIED] CORS مفتوح `*`، وmethods المعلنة لا تشمل PUT/DELETE رغم استعمالهما.
 - [VERIFIED] لا يوجد auth/authorization ظاهر حول streaming أو غالبية endpoints الإدارية.
 - [VERIFIED] race محتمل لتوليد preview نفسه مع طلبات متزامنة؛ لا توجد single-flight/lock.
+- [VERIFIED] race حقي كان موجودًا في فهرس هوية الملفات (`identityIndex.seen`) واستُخرج بواسطة benchmark ثم أُصلح؛ يوجد الآن اختبار ضغط يشغّل 8 workers على 200 سجل ويؤكد أن كل سجل يُطالب به مرة واحدة. حالة الـ race detector غير مقيسة في هذه البيئة لعدم توفر C toolchain.
 - [VERIFIED] event watcher لا يحذف record عند remove في `app.Run` callback.
 - [VERIFIED] `README.md` يذكر Plyr/MediaInfo وخصائص لا تظهر جميعها كما هي في code path الحالي؛ التباين قد يسبب قرارات تشغيلية خاطئة.
 - [VERIFIED] Copy Bridge الافتراضي يعمل بـ `LocalSystem` (Session 0)؛ Android MTP (Shell COM) قد يتطلب جلسة مستخدم تفاعلية في بعض إصدارات ويندوز.
@@ -320,10 +332,10 @@ mousemove over timeline
 ## 28. Bottlenecks and Scalability Concerns
 
 - [VERIFIED] أول hover لكل 10-second bucket يستدعي FFmpeg synchronous داخل request؛ عدة مستخدمين/لقطات جديدة قد تنافس CPU/disk.
-- [VERIFIED] كل index يمر على كل ملف وFFprobe لكل ملف، ثم يطلب حتى 10,000 search document للمزامنة؛ ذلك عمل ثقيل لمكتبات ضخمة.
+- [VERIFIED] لم يعد الفحص يمر على كل ملف للكتابة: مسار `incremental` يتخطى الملفات غير المتغيرة ولا يعمل FFprobe إلا على الملفات الجديدة/المتغيرة وعند طلب `inspect`. لكن مزامنة البحث ما زالت محدودة بـ 10,000 search document لكل نداء، وهو حد يحتاج مراجعة لمكتبة أكبر.
 - [VERIFIED] server cache يحتفظ body responses في الذاكرة حتى 256 key؛ TTL قصير ولكن أحجام responses الكبيرة تؤثر على الذاكرة.
 - [INFERRED] direct file serving سيضع حمل القراءة على الأقراص والشبكة مع كل عميل؛ لا يوجد ABR/transcoding أو CDN في الكود ليعالج clients بقدرات مختلفة.
-- [UNKNOWN] لا توجد benchmark أو profile أو أرقام الأجهزة/عدد العملاء لتحديد bottleneck الفعلي.
+- [VERIFIED] توجد الآن benchmarks داخل `internal/scanner` على أشجار مجلدات صناعية: 1,000 ملف ≈ 124ms و10,000 ملف ≈ 1.9s (~5,250 ملف/ثانية بتوسّع خطي)، وفحص incremental لـ 5,000 ملف غير متغير ≈ 199ms مع 869 allocation أي بدون تخصيص لكل ملف. تبقى أرقام العملاء المتزامنين وbitrate غير مقيسة.
 
 ## 29. Technical Debt
 

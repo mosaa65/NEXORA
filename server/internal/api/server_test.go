@@ -13,6 +13,7 @@ import (
 
 	"nexora/server/internal/config"
 	"nexora/server/internal/db"
+	"nexora/server/internal/identity"
 	"nexora/server/internal/media"
 	"nexora/server/internal/metadata"
 	"nexora/server/internal/migration"
@@ -23,6 +24,8 @@ import (
 
 type mockRepo struct {
 	categories []db.CategorySummary
+	known      []scanner.KnownFile
+	works      []identity.Work
 	mediaItem  *db.MediaItemDetail
 	stats      *db.DashboardStats
 	disks      []db.StorageDisk
@@ -33,10 +36,60 @@ type mockRepo struct {
 func (m *mockRepo) Health(ctx context.Context) (db.Health, error) {
 	return db.Health{DatabaseOK: true, CheckedAt: time.Now().UTC()}, nil
 }
-func (m *mockRepo) IngestScannedFiles(ctx context.Context, files []scanner.FileInfo) (db.IngestResult, error) {
-	return db.IngestResult{Scanned: len(files), Imported: len(files)}, nil
+func (m *mockRepo) IngestScannedFiles(ctx context.Context, files []scanner.FileInfo) (db.IngestStats, error) {
+	return db.IngestStats{Scanned: len(files), Inserted: len(files)}, nil
+}
+
+// ResolveAndIngest mirrors the real contract for the API tests: it attaches the
+// batch through the resolver and reports how many files reached the catalogue.
+func (m *mockRepo) ResolveAndIngest(ctx context.Context, files []scanner.FileInfo,
+	resolver *identity.Resolver, works *[]identity.Work,
+	aliasLookup map[string]int64) (db.ResolutionIngestStats, error) {
+
+	stats := db.ResolutionIngestStats{Scanned: len(files)}
+	// The mock treats every file as attachable: the real resolution behaviour is
+	// covered exhaustively in internal/identity and internal/db.
+	stats.FilesAttached = len(files)
+	stats.Resolved = len(files)
+	return stats, nil
+}
+
+func (m *mockRepo) LoadKnownWorks(ctx context.Context) ([]identity.Work, error) {
+	return m.works, nil
+}
+func (m *mockRepo) LoadAliasLookup(ctx context.Context) (map[string]int64, error) {
+	return map[string]int64{}, nil
+}
+func (m *mockRepo) ListResolutionQueue(ctx context.Context, reason string, limit int) ([]db.ResolutionQueueItem, error) {
+	return nil, nil
+}
+func (m *mockRepo) CountResolutionQueue(ctx context.Context) (map[string]int, error) {
+	return map[string]int{}, nil
+}
+func (m *mockRepo) ApplyResolutionDecision(ctx context.Context, itemID int64, decision db.ResolutionDecision) error {
+	return nil
 }
 func (m *mockRepo) ClassifyOriginsFromPaths(ctx context.Context) (int, error) { return 0, nil }
+
+// Indexer state methods. The mock keeps them trivial; the real behaviour is
+// covered by the repository tests and the scanner package tests.
+func (m *mockRepo) ListKnownFiles(ctx context.Context, roots []string) ([]scanner.KnownFile, error) {
+	return m.known, nil
+}
+func (m *mockRepo) MarkFilesState(ctx context.Context, paths []string, state scanner.FileState, scanID string) (int, error) {
+	return len(paths), nil
+}
+func (m *mockRepo) StartScanSession(ctx context.Context, scanID, mode string) error { return nil }
+func (m *mockRepo) FinishScanSession(ctx context.Context, scanID, status string, progress scanner.Progress) error {
+	return nil
+}
+func (m *mockRepo) SaveScanRootState(ctx context.Context, scanID string, state db.ScanRootState) error {
+	return nil
+}
+func (m *mockRepo) LatestScanProgress(ctx context.Context) (*db.ScanSession, error) { return nil, nil }
+func (m *mockRepo) InterruptedScanSessions(ctx context.Context) ([]db.ScanSession, error) {
+	return nil, nil
+}
 func (m *mockRepo) ListCategories(ctx context.Context) ([]db.CategorySummary, error) {
 	return m.categories, nil
 }
@@ -52,6 +105,19 @@ func (m *mockRepo) DeleteCategory(ctx context.Context, id int64) error {
 func (m *mockRepo) ListSearchDocuments(ctx context.Context, limit int) ([]search.MediaDocument, error) {
 	return []search.MediaDocument{}, nil
 }
+
+// Projection store methods. The mock returns an empty catalogue so a projection
+// run completes immediately; paging behaviour is covered in internal/search.
+func (m *mockRepo) ListSearchDocumentPage(ctx context.Context, afterID int64, limit int) ([]search.MediaDocument, error) {
+	return []search.MediaDocument{}, nil
+}
+func (m *mockRepo) LoadProjectionCursors(ctx context.Context) (map[string]int64, error) {
+	return map[string]int64{}, nil
+}
+func (m *mockRepo) SaveProjectionCursor(ctx context.Context, kind string, lastID int64, documentCount int64) error {
+	return nil
+}
+func (m *mockRepo) ResetProjectionCursor(ctx context.Context, kind string) error { return nil }
 func (m *mockRepo) ListVideoFiles(ctx context.Context, mediaItemID int64) ([]db.VideoFile, error) {
 	return []db.VideoFile{{ID: 1, MediaItemID: mediaItemID, TitleEN: "Test File", FilePath: "test.mp4", FileSize: 1024}}, nil
 }
@@ -228,6 +294,11 @@ func (m *mockRepo) FinishTMDBQueueJob(ctx context.Context, id int64, succeeded b
 	return nil
 }
 
+// DeleteDocuments mirrors the client contract for the projection path.
+func (m *mockSearch) DeleteDocuments(ctx context.Context, ids []int64) (search.SyncResult, error) {
+	return search.SyncResult{}, nil
+}
+
 type mockSearch struct{}
 
 func (m *mockSearch) IndexDocuments(ctx context.Context, documents []search.MediaDocument) (search.SyncResult, error) {
@@ -329,7 +400,7 @@ func setupTestServer() http.Handler {
 	mig := &mockMigration{}
 	qual := &mockQuality{}
 
-	return NewServer(cfg, repo, sc, searchSvc, metaSvc, proc, mig, qual, nil)
+	return NewServer(cfg, repo, sc, searchSvc, metaSvc, proc, mig, qual, nil, db.NewResolutionSession())
 }
 
 // adminToken performs a real login so tests exercise the same auth path as
@@ -512,7 +583,7 @@ func TestMediaVerifyPersistsIndexedFileResult(t *testing.T) {
 		AdminSecret: "test-admin-signing-secret",
 	}
 	repo := &mockRepo{}
-	handler := NewServer(cfg, repo, scanner.New(scanner.Options{}), &mockSearch{}, &mockMetadata{}, &mockProcessor{}, &mockMigration{}, &mockQuality{}, nil)
+	handler := NewServer(cfg, repo, scanner.New(scanner.Options{}), &mockSearch{}, &mockMetadata{}, &mockProcessor{}, &mockMigration{}, &mockQuality{}, nil, db.NewResolutionSession())
 
 	req := httptest.NewRequest(http.MethodPost, "/api/media/verify", bytes.NewBufferString(`{"fileId":1}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -555,6 +626,7 @@ func TestIndexStreamsFilesInBoundedBatches(t *testing.T) {
 		&mockMigration{},
 		&mockQuality{},
 		nil,
+		db.NewResolutionSession(),
 	)
 	payload, err := json.Marshal(map[string][]string{"roots": []string{root}})
 	if err != nil {
@@ -573,8 +645,16 @@ func TestIndexStreamsFilesInBoundedBatches(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&result); err != nil {
 		t.Fatal(err)
 	}
-	if result.Scanned != 2 || result.Imported != 2 || result.Inspected != 2 {
+	// The default mode is incremental: both files are new, so they are inserted,
+	// and technical inspection is off unless explicitly requested.
+	if result.Scanned != 2 || result.Imported != 2 || result.Inserted != 2 {
 		t.Fatalf("unexpected streaming index result: %#v", result)
+	}
+	if result.Status != string(scanner.StatusCompleted) {
+		t.Fatalf("expected a completed scan, got %q", result.Status)
+	}
+	if result.Mode != string(scanner.ModeIncremental) {
+		t.Fatalf("expected the incremental default, got %q", result.Mode)
 	}
 }
 

@@ -17,6 +17,7 @@ import (
 	"nexora/server/internal/config"
 	"nexora/server/internal/db"
 	"nexora/server/internal/disks"
+	"nexora/server/internal/identity"
 	"nexora/server/internal/media"
 	"nexora/server/internal/metadata"
 	"nexora/server/internal/migration"
@@ -28,8 +29,22 @@ import (
 
 type repository interface {
 	Health(ctx context.Context) (db.Health, error)
-	IngestScannedFiles(ctx context.Context, files []scanner.FileInfo) (db.IngestResult, error)
+	// ResolveAndIngest is the resolution-driven write path used by /api/index.
+	ResolveAndIngest(ctx context.Context, files []scanner.FileInfo, resolver *identity.Resolver,
+		works *[]identity.Work, aliasLookup map[string]int64) (db.ResolutionIngestStats, error)
+	LoadKnownWorks(ctx context.Context) ([]identity.Work, error)
+	LoadAliasLookup(ctx context.Context) (map[string]int64, error)
+	ListResolutionQueue(ctx context.Context, reason string, limit int) ([]db.ResolutionQueueItem, error)
+	CountResolutionQueue(ctx context.Context) (map[string]int, error)
+	ApplyResolutionDecision(ctx context.Context, itemID int64, decision db.ResolutionDecision) error
 	ClassifyOriginsFromPaths(ctx context.Context) (int, error)
+	ListKnownFiles(ctx context.Context, roots []string) ([]scanner.KnownFile, error)
+	MarkFilesState(ctx context.Context, paths []string, state scanner.FileState, scanID string) (int, error)
+	StartScanSession(ctx context.Context, scanID, mode string) error
+	FinishScanSession(ctx context.Context, scanID, status string, progress scanner.Progress) error
+	SaveScanRootState(ctx context.Context, scanID string, state db.ScanRootState) error
+	LatestScanProgress(ctx context.Context) (*db.ScanSession, error)
+	InterruptedScanSessions(ctx context.Context) ([]db.ScanSession, error)
 	ListCategories(ctx context.Context) ([]db.CategorySummary, error)
 	CreateCategory(ctx context.Context, nameAR, nameEN, slug string) (*db.CategorySummary, error)
 	UpdateCategory(ctx context.Context, id int64, nameAR, nameEN, slug string) error
@@ -38,6 +53,12 @@ type repository interface {
 	SaveCollection(ctx context.Context, id int64, req db.CollectionRequest) (*db.Collection, error)
 	DeleteCollection(ctx context.Context, id int64) error
 	ListSearchDocuments(ctx context.Context, limit int) ([]search.MediaDocument, error)
+	// Search projection: paged reads plus cursor bookkeeping, so an index rebuild
+	// scales past the previous 10,000-document ceiling and can resume.
+	ListSearchDocumentPage(ctx context.Context, afterID int64, limit int) ([]search.MediaDocument, error)
+	LoadProjectionCursors(ctx context.Context) (map[string]int64, error)
+	SaveProjectionCursor(ctx context.Context, kind string, lastID int64, documentCount int64) error
+	ResetProjectionCursor(ctx context.Context, kind string) error
 	ListVideoFiles(ctx context.Context, mediaItemID int64) ([]db.VideoFile, error)
 	GetVideoFilePath(ctx context.Context, id int64) (string, error)
 	GetVideoFileIDByPath(ctx context.Context, path string) (int64, error)
@@ -98,6 +119,7 @@ type repository interface {
 
 type searchClient interface {
 	IndexDocuments(ctx context.Context, documents []search.MediaDocument) (search.SyncResult, error)
+	DeleteDocuments(ctx context.Context, ids []int64) (search.SyncResult, error)
 	SearchDocuments(ctx context.Context, query string, limit int, filter string) (search.SearchResult, error)
 }
 
@@ -159,6 +181,11 @@ type Server struct {
 	diskManager *disks.Manager
 	mux         *http.ServeMux
 	cache       *responseCache
+	// scanGuard serialises scans and exposes live progress and cancellation.
+	scanGuard *scanGuard
+	// resolution holds the shared Entity Resolution state (candidate works and
+	// learned aliases) used by the scan, the watcher and the scheduler.
+	resolution *db.ResolutionSession
 }
 
 func NewServer(
@@ -171,6 +198,7 @@ func NewServer(
 	migrationService migrationService,
 	qualityService qualityService,
 	transferService transferService,
+	resolutionSession *db.ResolutionSession,
 ) http.Handler {
 	server := &Server{
 		config:      config,
@@ -184,6 +212,8 @@ func NewServer(
 		transfer:    transferService,
 		diskManager: disks.NewManager(),
 		mux:         http.NewServeMux(),
+		scanGuard:   newScanGuard(),
+		resolution:  resolutionSession,
 		cache:       newResponseCache(config.RedisAddr, config.RedisPassword, config.RedisDB),
 	}
 	server.routes()
@@ -283,8 +313,23 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/dashboard/stats", s.handleDashboardStats)
 	s.mux.HandleFunc("GET /api/disks", s.handleDisksList)
 	s.mux.HandleFunc("POST /api/disks/scan", s.requireAdminAuth(s.handleDisksScan))
-	s.mux.HandleFunc("GET /api/scan", s.handleScan)
-	s.mux.HandleFunc("POST /api/ingest", s.requireAdminAuth(s.handleIngest))
+	// Indexer endpoints. /api/scan (read-only JSON listing) was removed in
+	// favour of the streaming pipeline; /api/ingest is now an alias of
+	// /api/index so existing clients keep working.
+	// Entity Resolution review queue. These endpoints are what make an ambiguous
+	// file actionable instead of stuck: the resolver refused to guess, so an
+	// operator decides, and a safe decision becomes a durable alias.
+	s.mux.HandleFunc("GET /api/resolution/queue", s.requireAdminAuth(s.handleResolutionQueue))
+	s.mux.HandleFunc("GET /api/resolution/stats", s.requireAdminAuth(s.handleResolutionStats))
+	s.mux.HandleFunc("POST /api/resolution/queue/{id}/decide", s.requireAdminAuth(s.handleResolutionDecide))
+
+	s.mux.HandleFunc("GET /api/scan/status", s.handleScanStatus)
+	s.mux.HandleFunc("GET /api/scan/workers", s.handleScanWorkers)
+	s.mux.HandleFunc("POST /api/scan/pause", s.requireAdminAuth(s.handleScanPause))
+	s.mux.HandleFunc("POST /api/scan/resume", s.requireAdminAuth(s.handleScanResume))
+	s.mux.HandleFunc("POST /api/scan/cancel", s.requireAdminAuth(s.handleScanCancel))
+	s.mux.HandleFunc("GET /api/scan/interrupted", s.requireAdminAuth(s.handleInterruptedScans))
+	s.mux.HandleFunc("POST /api/ingest", s.requireAdminAuth(s.handleIndex))
 	s.mux.HandleFunc("POST /api/index", s.requireAdminAuth(s.handleIndex))
 	s.mux.HandleFunc("POST /api/index/preview", s.requireAdminAuth(s.handleIndexPreview))
 	s.mux.HandleFunc("POST /api/library/classify-origins", s.requireAdminAuth(s.handleClassifyOrigins))

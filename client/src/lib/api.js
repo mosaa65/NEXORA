@@ -171,11 +171,125 @@ export async function syncIndex(limit = 1000) {
   });
 }
 
-export async function indexLibrary(roots) {
+export async function indexLibrary(roots, options = {}) {
+  const body = { roots };
+  // The scan endpoint understands mode/inspect/syncSearch. Sending them
+  // explicitly is what lets the UI offer "full" versus "incremental" rather
+  // than always running the server's default.
+  if (options.mode) body.mode = options.mode;
+  if (options.inspect !== undefined) body.inspect = options.inspect;
+  if (options.syncSearch !== undefined) body.syncSearch = options.syncSearch;
   return requestJSON("/api/index", {
     method: "POST",
-    body: JSON.stringify({ roots })
+    body: JSON.stringify(body)
   });
+}
+
+// -----------------------------------------------------------------------------
+// Scan control centre
+// -----------------------------------------------------------------------------
+
+/**
+ * getScanStatus reads the live progress, pause state and worker breakdown of the
+ * running scan, or the most recent finished session when nothing is running.
+ *
+ * It is deliberately NOT cached: the caller polls it, and a cached snapshot
+ * would freeze the progress bar and the worker table.
+ */
+export async function getScanStatus() {
+  return requestJSON("/api/scan/status", { cache: "no-store" });
+}
+
+/**
+ * getScanWorkers reads only the per-worker state, for a panel that polls more
+ * often than the full status.
+ */
+export async function getScanWorkers() {
+  return requestJSON("/api/scan/workers", { cache: "no-store" });
+}
+
+/**
+ * pauseScan requests a cooperative pause.
+ *
+ * The response state is usually "pausing": workers finish the file they are on
+ * before stopping. The scan only reaches "paused" once none is mid-item, so the
+ * UI must show the transition instead of claiming an immediate stop.
+ */
+export async function pauseScan() {
+  return requestJSON("/api/scan/pause", { method: "POST" });
+}
+
+/** resumeScan lifts a pause and continues from the same point. */
+export async function resumeScan() {
+  return requestJSON("/api/scan/resume", { method: "POST" });
+}
+
+/** cancelScan ends the scan. It is a different operation from pause. */
+export async function cancelScan() {
+  return requestJSON("/api/scan/cancel", { method: "POST" });
+}
+
+/** getInterruptedScans lists scans that never finished, e.g. after a restart. */
+export async function getInterruptedScans() {
+  return requestJSON("/api/scan/interrupted", { cache: "no-store" });
+}
+
+// -----------------------------------------------------------------------------
+// Entity Resolution review queue
+// -----------------------------------------------------------------------------
+
+/**
+ * getResolutionQueue lists files that entity resolution refused to decide.
+ *
+ * These are the files that would previously have become works named "01" or
+ * after a site watermark. Each item carries the ranked candidates and the
+ * itemised evidence behind each score, so an operator can choose instead of
+ * retyping a title.
+ */
+export async function getResolutionQueue(options = {}) {
+  const params = new URLSearchParams();
+  if (options.reason) params.set("reason", options.reason);
+  if (options.limit) params.set("limit", String(options.limit));
+  const query = params.toString();
+  return requestJSON(`/api/resolution/queue${query ? `?${query}` : ""}`, { cache: "no-store" });
+}
+
+/** getResolutionStats reports how many files still need a human, per reason. */
+export async function getResolutionStats() {
+  return requestJSON("/api/resolution/stats", { cache: "no-store" });
+}
+
+/**
+ * decideResolution applies an operator decision to a queued file.
+ *
+ * The decision is recorded for auditability and, when learnAlias is true,
+ * promoted into a durable alias so the same ambiguity never appears again.
+ *
+ * @param {number} itemId        queue item id
+ * @param {object} decision      { action, workId?, season?, episode?, newTitle?, learnAlias? }
+ */
+export async function decideResolution(itemId, decision) {
+  return requestJSON(`/api/resolution/queue/${encodeURIComponent(itemId)}/decide`, {
+    method: "POST",
+    body: JSON.stringify({
+      action: decision.action,
+      work_id: decision.workId ?? 0,
+      season: decision.season ?? 0,
+      episode: decision.episode ?? 0,
+      new_title: decision.newTitle ?? "",
+      learn_alias: Boolean(decision.learnAlias)
+    })
+  });
+}
+
+/**
+ * rebuildSearchIndex rebuilds the search index as a projection of PostgreSQL.
+ *
+ * `reset` starts from the beginning (drop and rebuild); without it the run
+ * resumes from the persisted cursor. Nothing here re-reads the filesystem.
+ */
+export async function rebuildSearchIndex(reset = false) {
+  return requestJSON(`/api/search/sync${reset ? "?reset=true" : ""}`, { method: "POST" });
 }
 
 export async function previewIndex(roots) {

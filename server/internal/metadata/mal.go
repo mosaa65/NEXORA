@@ -30,14 +30,14 @@ type malSearchResponse struct {
 }
 
 type malAnime struct {
-	ID                int     `json:"id"`
-	Title             string  `json:"title"`
-	Mean              float64 `json:"mean"`
-	StartDate         string  `json:"start_date"`
-	Synopsis          string  `json:"synopsis"`
+	ID                int      `json:"id"`
+	Title             string   `json:"title"`
+	Mean              float64  `json:"mean"`
+	StartDate         string   `json:"start_date"`
+	Synopsis          string   `json:"synopsis"`
 	MainPicture       malImage `json:"main_picture"`
 	AlternativeTitles struct {
-		English string `json:"en"`
+		English  string `json:"en"`
 		Japanese string `json:"ja"`
 	} `json:"alternative_titles"`
 	Genres []struct {

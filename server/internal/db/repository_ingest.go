@@ -3,10 +3,8 @@ package db
 import (
 	"context"
 	"database/sql"
-	"errors"
+	"encoding/json"
 	"fmt"
-	"path/filepath"
-	"strings"
 	"unicode"
 
 	"github.com/lib/pq"
@@ -14,150 +12,14 @@ import (
 	"nexora/server/internal/scanner"
 )
 
-func (r *Repository) IngestScannedFiles(ctx context.Context, files []scanner.FileInfo) (IngestResult, error) {
-	result := IngestResult{Scanned: len(files)}
-	for _, file := range files {
-		if err := r.ingestScannedFile(ctx, file); err != nil {
-			return result, err
-		}
-		result.Imported++
-	}
-	return result, nil
-}
-
-func (r *Repository) ingestScannedFile(ctx context.Context, file scanner.FileInfo) error {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("begin ingest: %w", err)
-	}
-	defer tx.Rollback()
-
-	categorySlug, mediaType := ClassifyMedia(file.Path, file.Parsed)
-
-	var categoryID int64
-	if err := tx.QueryRowContext(ctx, `SELECT id FROM categories WHERE slug = $1`, categorySlug).Scan(&categoryID); err != nil {
-		return fmt.Errorf("find category %q: %w", categorySlug, err)
-	}
-
-	title := file.Parsed.Title
-	if title == "" {
-		title = strings.TrimSuffix(filepath.Base(file.Path), filepath.Ext(file.Path))
-	}
-	titleAR := nullableTitleAR(file.Parsed.TitleAR)
-	if !titleAR.Valid {
-		titleAR = nullableTitleAR(title)
-	}
-	titleEN := file.Parsed.TitleEN
-	if titleEN == "" {
-		titleEN = title
-	}
-
-	localPosterURL := ""
-	if file.ArtworkPath != "" {
-		localPosterURL = r.CacheLocalArtwork(file.ArtworkPath)
-	}
-
-	var mediaID int64
-	err = tx.QueryRowContext(ctx, `
-		SELECT id FROM media_items
-		WHERE type = $1 AND (LOWER(title_en) = LOWER($2) OR (title_ar IS NOT NULL AND title_ar = $3))
-		LIMIT 1;
-	`, mediaType, titleEN, titleAR).Scan(&mediaID)
-
-	if errors.Is(err, sql.ErrNoRows) {
-		err = tx.QueryRowContext(ctx, `
-			INSERT INTO media_items (
-				category_id,
-				title_ar,
-				title_en,
-				type,
-				release_year,
-				poster_path,
-				banner_path,
-				status
-			)
-			VALUES ($1, $2, $3, $4, NULLIF($5, 0), NULLIF($6, ''), NULLIF($6, ''), 'completed')
-			RETURNING id;
-		`, categoryID, titleAR, titleEN, mediaType, file.Parsed.ReleaseYear, localPosterURL).Scan(&mediaID)
-		if err != nil {
-			return fmt.Errorf("insert media item %q: %w", title, err)
-		}
-	} else if err != nil {
-		return fmt.Errorf("find media item %q: %w", title, err)
-	} else if localPosterURL != "" {
-		_, _ = tx.ExecContext(ctx, `
-			UPDATE media_items
-			SET poster_path = COALESCE(NULLIF(poster_path, ''), $2),
-			    banner_path = COALESCE(NULLIF(banner_path, ''), $2)
-			WHERE id = $1 AND (poster_path IS NULL OR poster_path = '' OR poster_path LIKE '/images/placeholder%');
-		`, mediaID, localPosterURL)
-	}
-
-	// A library folder such as "مسلسلات/عربي" is a stronger signal than a
-	// metadata search. Keep that owner-provided classification as a tag while
-	// preserving all existing genre tags already attached to the media item.
-	if originTags := scanner.DetectOriginTagsFromPath(file.Path); len(originTags) > 0 {
-		if err := mergeMediaTags(ctx, tx, mediaID, originTags); err != nil {
-			return fmt.Errorf("apply origin tags for %q: %w", title, err)
-		}
-	}
-
-	seasonID := sql.NullInt64{}
-	episodeNumber := sql.NullInt64{}
-	if file.Parsed.IsEpisode {
-		seasonNumber := file.Parsed.SeasonNumber
-		if seasonNumber <= 0 {
-			seasonNumber = 1
-		}
-		if err := tx.QueryRowContext(ctx, `
-			INSERT INTO seasons (media_item_id, season_number, title_en)
-			VALUES ($1, $2, $3)
-			ON CONFLICT (media_item_id, season_number)
-			DO UPDATE SET title_en = COALESCE(seasons.title_en, EXCLUDED.title_en)
-			RETURNING id;
-		`, mediaID, seasonNumber, fmt.Sprintf("Season %02d", seasonNumber)).Scan(&seasonID.Int64); err != nil {
-			return fmt.Errorf("upsert season %d: %w", seasonNumber, err)
-		}
-		seasonID.Valid = true
-		episodeNumber = sql.NullInt64{Int64: int64(file.Parsed.EpisodeNumber), Valid: file.Parsed.EpisodeNumber > 0}
-	}
-
-	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO video_files (
-			media_item_id,
-			season_id,
-			episode_number,
-			title_ar,
-			title_en,
-			file_path,
-			file_size,
-			resolution,
-			audio_tracks,
-			subtitles
-		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, NULLIF($8, ''), '[]'::jsonb, '[]'::jsonb)
-		ON CONFLICT (file_path)
-		DO UPDATE SET
-			media_item_id = EXCLUDED.media_item_id,
-			season_id = EXCLUDED.season_id,
-			episode_number = EXCLUDED.episode_number,
-			title_ar = EXCLUDED.title_ar,
-			title_en = EXCLUDED.title_en,
-			file_size = EXCLUDED.file_size,
-			resolution = EXCLUDED.resolution;
-	`, mediaID, seasonID, episodeNumber, titleAR, titleEN, file.Path, file.Size, file.Parsed.Resolution); err != nil {
-		return fmt.Errorf("upsert video file %q: %w", file.Path, err)
-	}
-
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit ingest: %w", err)
-	}
-	return nil
-}
-
+// ClassifyMedia maps a path and its parse result to a category slug and a media
+// type. Category detection is segment-based, so a folder like "/NotMovies/" can
+// no longer be misread as "movies".
 func ClassifyMedia(path string, parsed scanner.ParsedName) (categorySlug string, mediaType string) {
-	// Use the centralized category detection from the scanner package.
-	detectedSlug := scanner.DetectCategoryFromPath(path)
+	detectedSlug := parsed.CategorySlug
+	if detectedSlug == "" {
+		detectedSlug = scanner.DetectCategoryFromPath(path)
+	}
 
 	switch detectedSlug {
 	case "anime":
@@ -267,4 +129,14 @@ func containsArabic(input string) bool {
 		}
 	}
 	return false
+}
+
+// progressJSON serialises a scan progress snapshot for the session stats column.
+// An encoding failure must never fail a scan, so it degrades to "{}".
+func progressJSON(progress scanner.Progress) string {
+	encoded, err := json.Marshal(progress)
+	if err != nil {
+		return "{}"
+	}
+	return string(encoded)
 }

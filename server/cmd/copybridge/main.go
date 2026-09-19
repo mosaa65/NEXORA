@@ -79,6 +79,13 @@ func main() {
 	}
 
 	cfg := copybridge.LoadConfig()
+	if cfg.CommandToken == "" {
+		// One warning, not one per request: an operator needs to know the mutating
+		// commands are unauthenticated, but the log must not become noise.
+		slog.Warn("NEXORA_COPY_BRIDGE_TOKEN is not set: copy/mkdir/eject commands are " +
+			"protected only by the loopback bind and the CORS policy. Set it to require " +
+			"an Authorization header on mutating commands.")
+	}
 	service, err := copybridge.NewService(cfg)
 	if err != nil {
 		slog.Error("copy bridge init failed", slog.Any("error", err))

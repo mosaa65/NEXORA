@@ -12,6 +12,7 @@ const adminNavItems = [
   { id: "hubs", path: "/admin/hubs", label: "المحاور الذكية", icon: "grid" },
   { id: "media", path: "/admin/media", label: "إدارة الأعمال", icon: "film" },
   { id: "indexer", path: "/admin/indexer", label: "الفهرسة والمجلدات", icon: "search" },
+  { id: "review", path: "/admin/review", label: "مراجعة الحالات الغامضة", icon: "spark" },
   { id: "tmdb", path: "/admin/tmdb", label: "إعدادات TMDB", icon: "spark" },
   { id: "quality", path: "/admin/quality", label: "جودة المكتبة", icon: "book" },
   { id: "migration", path: "/admin/migration", label: "الترتيب والنقل", icon: "arrowLeft" },

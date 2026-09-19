@@ -27,59 +27,59 @@ const (
 // ModuleConfig defines individual toggle switches for every TMDB metadata field
 type ModuleConfig struct {
 	// Core text fields
-	FetchTitle            bool `json:"fetch_title"`
-	FetchOverview         bool `json:"fetch_overview"`
-	FetchGenres           bool `json:"fetch_genres"`
-	FetchKeywords         bool `json:"fetch_keywords"`
-	FetchReleaseDates     bool `json:"fetch_release_dates"`
-	FetchContentRatings   bool `json:"fetch_content_ratings"`
-	FetchExternalIDs      bool `json:"fetch_external_ids"`
-	FetchTranslations     bool `json:"fetch_translations"`
+	FetchTitle             bool `json:"fetch_title"`
+	FetchOverview          bool `json:"fetch_overview"`
+	FetchGenres            bool `json:"fetch_genres"`
+	FetchKeywords          bool `json:"fetch_keywords"`
+	FetchReleaseDates      bool `json:"fetch_release_dates"`
+	FetchContentRatings    bool `json:"fetch_content_ratings"`
+	FetchExternalIDs       bool `json:"fetch_external_ids"`
+	FetchTranslations      bool `json:"fetch_translations"`
 	FetchAlternativeTitles bool `json:"fetch_alternative_titles"`
-	FetchTrailers         bool `json:"fetch_trailers"`
-	FetchCreditsText      bool `json:"fetch_credits_text"`      // Cast & Crew names + roles
-	FetchRecommendations  bool `json:"fetch_recommendations"`   // Recommended titles text
-	FetchSimilar          bool `json:"fetch_similar"`           // Similar titles text
-	FetchReviews          bool `json:"fetch_reviews"`           // User reviews
-	FetchWatchProviders   bool `json:"fetch_watch_providers"`   // JustWatch streaming providers
+	FetchTrailers          bool `json:"fetch_trailers"`
+	FetchCreditsText       bool `json:"fetch_credits_text"`    // Cast & Crew names + roles
+	FetchRecommendations   bool `json:"fetch_recommendations"` // Recommended titles text
+	FetchSimilar           bool `json:"fetch_similar"`         // Similar titles text
+	FetchReviews           bool `json:"fetch_reviews"`         // User reviews
+	FetchWatchProviders    bool `json:"fetch_watch_providers"` // JustWatch streaming providers
 
 	// Images control
-	FetchPoster           bool `json:"fetch_poster"`
-	FetchBackdrop         bool `json:"fetch_backdrop"`
-	MaxCastImages         int  `json:"max_cast_images"`         // 0 = none, >0 = limit
-	MaxGalleryPosters     int  `json:"max_gallery_posters"`     // 0 = none, >0 = limit
-	MaxGalleryBackdrops   int  `json:"max_gallery_backdrops"`   // 0 = none, >0 = limit
-	MaxGalleryLogos       int  `json:"max_gallery_logos"`       // 0 = none, >0 = limit
-	MaxRelatedPosters     int  `json:"max_related_posters"`     // 0 = none, >0 = limit
+	FetchPoster         bool `json:"fetch_poster"`
+	FetchBackdrop       bool `json:"fetch_backdrop"`
+	MaxCastImages       int  `json:"max_cast_images"`       // 0 = none, >0 = limit
+	MaxGalleryPosters   int  `json:"max_gallery_posters"`   // 0 = none, >0 = limit
+	MaxGalleryBackdrops int  `json:"max_gallery_backdrops"` // 0 = none, >0 = limit
+	MaxGalleryLogos     int  `json:"max_gallery_logos"`     // 0 = none, >0 = limit
+	MaxRelatedPosters   int  `json:"max_related_posters"`   // 0 = none, >0 = limit
 
 	// Seasons & TV control
-	FetchSeasonOverview   bool `json:"fetch_season_overview"`
-	FetchSeasonPosters    bool `json:"fetch_season_posters"`
-	FetchEpisodeOverview  bool `json:"fetch_episode_overview"`
-	FetchEpisodeStills    bool `json:"fetch_episode_stills"`
+	FetchSeasonOverview  bool `json:"fetch_season_overview"`
+	FetchSeasonPosters   bool `json:"fetch_season_posters"`
+	FetchEpisodeOverview bool `json:"fetch_episode_overview"`
+	FetchEpisodeStills   bool `json:"fetch_episode_stills"`
 }
 
 // TMDBSettings is the complete configurable state of TMDB metadata operations
 type TMDBSettings struct {
-	FetchMode            FetchMode    `json:"fetch_mode"`
-	ImageMode            ImageMode    `json:"image_mode"`
-	PreferredLanguage    string       `json:"preferred_language"`     // Default: ar-SA
-	FallbackLanguage     string       `json:"fallback_language"`      // Default: en-US
-	IncludeImageLanguage string       `json:"include_image_language"` // Default: ar,en,null
-	DailyBandwidthMB     int64        `json:"daily_bandwidth_mb"`     // Daily bandwidth quota in MB (e.g. 500), 0 = unlimited
-	EnableRateLimitDelay bool         `json:"enable_rate_limit_delay"`
-	RateLimitRequestsPerSec int       `json:"rate_limit_requests_per_sec"` // Default 35
-	PosterSize           string       `json:"poster_size"`            // w500, w342, original
-	BackdropSize         string       `json:"backdrop_size"`          // original, w1280, w780
-	ProfileSize          string       `json:"profile_size"`           // w185, h632, original
-	StillSize            string       `json:"still_size"`             // w300, original
-	AutoRefreshEnabled   bool         `json:"auto_refresh_enabled"`
-	RefreshIntervalDays  int          `json:"refresh_interval_days"`
-	RefreshOnOpen        bool         `json:"refresh_on_open"`
-	RefreshStaleDays     int          `json:"refresh_stale_days"`
-	QueueMaxConcurrent   int          `json:"queue_max_concurrent"`
-	Modules              ModuleConfig `json:"modules"`
-	UpdatedAt            time.Time    `json:"updated_at"`
+	FetchMode               FetchMode    `json:"fetch_mode"`
+	ImageMode               ImageMode    `json:"image_mode"`
+	PreferredLanguage       string       `json:"preferred_language"`     // Default: ar-SA
+	FallbackLanguage        string       `json:"fallback_language"`      // Default: en-US
+	IncludeImageLanguage    string       `json:"include_image_language"` // Default: ar,en,null
+	DailyBandwidthMB        int64        `json:"daily_bandwidth_mb"`     // Daily bandwidth quota in MB (e.g. 500), 0 = unlimited
+	EnableRateLimitDelay    bool         `json:"enable_rate_limit_delay"`
+	RateLimitRequestsPerSec int          `json:"rate_limit_requests_per_sec"` // Default 35
+	PosterSize              string       `json:"poster_size"`                 // w500, w342, original
+	BackdropSize            string       `json:"backdrop_size"`               // original, w1280, w780
+	ProfileSize             string       `json:"profile_size"`                // w185, h632, original
+	StillSize               string       `json:"still_size"`                  // w300, original
+	AutoRefreshEnabled      bool         `json:"auto_refresh_enabled"`
+	RefreshIntervalDays     int          `json:"refresh_interval_days"`
+	RefreshOnOpen           bool         `json:"refresh_on_open"`
+	RefreshStaleDays        int          `json:"refresh_stale_days"`
+	QueueMaxConcurrent      int          `json:"queue_max_concurrent"`
+	Modules                 ModuleConfig `json:"modules"`
+	UpdatedAt               time.Time    `json:"updated_at"`
 }
 
 // TMDBRemoteConfig represents the payload from TMDB GET /3/configuration
@@ -99,50 +99,50 @@ type TMDBRemoteConfig struct {
 // DefaultSettings returns the recommended production defaults (Hybrid Mode)
 func DefaultSettings() TMDBSettings {
 	return TMDBSettings{
-		FetchMode:            FetchModeStandard,
-		ImageMode:            ImageModeHybrid,
-		PreferredLanguage:    "ar-SA",
-		FallbackLanguage:     "en-US",
-		IncludeImageLanguage: "ar,en,null",
-		DailyBandwidthMB:     500, // 500 MB daily quota protection
-		EnableRateLimitDelay: true,
+		FetchMode:               FetchModeStandard,
+		ImageMode:               ImageModeHybrid,
+		PreferredLanguage:       "ar-SA",
+		FallbackLanguage:        "en-US",
+		IncludeImageLanguage:    "ar,en,null",
+		DailyBandwidthMB:        500, // 500 MB daily quota protection
+		EnableRateLimitDelay:    true,
 		RateLimitRequestsPerSec: 35,
-		PosterSize:           "w500",
-		BackdropSize:         "original",
-		ProfileSize:          "w185",
-		StillSize:            "w300",
-		AutoRefreshEnabled:   false,
-		RefreshIntervalDays:  30,
-		RefreshOnOpen:        false,
-		RefreshStaleDays:     7,
-		QueueMaxConcurrent:   1,
+		PosterSize:              "w500",
+		BackdropSize:            "original",
+		ProfileSize:             "w185",
+		StillSize:               "w300",
+		AutoRefreshEnabled:      false,
+		RefreshIntervalDays:     30,
+		RefreshOnOpen:           false,
+		RefreshStaleDays:        7,
+		QueueMaxConcurrent:      1,
 		Modules: ModuleConfig{
-			FetchTitle:            true,
-			FetchOverview:         true,
-			FetchGenres:           true,
-			FetchKeywords:         true,
-			FetchReleaseDates:     true,
-			FetchContentRatings:   true,
-			FetchExternalIDs:      true,
-			FetchTranslations:     true,
+			FetchTitle:             true,
+			FetchOverview:          true,
+			FetchGenres:            true,
+			FetchKeywords:          true,
+			FetchReleaseDates:      true,
+			FetchContentRatings:    true,
+			FetchExternalIDs:       true,
+			FetchTranslations:      true,
 			FetchAlternativeTitles: true,
-			FetchTrailers:         true,
-			FetchCreditsText:      true,
-			FetchRecommendations:  true,
-			FetchSimilar:          true,
-			FetchReviews:          true,
-			FetchWatchProviders:   true,
-			FetchPoster:           true,
-			FetchBackdrop:         true,
-			MaxCastImages:         0, // Text names only by default in standard
-			MaxGalleryPosters:     0,
-			MaxGalleryBackdrops:   0,
-			MaxGalleryLogos:       0,
-			MaxRelatedPosters:     0,
-			FetchSeasonOverview:   true,
-			FetchSeasonPosters:    false,
-			FetchEpisodeOverview:  true,
-			FetchEpisodeStills:    false,
+			FetchTrailers:          true,
+			FetchCreditsText:       true,
+			FetchRecommendations:   true,
+			FetchSimilar:           true,
+			FetchReviews:           true,
+			FetchWatchProviders:    true,
+			FetchPoster:            true,
+			FetchBackdrop:          true,
+			MaxCastImages:          0, // Text names only by default in standard
+			MaxGalleryPosters:      0,
+			MaxGalleryBackdrops:    0,
+			MaxGalleryLogos:        0,
+			MaxRelatedPosters:      0,
+			FetchSeasonOverview:    true,
+			FetchSeasonPosters:     false,
+			FetchEpisodeOverview:   true,
+			FetchEpisodeStills:     false,
 		},
 		UpdatedAt: time.Now().UTC(),
 	}
@@ -154,109 +154,109 @@ func (s *TMDBSettings) ApplyProfile(profile FetchMode) {
 	switch profile {
 	case FetchModeEssential:
 		s.Modules = ModuleConfig{
-			FetchTitle:            true,
-			FetchOverview:         true,
-			FetchGenres:           true,
-			FetchKeywords:         true,
-			FetchReleaseDates:     true,
-			FetchContentRatings:   true,
-			FetchExternalIDs:      false,
-			FetchTranslations:     false,
+			FetchTitle:             true,
+			FetchOverview:          true,
+			FetchGenres:            true,
+			FetchKeywords:          true,
+			FetchReleaseDates:      true,
+			FetchContentRatings:    true,
+			FetchExternalIDs:       false,
+			FetchTranslations:      false,
 			FetchAlternativeTitles: false,
-			FetchTrailers:         false,
-			FetchCreditsText:      false,
-			FetchRecommendations:  false,
-			FetchSimilar:          false,
-			FetchReviews:          false,
-			FetchWatchProviders:   false,
-			FetchPoster:           true,
-			FetchBackdrop:         true,
-			MaxCastImages:         0,
-			MaxGalleryPosters:     0,
-			MaxGalleryBackdrops:   0,
-			MaxGalleryLogos:       0,
-			MaxRelatedPosters:     0,
-			FetchSeasonOverview:   false,
-			FetchSeasonPosters:    false,
-			FetchEpisodeOverview:  false,
-			FetchEpisodeStills:    false,
+			FetchTrailers:          false,
+			FetchCreditsText:       false,
+			FetchRecommendations:   false,
+			FetchSimilar:           false,
+			FetchReviews:           false,
+			FetchWatchProviders:    false,
+			FetchPoster:            true,
+			FetchBackdrop:          true,
+			MaxCastImages:          0,
+			MaxGalleryPosters:      0,
+			MaxGalleryBackdrops:    0,
+			MaxGalleryLogos:        0,
+			MaxRelatedPosters:      0,
+			FetchSeasonOverview:    false,
+			FetchSeasonPosters:     false,
+			FetchEpisodeOverview:   false,
+			FetchEpisodeStills:     false,
 		}
 	case FetchModeStandard:
 		s.Modules = ModuleConfig{
-			FetchTitle:            true,
-			FetchOverview:         true,
-			FetchGenres:           true,
-			FetchKeywords:         true,
-			FetchReleaseDates:     true,
-			FetchContentRatings:   true,
-			FetchExternalIDs:      true,
-			FetchTranslations:     true,
+			FetchTitle:             true,
+			FetchOverview:          true,
+			FetchGenres:            true,
+			FetchKeywords:          true,
+			FetchReleaseDates:      true,
+			FetchContentRatings:    true,
+			FetchExternalIDs:       true,
+			FetchTranslations:      true,
 			FetchAlternativeTitles: true,
-			FetchTrailers:         true,
-			FetchCreditsText:      true,
-			FetchRecommendations:  true,
-			FetchSimilar:          true,
-			FetchReviews:          false,
-			FetchWatchProviders:   false,
-			FetchPoster:           true,
-			FetchBackdrop:         true,
-			MaxCastImages:         0,
-			MaxGalleryPosters:     0,
-			MaxGalleryBackdrops:   0,
-			MaxGalleryLogos:       0,
-			MaxRelatedPosters:     0,
-			FetchSeasonOverview:   true,
-			FetchSeasonPosters:    false,
-			FetchEpisodeOverview:  true,
-			FetchEpisodeStills:    false,
+			FetchTrailers:          true,
+			FetchCreditsText:       true,
+			FetchRecommendations:   true,
+			FetchSimilar:           true,
+			FetchReviews:           false,
+			FetchWatchProviders:    false,
+			FetchPoster:            true,
+			FetchBackdrop:          true,
+			MaxCastImages:          0,
+			MaxGalleryPosters:      0,
+			MaxGalleryBackdrops:    0,
+			MaxGalleryLogos:        0,
+			MaxRelatedPosters:      0,
+			FetchSeasonOverview:    true,
+			FetchSeasonPosters:     false,
+			FetchEpisodeOverview:   true,
+			FetchEpisodeStills:     false,
 		}
 	case FetchModeFull:
 		s.Modules = ModuleConfig{
-			FetchTitle:            true,
-			FetchOverview:         true,
-			FetchGenres:           true,
-			FetchKeywords:         true,
-			FetchReleaseDates:     true,
-			FetchContentRatings:   true,
-			FetchExternalIDs:      true,
-			FetchTranslations:     true,
+			FetchTitle:             true,
+			FetchOverview:          true,
+			FetchGenres:            true,
+			FetchKeywords:          true,
+			FetchReleaseDates:      true,
+			FetchContentRatings:    true,
+			FetchExternalIDs:       true,
+			FetchTranslations:      true,
 			FetchAlternativeTitles: true,
-			FetchTrailers:         true,
-			FetchCreditsText:      true,
-			FetchRecommendations:  true,
-			FetchSimilar:          true,
-			FetchReviews:          true,
-			FetchWatchProviders:   true,
-			FetchPoster:           true,
-			FetchBackdrop:         true,
-			MaxCastImages:         20,
-			MaxGalleryPosters:     12,
-			MaxGalleryBackdrops:   12,
-			MaxGalleryLogos:       8,
-			MaxRelatedPosters:     12,
-			FetchSeasonOverview:   true,
-			FetchSeasonPosters:    true,
-			FetchEpisodeOverview:  true,
-			FetchEpisodeStills:    true,
+			FetchTrailers:          true,
+			FetchCreditsText:       true,
+			FetchRecommendations:   true,
+			FetchSimilar:           true,
+			FetchReviews:           true,
+			FetchWatchProviders:    true,
+			FetchPoster:            true,
+			FetchBackdrop:          true,
+			MaxCastImages:          20,
+			MaxGalleryPosters:      12,
+			MaxGalleryBackdrops:    12,
+			MaxGalleryLogos:        8,
+			MaxRelatedPosters:      12,
+			FetchSeasonOverview:    true,
+			FetchSeasonPosters:     true,
+			FetchEpisodeOverview:   true,
+			FetchEpisodeStills:     true,
 		}
 	}
 }
 
 // TMDBUsageSummary encapsulates network & quota monitoring
 type TMDBUsageSummary struct {
-	TotalRequests          int64     `json:"total_requests"`
-	RequestsToday          int64     `json:"requests_today"`
-	RequestsThisMonth      int64     `json:"requests_this_month"`
-	TotalBytesDownloaded   int64     `json:"total_bytes_downloaded"`
-	BytesToday             int64     `json:"bytes_today"`
-	MBToday                float64   `json:"mb_today"`
-	DailyQuotaMB           int64     `json:"daily_quota_mb"`
-	DailyQuotaUsedPercent  float64   `json:"daily_quota_used_percent"`
-	TotalImagesDownloaded  int64     `json:"total_images_downloaded"`
-	ImagesToday            int64     `json:"images_today"`
-	EnrichedMediaCount     int64     `json:"enriched_media_count"`
-	PendingMediaCount      int64     `json:"pending_media_count"`
-	LastRequestAt          *time.Time `json:"last_request_at,omitempty"`
+	TotalRequests         int64      `json:"total_requests"`
+	RequestsToday         int64      `json:"requests_today"`
+	RequestsThisMonth     int64      `json:"requests_this_month"`
+	TotalBytesDownloaded  int64      `json:"total_bytes_downloaded"`
+	BytesToday            int64      `json:"bytes_today"`
+	MBToday               float64    `json:"mb_today"`
+	DailyQuotaMB          int64      `json:"daily_quota_mb"`
+	DailyQuotaUsedPercent float64    `json:"daily_quota_used_percent"`
+	TotalImagesDownloaded int64      `json:"total_images_downloaded"`
+	ImagesToday           int64      `json:"images_today"`
+	EnrichedMediaCount    int64      `json:"enriched_media_count"`
+	PendingMediaCount     int64      `json:"pending_media_count"`
+	LastRequestAt         *time.Time `json:"last_request_at,omitempty"`
 }
 
 type TMDBUsageDay struct {
@@ -271,14 +271,14 @@ type TMDBUsageDay struct {
 
 // ModuleItemInfo represents a descriptor for UI render
 type ModuleItemInfo struct {
-	ID                  string `json:"id"`
-	Category            string `json:"category"` // "text", "media", "tv", "extra"
-	NameAR              string `json:"name_ar"`
-	NameEN              string `json:"name_en"`
-	DescriptionAR       string `json:"description_ar"`
-	EstimatedBandwidth  string `json:"estimated_bandwidth"`
-	Enabled             bool   `json:"enabled"`
-	IsEssential         bool   `json:"is_essential"`
+	ID                 string `json:"id"`
+	Category           string `json:"category"` // "text", "media", "tv", "extra"
+	NameAR             string `json:"name_ar"`
+	NameEN             string `json:"name_en"`
+	DescriptionAR      string `json:"description_ar"`
+	EstimatedBandwidth string `json:"estimated_bandwidth"`
+	Enabled            bool   `json:"enabled"`
+	IsEssential        bool   `json:"is_essential"`
 }
 
 // GetModuleList returns a friendly UI manifest of all available toggles

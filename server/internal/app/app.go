@@ -48,7 +48,18 @@ func Run() {
 
 	repository := db.NewRepository(sqlDB)
 	repository.SetAssetImageDir(cfg.AssetImageDir)
-	scannerService := scanner.New(scanner.Options{Workers: cfg.ScanWorkers})
+	scannerService := scanner.New(scanner.Options{
+		Workers:   cfg.ScanWorkers,
+		QueueSize: cfg.ScanQueueSize,
+		Discovery: scanner.DiscoveryConfig{
+			FollowSymlinks: cfg.FollowSymlinks,
+			IgnoreHidden:   cfg.IgnoreHidden,
+			IgnoreDirs:     cfg.IgnoreDirs,
+			MaxDepth:       cfg.ScanMaxDepth,
+		},
+		ProgressInterval: cfg.ScanProgressInterval,
+	})
+	scannerService.SetConfiguredRoots(cfg.MediaRoots)
 	searchClient := search.NewClient(search.Config{
 		Host:   cfg.MeiliHost,
 		APIKey: cfg.MeiliAPIKey,
@@ -83,30 +94,61 @@ func Run() {
 		})
 	}
 
+	// The resolution session is the single write path for every file that reaches
+	// the catalogue: the on-demand scan, the debounced watcher, and the scheduled
+	// reconciliation sweep all share it, so no path can bypass entity resolution.
+	resolutionSession := db.NewResolutionSession()
+
 	if len(cfg.MediaRoots) > 0 {
-		eventWatcher := scanner.NewEventWatcher(scannerService, cfg.WatchRecursive)
+		logInterruptedScans(ctx, repository)
+
+		// The watcher is the FAST PATH. It is debounced and stability-checked so
+		// an in-progress download is ingested once, after it stops growing.
+		eventWatcher := scanner.NewEventWatcherWithOptions(scannerService, scanner.WatcherOptions{
+			Recursive:          cfg.WatchRecursive,
+			Debounce:           cfg.WatchDebounce,
+			Stability:          cfg.WatchStability,
+			RootRetryInterval:  cfg.WatchRetryInterval,
+			ErrorRetryInterval: cfg.WatchErrorRetry,
+			Logger:             slog.Default(),
+		})
 		go func() {
 			err := eventWatcher.Watch(ctx, cfg.MediaRoots, func(event scanner.Event) error {
-				if event.File != nil {
-					if _, err := repository.IngestScannedFiles(ctx, []scanner.FileInfo{*event.File}); err != nil {
-						slog.Warn("media ingest failed", slog.String("kind", string(event.Kind)), slog.String("path", event.Path), slog.Any("error", err))
-						return nil
-					}
-					slog.Info("media indexed", slog.String("kind", string(event.Kind)), slog.String("path", event.Path), slog.String("title", event.File.Parsed.Title))
-				} else {
-					slog.Info("media event", slog.String("kind", string(event.Kind)), slog.String("path", event.Path))
-				}
+				handleWatchEvent(ctx, repository, resolutionSession, cfg, event)
 				return nil
 			})
 			if err != nil && !errors.Is(err, context.Canceled) {
 				slog.Error("media watcher stopped", slog.Any("error", err))
 			}
 		}()
+
+		// Reconciliation is the SOURCE OF TRUTH. fsnotify can overflow its buffer,
+		// lose events on network shares, or miss everything that happened while the
+		// server was down; a periodic incremental sweep settles that drift.
+		if cfg.ReconcileInterval > 0 {
+			scheduler := scanner.NewWatchScheduler(scannerService, scanner.WatchSchedulerOptions{
+				Interval: cfg.ReconcileInterval,
+				Roots:    cfg.MediaRoots,
+				Mode:     scanner.ModeReconcile,
+				Logger:   slog.Default(),
+			}, func(roots []string) ([]scanner.KnownFile, error) {
+				return repository.ListKnownFiles(ctx, roots)
+			}, func(result scanner.ReconcileResult, decisions []scanner.ReconcileDecision) error {
+				return nil
+			})
+			emit := buildReconcileEmitter(ctx, repository, resolutionSession)
+			go func() {
+				if err := scheduler.Run(ctx, emit); err != nil && !errors.Is(err, context.Canceled) {
+					slog.Error("reconciliation scheduler stopped", slog.Any("error", err))
+				}
+			}()
+		}
 	}
 
 	server := &http.Server{
-		Addr:              cfg.HTTPAddr,
-		Handler:           api.NewServer(cfg, repository, scannerService, searchClient, metadataService, mediaProcessor, migrationService, qualityService, transferService),
+		Addr: cfg.HTTPAddr,
+		Handler: api.NewServer(cfg, repository, scannerService, searchClient, metadataService,
+			mediaProcessor, migrationService, qualityService, transferService, resolutionSession),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
