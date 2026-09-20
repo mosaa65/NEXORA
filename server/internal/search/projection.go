@@ -16,6 +16,10 @@ type ProjectionStore interface {
 	LoadProjectionCursors(ctx context.Context) (map[string]int64, error)
 	SaveProjectionCursor(ctx context.Context, kind string, lastID int64, documentCount int64) error
 	ResetProjectionCursor(ctx context.Context, kind string) error
+	// LiveWorkIDs returns every work id that still exists in the database. The
+	// projector diffs the index against this to find and remove orphaned
+	// documents, which is what stops a deleted work from staying searchable.
+	LiveWorkIDs(ctx context.Context) ([]int64, error)
 }
 
 // ProjectionResult reports what a rebuild did.
@@ -26,6 +30,10 @@ type ProjectionResult struct {
 	LastID    int64  `json:"lastId"`
 	Resumed   bool   `json:"resumed"`
 	TaskUID   string `json:"taskUid,omitempty"`
+	// Pruned is how many orphaned documents a full rebuild removed. It is only
+	// populated for a reset run, because pruning is destructive and must not
+	// happen silently during a routine sync.
+	Pruned int `json:"pruned,omitempty"`
 }
 
 // DefaultProjectionPageSize is the page size used when none is chosen.
@@ -60,6 +68,7 @@ type Projector struct {
 type ProjectionSink interface {
 	IndexDocuments(ctx context.Context, documents []MediaDocument) (SyncResult, error)
 	DeleteDocuments(ctx context.Context, ids []int64) (SyncResult, error)
+	DocumentIDs(ctx context.Context) ([]int64, error)
 }
 
 // NewProjector wires a projector to the search engine and the database.
@@ -118,7 +127,8 @@ func (p *Projector) Rebuild(ctx context.Context, reset bool) (ProjectionResult, 
 		syncResult, err := p.client.IndexDocuments(ctx, page)
 		if err != nil {
 			// Return the progress already made so the caller's report is truthful
-			// about how far the index got before failing.
+			// about how far the index got before failing. documentsProjected counts
+			// pages that succeeded, so the number is the work actually done.
 			result.Documents = documentsProjected
 			result.LastID = afterID
 			return result, fmt.Errorf("index projection page: %w", err)
@@ -142,6 +152,22 @@ func (p *Projector) Rebuild(ctx context.Context, reset bool) (ProjectionResult, 
 	}
 
 	result.Documents = documentsProjected
+	// A full rebuild is the one place pruning runs automatically: the operator
+	// already asked for a rebuild from scratch, so removing documents whose work
+	// no longer exists is part of delivering that. An incremental sync never
+	// prunes, so no routine operation can delete from the index unasked.
+	if reset {
+		pruneResult, pruneErr := p.Prune(ctx)
+		if pruneErr != nil {
+			// Report the rebuild as successful and the prune as incomplete rather
+			// than discarding the work that was done.
+			p.logger.Warn("projection rebuild finished but pruning failed",
+				slog.Any("error", pruneErr))
+		} else {
+			result.Pruned = pruneResult.Deleted
+		}
+	}
+
 	return result, nil
 }
 
@@ -169,4 +195,78 @@ func (p *Projector) DeleteWork(ctx context.Context, ids []int64) error {
 		return fmt.Errorf("delete search documents: %w", err)
 	}
 	return nil
+}
+
+// PruneResult reports what a prune pass found and removed.
+
+type PruneResult struct {
+	Indexed  int `json:"indexed"`
+	Live     int `json:"live"`
+	Orphans  int `json:"orphans"`
+	Deleted  int `json:"deleted"`
+	Failures int `json:"failures"`
+}
+
+// pruneBatchSize bounds how many ids are sent in one delete request.
+const pruneBatchSize = 1000
+
+// Prune removes index documents whose work no longer exists in the database.
+//
+// This is the missing half of the projection. Indexing alone is additive, so
+// every deleted or merged work stayed searchable forever and clicking one gave
+// a 404. The index is derived data, which means it must follow deletions as well
+// as insertions.
+//
+// It is deliberately a separate operation rather than part of every sync:
+// deleting from the search index is destructive, so it runs on explicit request
+// or as the final step of a full rebuild, never silently during a routine sync.
+func (p *Projector) Prune(ctx context.Context) (PruneResult, error) {
+	result := PruneResult{}
+
+	indexed, err := p.client.DocumentIDs(ctx)
+	if err != nil {
+		return result, fmt.Errorf("read index ids: %w", err)
+	}
+	result.Indexed = len(indexed)
+	if len(indexed) == 0 {
+		return result, nil
+	}
+
+	live, err := p.store.LiveWorkIDs(ctx)
+	if err != nil {
+		return result, fmt.Errorf("read live work ids: %w", err)
+	}
+	result.Live = len(live)
+
+	liveSet := make(map[int64]struct{}, len(live))
+	for _, id := range live {
+		liveSet[id] = struct{}{}
+	}
+
+	orphans := make([]int64, 0)
+	for _, id := range indexed {
+		if _, exists := liveSet[id]; !exists {
+			orphans = append(orphans, id)
+		}
+	}
+	result.Orphans = len(orphans)
+
+	for start := 0; start < len(orphans); start += pruneBatchSize {
+		if err := ctx.Err(); err != nil {
+			return result, err
+		}
+		end := start + pruneBatchSize
+		if end > len(orphans) {
+			end = len(orphans)
+		}
+		if _, err := p.client.DeleteDocuments(ctx, orphans[start:end]); err != nil {
+			// One failed batch must not abandon the rest: the remaining orphans are
+			// still worth removing, and the count makes the partial result honest.
+			result.Failures++
+			continue
+		}
+		result.Deleted += end - start
+	}
+
+	return result, nil
 }

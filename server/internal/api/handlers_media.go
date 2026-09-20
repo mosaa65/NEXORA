@@ -163,7 +163,25 @@ func (s *Server) handleMediaDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "deleted_id": mediaID})
+	// Remove the search document immediately.
+	//
+	// Indexing is additive, so without this the deleted work stays searchable
+	// and clicking it returns a 404. The cascade is best-effort: the database
+	// delete already succeeded, and a failed index cleanup must not report the
+	// deletion as failed. It is reported as a warning so the operator knows a
+	// prune is worthwhile, and POST /api/search/prune is the recovery path.
+	warning := ""
+	projector := search.NewProjector(s.search, s.repository, search.DefaultProjectionPageSize, nil)
+	if err := projector.DeleteWork(r.Context(), []int64{mediaID}); err != nil {
+		warning = "deleted, but the search index entry could not be removed: " + err.Error() +
+			"; run POST /api/search/prune to reconcile"
+	}
+
+	payload := map[string]any{"ok": true, "deleted_id": mediaID}
+	if warning != "" {
+		payload["warning"] = warning
+	}
+	writeJSON(w, http.StatusOK, payload)
 }
 
 func (s *Server) handleMediaFiles(w http.ResponseWriter, r *http.Request) {

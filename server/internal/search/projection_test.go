@@ -73,6 +73,17 @@ func (s *fakeStore) ResetProjectionCursor(ctx context.Context, kind string) erro
 	return nil
 }
 
+// LiveWorkIDs reports the works that still exist, which is the set a prune pass
+// keeps. The fake exposes it so the orphan behaviour is testable without a
+// database.
+func (s *fakeStore) LiveWorkIDs(ctx context.Context) ([]int64, error) {
+	ids := make([]int64, 0, len(s.documents))
+	for _, doc := range s.documents {
+		ids = append(ids, doc.ID)
+	}
+	return ids, nil
+}
+
 // fakeSink records what was indexed so the test can assert exact document sets.
 type fakeSink struct {
 	indexedBatches [][]MediaDocument
@@ -98,6 +109,35 @@ func (s *fakeSink) IndexDocuments(ctx context.Context, documents []MediaDocument
 func (s *fakeSink) DeleteDocuments(ctx context.Context, ids []int64) (SyncResult, error) {
 	s.deleted = append(s.deleted, ids...)
 	return SyncResult{Indexed: len(ids)}, nil
+}
+
+// DocumentIDs reports the ids currently indexed, so the orphan-prune test can
+// simulate an index that accumulated documents whose rows are gone.
+func (s *fakeSink) DocumentIDs(ctx context.Context) ([]int64, error) {
+	seen := make(map[int64]struct{}, len(s.indexedBatches))
+	ids := make([]int64, 0, len(s.indexedBatches))
+	for _, batch := range s.indexedBatches {
+		for _, doc := range batch {
+			if _, exists := seen[doc.ID]; exists {
+				continue
+			}
+			seen[doc.ID] = struct{}{}
+			ids = append(ids, doc.ID)
+		}
+	}
+	// Deleted ids are removed, so a prune test sees the index shrink.
+	deleted := make(map[int64]struct{}, len(s.deleted))
+	for _, id := range s.deleted {
+		deleted[id] = struct{}{}
+	}
+	out := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		if _, gone := deleted[id]; gone {
+			continue
+		}
+		out = append(out, id)
+	}
+	return out, nil
 }
 
 // TestProjectionPagesThroughTheWholeCatalogue is the test for the removed

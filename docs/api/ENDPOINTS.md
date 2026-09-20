@@ -58,7 +58,35 @@
 | المسار | الطريقة | الوصف |
 |--------|---------|-------|
 | `/api/search` | `GET` | البحث الفوري اللحظي عبر Meilisearch (`?q=...`) |
-| `/api/search/sync` | `POST` | إعادة بناء فهرس البحث كـ projection من PostgreSQL (admin). `?reset=true` يبدأ من الصفر، وبدونه **يستكمل** من الـ cursor |
+| `/api/search/sync` | `POST` | إعادة بناء فهرس البحث كـ projection من PostgreSQL (admin). `?reset=true` يبدأ من الصفر ويُنظّف اليتامى، وبدونه **يستكمل** من الـ cursor |
+| `/api/search/prune` | `POST` | إزالة مستندات الفهرس التي لم يعد لها صف في قاعدة البيانات (admin). يعيد `indexed`/`live`/`orphans`/`deleted` |
+| `/api/episodes/search` | `GET` | البحث في فهرس الحلقات المنفصل. معاملات: `q`, `work`, `season`, `local`, `limit` (حد 200), `offset` (تخطّي نتائج، للترقيم عبر عمل طويل) |
+| `/api/episodes/index/sync` | `POST` | إعادة بناء فهرس الحلقات من قاعدة البيانات (admin). `?reset=true` يبدأ من الصفر وينظّف اليتامى |
+| `/api/library/enrich-local` | `POST` | الإثراء المحلي للحلقات والمواسم من snapshots المزوّد المخزّنة (admin). **صفر طلبات خارجية**. معاملات: `work`, `limit` |
+| `/api/library/duplicate-works` | `GET` | الأعمال المكررة وصفوف الحاويات، مصنّفة حسب الخطورة (admin). قراءة فقط |
+| `/api/library/provider-only-episodes` | `GET` | حلقات يعرفها المزوّد ولم تحصل عليها المكتبة = قائمة "قيد الإضافة" (admin) |
+
+### فهرس الحلقات والإثراء المحلي
+فهرس `media_episodes` **منفصل** عن فهرس الأعمال، وهذا مقصود:
+- المشاركة تُصادم على المعرّف (عمل 42 ≠ حلقة 42)
+- الفلترة حسب العمل/الموسم تصبح **بحثًا (lookup)** لا مسحًا
+```powershell
+# حلقات عمل معيّن، الموسم الثالث فقط
+Invoke-WebRequest "http://127.0.0.1:8080/api/episodes/search?work=16&season=3" -UseBasicParsing
+# الحلقات "قيد الإضافة" (بلا ملف محلي)
+Invoke-WebRequest "http://127.0.0.1:8080/api/episodes/search?work=16&local=false" -UseBasicParsing
+# البحث بعنوان حلقة
+Invoke-WebRequest "http://127.0.0.1:8080/api/episodes/search?q=Ozymandias" -UseBasicParsing
+# الترقيم عبر عمل طويل (صفحة 2 من 200 حلقة)
+# فهرس الحلقات مضبوط على pagination.maxTotalHits = 10000، وإلا توقف الترقيم عند 1000
+Invoke-WebRequest "http://127.0.0.1:8080/api/episodes/search?work=160&limit=200&offset=200" -UseBasicParsing
+# الإثراء المحلي — صفر طلبات TMDB
+Invoke-WebRequest "http://127.0.0.1:8080/api/library/enrich-local" -Method POST -Headers $headers -UseBasicParsing
+# تقرير المكررات قبل أي دمج
+Invoke-WebRequest "http://127.0.0.1:8080/api/library/duplicate-works" -Headers $headers -UseBasicParsing
+```
+
+**الإثراء محلي بالكامل:** يقرأ من `season_metadata_snapshots` المخزّنة، ويطابق بـ `(media_item_id, season_number, episode_number)` — لا تخمين ولا طلب شبكة.
 | `/api/index` | `POST` | تشغيل مسار الفهرسة (admin). الحقول: `roots`, `mode` (`full`/`incremental`، الافتراضي `incremental`), `inspect`, `syncSearch` |
 | `/api/ingest` | `POST` | مرادف لـ `/api/index` (توافق مع العملاء القدامى) |
 | `/api/index/preview` | `POST` | معاينة Dry-Run بدون أي كتابة لقاعدة البيانات |

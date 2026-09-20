@@ -25,10 +25,23 @@ type Client struct {
 	httpClient *http.Client
 }
 
+// MediaDocument is the search projection of one work.
+//
+// It is deliberately separate from the database model: the shape here is what a
+// search engine needs, not what persistence needs. Display fields and search
+// fields coexist so the client can render a card from one hit.
 type MediaDocument struct {
-	ID                 int64    `json:"id"`
-	TitleAR            string   `json:"title_ar,omitempty"`
-	TitleEN            string   `json:"title_en"`
+	ID      int64  `json:"id"`
+	TitleAR string `json:"title_ar,omitempty"`
+	TitleEN string `json:"title_en"`
+	// TitleNormalized is a search-only field. It folds Arabic letter variants,
+	// diacritics and Arabic-Indic numerals, so "اسامة" matches "أسامة" and
+	// "الحلقة ١" matches "الحلقة 1". The original spelling is never replaced:
+	// TitleAR and TitleEN keep it for display.
+	TitleNormalized string `json:"title_normalized,omitempty"`
+	// AlternateTitles carries every known alias for the work, so a library that
+	// learned "ون بيس" as an alias for "One Piece" is findable by either name.
+	AlternateTitles    []string `json:"alternate_titles,omitempty"`
 	Type               string   `json:"type"`
 	PlotAR             string   `json:"plot_ar,omitempty"`
 	PlotEN             string   `json:"plot_en,omitempty"`
@@ -149,6 +162,67 @@ func (c *Client) IndexDocuments(ctx context.Context, documents []MediaDocument) 
 	return SyncResult{Indexed: len(documents), TaskUID: taskUID}, nil
 }
 
+// DocumentIDs returns every primary key currently held by the index.
+//
+// It is what makes orphan detection possible: the projector compares this set
+// against the set of works that still exist in PostgreSQL, and everything left
+// over is a leftover from a deleted or merged row.
+//
+// Meilisearch paginates this endpoint, so it is read page by page rather than
+// assuming one response carries the whole index. A library with a million works
+// would otherwise silently truncate at the engine's default page size.
+func (c *Client) DocumentIDs(ctx context.Context) ([]int64, error) {
+	if err := c.EnsureIndex(ctx); err != nil {
+		return nil, err
+	}
+
+	const pageSize = 1000
+	const maxPages = 100000 // safety bound: 100M documents
+	ids := make([]int64, 0, pageSize)
+	for page := 0; page < maxPages; page++ {
+		path := fmt.Sprintf("/indexes/%s/documents?fields=id&limit=%d&offset=%d",
+			url.PathEscape(c.index), pageSize, page*pageSize)
+
+		response, err := c.doJSON(ctx, http.MethodGet, path, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		payload, readErr := io.ReadAll(io.LimitReader(response.Body, 8<<20))
+		response.Body.Close()
+		if readErr != nil {
+			return nil, readErr
+		}
+		if response.StatusCode >= 300 {
+			return nil, fmt.Errorf("list meilisearch documents: status %d: %s",
+				response.StatusCode, strings.TrimSpace(string(payload)))
+		}
+
+		var batch struct {
+			Results []struct {
+				ID int64 `json:"id"`
+			} `json:"results"`
+		}
+		if err := json.Unmarshal(payload, &batch); err != nil {
+			return nil, fmt.Errorf("decode meilisearch documents: %w", err)
+		}
+		if len(batch.Results) == 0 {
+			break
+		}
+		for _, entry := range batch.Results {
+			ids = append(ids, entry.ID)
+		}
+		if len(batch.Results) < pageSize {
+			break
+		}
+
+		if err := ctx.Err(); err != nil {
+			return ids, err
+		}
+	}
+	return ids, nil
+}
+
 // DeleteDocuments removes documents by primary key.
 //
 // Meilisearch deletes by primary key, so removing a merged duplicate or a
@@ -237,26 +311,50 @@ func (c *Client) SearchDocuments(ctx context.Context, query string, limit int, f
 }
 
 func (c *Client) configureSettings(ctx context.Context) error {
+	// Attribute order is significance order, not a set: Meilisearch weights an
+	// earlier attribute above a later one. The previous order put a plot before
+	// the title's own Arabic name and gave the synopsis the same weight as the
+	// name, so a plot mentioning "inception" could outrank a work actually
+	// titled "Inception". The title now comes first in both scripts.
 	settings := map[string][]string{
 		"searchableAttributes": {
-			"title_ar",
 			"title_en",
+			"title_ar",
+			// The normalized title is what makes "اسامة" match "أسامة" and
+			// Arabic-Indic numerals match ASCII ones. It sits directly beside the
+			// real titles so a folded match ranks as a title match.
+			"title_normalized",
+			"alternate_titles",
 			"genres",
-			"plot_ar",
-			"plot_en",
-			"category_ar",
 			"category_en",
+			"category_ar",
+			"plot_en",
+			"plot_ar",
 		},
 		"filterableAttributes": {
 			"type",
 			"category_slug",
 			"release_year",
 			"genres",
+			"status",
 		},
 		"sortableAttributes": {
 			"rating",
 			"release_year",
 			"file_count",
+		},
+		// Ranking rules are set explicitly rather than left implicit. They are
+		// Meilisearch's defaults today, and writing them down means a future
+		// engine upgrade cannot silently change how results are ordered.
+		// `attribute` is the rule that applies the searchable-attribute order
+		// above, which is why the order matters.
+		"rankingRules": {
+			"words",
+			"typo",
+			"proximity",
+			"attribute",
+			"sort",
+			"exactness",
 		},
 	}
 

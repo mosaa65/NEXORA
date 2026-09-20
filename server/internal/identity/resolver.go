@@ -505,13 +505,35 @@ var containerFolderNames = map[string]struct{}{
 	// Arabic browse groupings seen in real libraries.
 	"اعمال": {}, "أعمال": {}, "افلام": {}, "أفلام": {}, "مسلسلات": {}, "مسلسل": {},
 	"مكتبه": {}, "مكتبة": {}, "القسم": {}, "قسم": {}, "الكل": {}, "متنوع": {},
-	"افلام ومسلسلات": {}, "اخرى": {}, "أخرى": {}, "جديد": {}, "قديم": {},
+	"افلام ومسلسلات": {}, "اخرى": {}, "أخرى": {}, "اخري": {}, "أخري": {},
+	"جديد": {}, "قديمة": {}, "قديم": {}, "متنوعة": {}, "منوعة": {}, "متنوعه": {},
 	"franchises": {}, "collection": {}, "collections": {}, "boxset": {}, "box set": {},
 	"movies": {}, "films": {}, "series": {}, "tv": {}, "shows": {},
 	"library": {}, "media": {}, "video": {}, "videos": {}, "unsorted": {},
 	"misc": {}, "other": {}, "others": {}, "extra": {}, "extras": {},
 	"featurettes": {}, "bonus": {}, "sample": {}, "samples": {},
 }
+
+// IsContainerFolderName reports whether a folder name is a container (a browse
+// grouping, a category or a franchise label) rather than a work title.
+//
+// It is exported because the catalogue repair needs the same rule the resolver
+// uses when choosing a title. Two implementations of "what is a container" would
+// eventually disagree, and then a repaired row and a freshly ingested row would
+// differ for the same folder.
+func IsContainerFolderName(folder string) bool { return isContainerFolderName(folder) }
+
+// IsContainerFolderNameForTitle reports whether a folder is a container in the
+// wider sense the catalogue repair needs: either the name itself is a container,
+// or it begins with one and carries a qualifier ("مسلسلات تركية").
+//
+// It deliberately mirrors scanner.IsContainerFolderForTitle. The two packages
+// cannot import each other, so the rule is written twice and a test asserts the
+// same inputs classify the same way in both.
+
+// IsStructuralTitle reports whether a title is only a structural keyword
+// ("Season", "Episode", "Part") rather than a name.
+func IsStructuralTitle(title string) bool { return isStructuralWord(title) }
 
 // isContainerFolderName reports whether a folder name is a container rather than
 // a work title.
