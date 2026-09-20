@@ -271,10 +271,15 @@ client/**                                            ← الواجهة
 ---
 
 ## Git commit
+```
+65244fc  fix(transfer): resolve PowerShell by path and send scripts encoded
+2b37095  feat(transfer): complete the Android backend over Shell COM
+7b58a55  docs(agent): scope the Android work and record the decision
+   eb656e0  docs(agent): baseline and architecture before touching Android
+```
 
-```
-<يُملأ بعد الرفع>
-```
+**الفرع:** `feature/nexora-agent-android-architecture` — مرفوع ومتتبع لـ origin.
+**قبل الرفع:** `main` عند `1f51f8a` **دون تغيير**.
 
 ## Rollback instructions
 
