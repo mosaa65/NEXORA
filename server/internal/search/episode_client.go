@@ -66,6 +66,13 @@ func (c *Client) ConfigureEpisodeIndex(ctx context.Context) error {
 			"sort",
 			"exactness",
 		},
+		// Meilisearch stops paginating at 1000 hits by default. A long-running
+		// show exceeds that — the live library has a work with 1,181 episodes —
+		// so the default would silently truncate a work's episode list at the
+		// 1000th hit. Raised so a whole work can be paged through.
+		"pagination": map[string]int{
+			"maxTotalHits": 10000,
+		},
 	}
 
 	path := "/indexes/" + url.PathEscape(EpisodeIndexName) + "/settings"
@@ -190,13 +197,29 @@ func (c *Client) EpisodeDocumentIDs(ctx context.Context) ([]int64, error) {
 // because filtering by work is the common case: "show me the episodes of this
 // season" is a filter on work_id and season_number, not a text query.
 func (c *Client) SearchEpisodes(ctx context.Context, query string, limit int, filter string) (EpisodeSearchResult, error) {
+	return c.SearchEpisodesPage(ctx, query, limit, 0, filter)
+}
+
+// SearchEpisodesPage is SearchEpisodes with an offset.
+//
+// A work with many episodes does not fit in one page: the endpoint caps a page
+// at 200 hits, and a long-running show can hold more than that (the live library
+// has a work with 23 seasons). Without an offset the caller would silently see
+// only the first page, so a paging caller must be able to ask for the rest.
+func (c *Client) SearchEpisodesPage(ctx context.Context, query string, limit, offset int, filter string) (EpisodeSearchResult, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
+	}
+	if offset < 0 {
+		offset = 0
 	}
 
 	payload := map[string]any{
 		"q":     query,
 		"limit": limit,
+	}
+	if offset > 0 {
+		payload["offset"] = offset
 	}
 	if strings.TrimSpace(filter) != "" {
 		payload["filter"] = filter
@@ -233,6 +256,7 @@ func (c *Client) SearchEpisodes(ctx context.Context, query string, limit int, fi
 		Hits:               raw.Hits,
 		ProcessingTimeMS:   raw.ProcessingTimeMS,
 		Limit:              limit,
+		Offset:             offset,
 		Filter:             filter,
 	}, nil
 }
@@ -244,6 +268,7 @@ type EpisodeSearchResult struct {
 	Hits               []EpisodeDocument `json:"hits"`
 	ProcessingTimeMS   int               `json:"processingTimeMs"`
 	Limit              int               `json:"limit"`
+	Offset             int               `json:"offset"`
 	Filter             string            `json:"filter,omitempty"`
 }
 

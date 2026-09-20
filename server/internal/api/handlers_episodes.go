@@ -22,6 +22,7 @@ import (
 //	local    "true" for episodes with a file, "false" for the provider-only
 //	         ones the UI renders as coming soon
 //	limit    page size, default 50, maximum 200
+//	offset   how many hits to skip, for a work whose episodes span pages
 func (s *Server) handleEpisodeSearch(w http.ResponseWriter, r *http.Request) {
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
 
@@ -33,6 +34,16 @@ func (s *Server) handleEpisodeSearch(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		limit = parsed
+	}
+
+	offset := 0
+	if rawOffset := r.URL.Query().Get("offset"); rawOffset != "" {
+		parsed, err := strconv.Atoi(rawOffset)
+		if err != nil || parsed < 0 {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "offset must be a non-negative integer"})
+			return
+		}
+		offset = parsed
 	}
 
 	filters := make([]string, 0, 3)
@@ -64,7 +75,7 @@ func (s *Server) handleEpisodeSearch(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	result, err := s.search.SearchEpisodes(r.Context(), query, limit, strings.Join(filters, " AND "))
+	result, err := s.search.SearchEpisodesPage(r.Context(), query, limit, offset, strings.Join(filters, " AND "))
 	if err != nil {
 		writeJSON(w, http.StatusBadGateway, map[string]any{"error": err.Error()})
 		return

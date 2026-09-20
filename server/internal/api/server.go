@@ -133,6 +133,7 @@ type searchClient interface {
 	DeleteEpisodeDocuments(ctx context.Context, ids []int64) (search.SyncResult, error)
 	EpisodeDocumentIDs(ctx context.Context) ([]int64, error)
 	SearchEpisodes(ctx context.Context, query string, limit int, filter string) (search.EpisodeSearchResult, error)
+	SearchEpisodesPage(ctx context.Context, query string, limit, offset int, filter string) (search.EpisodeSearchResult, error)
 	SearchDocuments(ctx context.Context, query string, limit int, filter string) (search.SearchResult, error)
 }
 

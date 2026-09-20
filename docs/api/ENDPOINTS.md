@@ -60,7 +60,7 @@
 | `/api/search` | `GET` | البحث الفوري اللحظي عبر Meilisearch (`?q=...`) |
 | `/api/search/sync` | `POST` | إعادة بناء فهرس البحث كـ projection من PostgreSQL (admin). `?reset=true` يبدأ من الصفر ويُنظّف اليتامى، وبدونه **يستكمل** من الـ cursor |
 | `/api/search/prune` | `POST` | إزالة مستندات الفهرس التي لم يعد لها صف في قاعدة البيانات (admin). يعيد `indexed`/`live`/`orphans`/`deleted` |
-| `/api/episodes/search` | `GET` | البحث في فهرس الحلقات المنفصل. معاملات: `q`, `work`, `season`, `local`, `limit` (حد 200) |
+| `/api/episodes/search` | `GET` | البحث في فهرس الحلقات المنفصل. معاملات: `q`, `work`, `season`, `local`, `limit` (حد 200), `offset` (تخطّي نتائج، للترقيم عبر عمل طويل) |
 | `/api/episodes/index/sync` | `POST` | إعادة بناء فهرس الحلقات من قاعدة البيانات (admin). `?reset=true` يبدأ من الصفر وينظّف اليتامى |
 | `/api/library/enrich-local` | `POST` | الإثراء المحلي للحلقات والمواسم من snapshots المزوّد المخزّنة (admin). **صفر طلبات خارجية**. معاملات: `work`, `limit` |
 | `/api/library/duplicate-works` | `GET` | الأعمال المكررة وصفوف الحاويات، مصنّفة حسب الخطورة (admin). قراءة فقط |
@@ -77,6 +77,9 @@ Invoke-WebRequest "http://127.0.0.1:8080/api/episodes/search?work=16&season=3" -
 Invoke-WebRequest "http://127.0.0.1:8080/api/episodes/search?work=16&local=false" -UseBasicParsing
 # البحث بعنوان حلقة
 Invoke-WebRequest "http://127.0.0.1:8080/api/episodes/search?q=Ozymandias" -UseBasicParsing
+# الترقيم عبر عمل طويل (صفحة 2 من 200 حلقة)
+# فهرس الحلقات مضبوط على pagination.maxTotalHits = 10000، وإلا توقف الترقيم عند 1000
+Invoke-WebRequest "http://127.0.0.1:8080/api/episodes/search?work=160&limit=200&offset=200" -UseBasicParsing
 # الإثراء المحلي — صفر طلبات TMDB
 Invoke-WebRequest "http://127.0.0.1:8080/api/library/enrich-local" -Method POST -Headers $headers -UseBasicParsing
 # تقرير المكررات قبل أي دمج

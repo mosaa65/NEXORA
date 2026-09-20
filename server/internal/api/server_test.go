@@ -350,6 +350,10 @@ func (m *mockSearch) SearchEpisodes(ctx context.Context, query string, limit int
 	return search.EpisodeSearchResult{Query: query, Limit: limit}, nil
 }
 
+func (m *mockSearch) SearchEpisodesPage(ctx context.Context, query string, limit, offset int, filter string) (search.EpisodeSearchResult, error) {
+	return search.EpisodeSearchResult{Query: query, Limit: limit, Offset: offset}, nil
+}
+
 type mockSearch struct{}
 
 func (m *mockSearch) IndexDocuments(ctx context.Context, documents []search.MediaDocument) (search.SyncResult, error) {

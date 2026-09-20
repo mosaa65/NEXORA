@@ -397,6 +397,7 @@ Redis is not assigned a runtime caching responsibility in current application co
 - ADR-011: Rebuildable Search Projection and Cooperative Scan Control
 - ADR-012: Local Episode Enrichment and a Separate Episode Search Index
 - ADR-013: Catalogue Consolidation — Duplicates, Container Titles and Unlinked Files
+- ADR-014: Work Details on a Single Episode Source, in the Platform Card Template
 ## 12. Known Risks and Non-Decisions
 
 هذه ليست أوامر إصلاح تلقائية:
