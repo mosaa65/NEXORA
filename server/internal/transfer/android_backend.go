@@ -2,6 +2,7 @@ package transfer
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf16"
 )
 
 // AndroidBackend copies files to an Android phone exposed as a Windows MTP
@@ -137,12 +139,57 @@ if (-not $deviceItem) { Write-Output '` + mtpMarkerDeviceMissing + `'; exit 0 }
 ` + b.storageSelector() + "\n"
 }
 
+// powershellPath resolves the Windows PowerShell host by absolute path.
+//
+// Invoking "powershell" by bare name depends on the process PATH, and the bare
+// name is not guaranteed to resolve: System32 is absent from PATH under a
+// restricted service account, under some agent launchers, and in the shell this
+// project is developed in. The failure is a confusing "executable file not
+// found in %PATH%" from an otherwise healthy backend. Resolving the known
+// absolute locations first removes that dependency.
+//
+// The bare name stays as the final fallback so a machine where PowerShell is
+// genuinely on PATH behaves exactly as before.
+func powershellPath() string {
+	candidates := []string{
+	filepath.Join(os.Getenv("SystemRoot"), "System32", "WindowsPowerShell", "v1.0", "powershell.exe"),
+	`C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`,
+	}
+	for _, candidate := range candidates {
+	if candidate == "" {
+	continue
+	}
+	if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+	return candidate
+	}
+	}
+	return "powershell"
+}
+
+// encodePowerShellCommand encodes a script for PowerShell's -EncodedCommand.
+//
+// The script is sent as UTF-16LE base64 rather than through -Command, because
+// -Command passes the text on the process command line where the encoding and
+// length are outside this program's control. The Android scripts contain Arabic
+// folder matching, and a script that long is where the command line starts to
+// truncate or mis-decode, which PowerShell then reports as a syntax error in
+// the middle of an otherwise correct script. Encoding removes both problems.
+func encodePowerShellCommand(script string) string {
+	runes := utf16.Encode([]rune(script))
+	buf := make([]byte, 0, len(runes)*2)
+	for _, r := range runes {
+	buf = append(buf, byte(r), byte(r>>8))
+	}
+	return base64.StdEncoding.EncodeToString(buf)
+}
+
 // runPowerShell executes a script and returns its trimmed output. Errors are
 // classified rather than passed through raw.
 func (b *AndroidBackend) runPowerShell(ctx context.Context, script string, timeout time.Duration) (string, error) {
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	out, err := exec.CommandContext(runCtx, "powershell", "-NoProfile", "-NonInteractive", "-Command", script).CombinedOutput()
+	out, err := exec.CommandContext(runCtx, powershellPath(),
+	"-NoProfile", "-NonInteractive", "-EncodedCommand", encodePowerShellCommand(script)).CombinedOutput()
 	text := strings.TrimSpace(string(out))
 	if err != nil {
 	if runCtx.Err() != nil && ctx.Err() == nil {
@@ -455,11 +502,11 @@ func (b *AndroidBackend) List(ctx context.Context, remotePath string) ([]RemoteE
 	parts := b.targetParts(remotePath)
 	script := b.connectPreamble() + b.folderWalkScript(parts, false) + `foreach ($item in $folder.Items()) {
     $isFolder = $false
-    try { if ($item.IsFolder) { $isFolder = $true } catch {}
+    if ($item.IsFolder) { $isFolder = $true }
     $size = 0
     if (-not $isFolder) {
-        try { $size = $item.ExtendedProperty('System.Size') } catch {}
-        if (-not $size) { try { $size = $item.Size } catch {} }
+        $size = $item.ExtendedProperty('System.Size')
+        if (-not $size) { $size = $item.Size }
         if (-not $size) { $size = 0 }
     }
     $kind = 'F'

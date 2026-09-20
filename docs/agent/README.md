@@ -20,6 +20,7 @@
 
 | الوثيقة | اقرأها إذا أردت أن تعرف |
 |---|---|
+| **[IMPLEMENTATION_REPORT](IMPLEMENTATION_REPORT.md)** | **ما نُفّذ، وما حُفظ، وما بقي، والاختبارات** |
 | **[MIGRATION_BASELINE](MIGRATION_BASELINE.md)** | **حالة المشروع قبل التغيير، وما هو محمي، وكيف ترجع** |
 | [ARCHITECTURE](ARCHITECTURE.md) | المكونات، تدفق الأجهزة، تدفق النقل، حدود الطبقات |
 | [ANDROID](ANDROID.md) | كيف يعمل Android الآن (Shell COM)، الفجوات، WPD، ADB، قيود Android الحديث |
@@ -50,12 +51,15 @@ TEST BEFORE DECLARING SUCCESS
 |---|---|
 | Agent (خدمة + API) | `cmd/copybridge`, `internal/copybridge` | ✅ يعمل | ❌ لا |
 | تجريد النقل | `backend.go` | ✅ يعمل | ⚠️ إضافات اختيارية فقط |
-| المحرك v2 | `engine.go`, `worker.go`, `scheduler.go` | ✅ يعمل | ⚠️ إضافات فقط |
+| المحرك v2 | `engine.go`, `worker.go`, `scheduler.go` | ✅ يعمل | ❌ لا |
 | **Storage (USB/HDD/أقراص)** | `storage_backend.go`, `removable_windows.go` | ✅ مكتمل | ❌ **محمي** |
 | **iPhone (iOS/AFC)** | `go_ios_backend.go` | ✅ **مكتمل ومُختبر** | ❌ **محمي — قاعدة غير قابلة للتفاوض** |
-| **Android (Shell COM)** | `android_backend.go` | ⚠️ **ناقص** | ✅ **هذا هو نطاق العمل** |
+| **Android (Shell COM)** | `android_backend.go` | ✅ **مُكمَّل** | ✅ **هذا هو نطاق العمل** |
 | WPD | — | ⏭️ مُخطَّط | ❌ لا (قرار المالك: خيار أ) |
 | ADB | — | ⏭️ مُخطَّط | ❌ لا |
+
+> **نتيجة التنفيذ (2026-09-20):** راجع [IMPLEMENTATION_REPORT](IMPLEMENTATION_REPORT.md)
+> و[ADR-015](../decisions/ADR-015-nexora-agent-android-completion.md).
 
 ---
 

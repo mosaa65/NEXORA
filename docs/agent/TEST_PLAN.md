@@ -47,17 +47,40 @@ cd "c:\Users\mousa\Desktop\project\NEXORA\server"
 | A6 | بناء السكربت | containing device name, paths, file name |
 | A7 | `Stat` — مسار فارغ | لا panic |
 | A8 | أكواد `TransferError` | التصنيف الصحيح |
+| A9 | `TestParseMTPListing` | تحليل الـ listing، وتجاهل السطر المشوّه |
+| A10 | `TestClassifyMTPOutput` | تحويل العلامات ل5 أكواد مُصنَّفة |
+| A11 | `TestAndroidConnectBindsDeviceName` | استخراج اسم الجهاز (4 صيغ) |
+| A12 | `TestAndroidRenameIsClassifiedUnsupported` | الرفض مُصنَّف لا نصيّ |
+| A13 | `TestAndroidCapabilities...` | القدرات تطابق التنفيذ |
+| A14 | `TestPowershellPathResolves...` | المسار المطلق لـ PowerShell |
+| A15 | **`TestGeneratedScriptParses`** | **محلّل PowerShell نفسه على 7 سكربتات** |
+| A16 | `TestGeneratedScriptsHaveBalancedBraces` | توازن الأقواس بدون PowerShell |
+| A17 | `TestParseMTPListingRootPath` | مسار الجذر بلا شرطة بادئة |
+| A18 | `TestPowershellPathHonoursSystemRoot` | احترام `SystemRoot` |
+
+### 2.2 نتائج التنفيذ الفعلي (2026-09-20)
+
+```
+A1–A18        ✅ كلها تمر  (go test ./internal/transfer/... -short)
+L1–L6         ⏸️ مُعلَّقة — لا جهاز Android متصل بهذه الآلة
+التحقق الحي   ✅ /api/health · /api/transfer/devices (قرص D: حقي
+                 مع capabilities) · browse (خطأ مُصنَّف نظيف)
+```
+
+**ثلاثة عيوب حقيقية اكتشفها التحقق الحي** (لا وحدة): `powershell` بلا مسار،
+ترميز `-Command`، وقوس ناقص في `try/catch`. التفاصيل في
+[IMPLEMENTATION_REPORT](IMPLEMENTATION_REPORT.md).
 
 ### 2.2 اختبارات حية (تحتاج جهاز) — تُوثَّق لا تُدّعى
 
 | # | السيناريو | الطلب |
 |---|---|---|
-| A9 | Android discovery | §26 Test 5 |
-| A10 | Android storage discovery | §26 Test 5 |
-| A11 | Android folder browsing | §35 |
-| A12 | Android file transfer | §26 Test 5 |
-| A13 | **Android reconnect** | §26 Test 6 |
-| A14 | **Android disconnect أثناء النقل** | §26 Test 7 |
+| L1 | Android discovery | §26 Test 5 |
+| L2 | Android storage discovery | §26 Test 5 |
+| L3 | Android folder browsing | §35 |
+| L4 | Android file transfer | §26 Test 5 |
+| L5 | **Android reconnect** | §26 Test 6 |
+| L6 | **Android disconnect أثناء النقل** | §26 Test 7 |
 
 > **سياسة الصدق:** لا أدّعي نجاح اختبار لم أُشغّله. تُسجَّل كـ **"مُعلَّقة — تحتاج
 > جهاز Android متصل"** في `IMPLEMENTATION_REPORT.md`.

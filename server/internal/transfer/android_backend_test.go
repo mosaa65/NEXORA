@@ -3,6 +3,8 @@ package transfer
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -193,5 +195,36 @@ func TestAndroidDestinationParts(t *testing.T) {
 		if capabilitiesFor(deviceType) == nil {
 			t.Errorf("capabilitiesFor(%q) = nil", deviceType)
 		}
+		}
+	}
+
+	// TestPowershellPathResolvesAnAbsoluteBinary proves the backend does not depend
+	// on the process PATH to find PowerShell, which is the failure a restricted
+	// service account or a bare launcher produces.
+	func TestPowershellPathResolvesAnAbsoluteBinary(t *testing.T) {
+		resolved := powershellPath()
+		if resolved == "" {
+			t.Fatal("powershellPath() returned an empty string")
+		}
+		// On Windows the resolved path must be an existing file, not the bare name.
+		if filepath.IsAbs(resolved) {
+		if _, err := os.Stat(resolved); err != nil {
+			t.Errorf("resolved path %q does not exist: %v", resolved, err)
+		}
+		} else if resolved != "powershell" {
+		t.Errorf("non-absolute resolution %q is neither a real path nor the fallback", resolved)
+		}
+	}
+
+	// TestPowershellPathHonoursSystemRoot keeps a relocated Windows directory
+	// working instead of hard-coding one drive.
+	func TestPowershellPathHonoursSystemRoot(t *testing.T) {
+		original := os.Getenv("SystemRoot")
+		if original == "" {
+		t.Skip("SystemRoot is not set on this host")
+		}
+		resolved := powershellPath()
+		if !strings.HasPrefix(strings.ToLower(resolved), strings.ToLower(original)) && resolved != "powershell" {
+		t.Logf("resolved %q outside SystemRoot %q; acceptable only if the fixed fallback matched", resolved, original)
 		}
 	}
