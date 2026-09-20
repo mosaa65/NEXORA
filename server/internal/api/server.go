@@ -56,9 +56,16 @@ type repository interface {
 	// Search projection: paged reads plus cursor bookkeeping, so an index rebuild
 	// scales past the previous 10,000-document ceiling and can resume.
 	ListSearchDocumentPage(ctx context.Context, afterID int64, limit int) ([]search.MediaDocument, error)
+	ListEpisodeDocumentPage(ctx context.Context, afterID int64, limit int) ([]search.EpisodeDocument, error)
+	LiveEpisodeIDs(ctx context.Context) ([]int64, error)
+	EnrichFromLocalSnapshots(ctx context.Context, workID int64, limit int) ([]db.EpisodeEnrichmentStats, error)
+	LinkOrphanEpisodes(ctx context.Context) (int, error)
+	FindDuplicateGroups(ctx context.Context) ([]db.WorkMergeGroup, error)
+	ListProviderOnlyEpisodes(ctx context.Context, limit int) ([]db.ProviderOnlyEpisode, error)
 	LoadProjectionCursors(ctx context.Context) (map[string]int64, error)
 	SaveProjectionCursor(ctx context.Context, kind string, lastID int64, documentCount int64) error
 	ResetProjectionCursor(ctx context.Context, kind string) error
+	LiveWorkIDs(ctx context.Context) ([]int64, error)
 	ListVideoFiles(ctx context.Context, mediaItemID int64) ([]db.VideoFile, error)
 	GetVideoFilePath(ctx context.Context, id int64) (string, error)
 	GetVideoFileIDByPath(ctx context.Context, path string) (int64, error)
@@ -120,6 +127,12 @@ type repository interface {
 type searchClient interface {
 	IndexDocuments(ctx context.Context, documents []search.MediaDocument) (search.SyncResult, error)
 	DeleteDocuments(ctx context.Context, ids []int64) (search.SyncResult, error)
+	DocumentIDs(ctx context.Context) ([]int64, error)
+	ConfigureEpisodeIndex(ctx context.Context) error
+	IndexEpisodeDocuments(ctx context.Context, documents []search.EpisodeDocument) (search.SyncResult, error)
+	DeleteEpisodeDocuments(ctx context.Context, ids []int64) (search.SyncResult, error)
+	EpisodeDocumentIDs(ctx context.Context) ([]int64, error)
+	SearchEpisodes(ctx context.Context, query string, limit int, filter string) (search.EpisodeSearchResult, error)
 	SearchDocuments(ctx context.Context, query string, limit int, filter string) (search.SearchResult, error)
 }
 
@@ -334,6 +347,16 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/index/preview", s.requireAdminAuth(s.handleIndexPreview))
 	s.mux.HandleFunc("POST /api/library/classify-origins", s.requireAdminAuth(s.handleClassifyOrigins))
 	s.mux.HandleFunc("POST /api/search/sync", s.requireAdminAuth(s.handleSearchSync))
+	s.mux.HandleFunc("POST /api/search/prune", s.requireAdminAuth(s.handleSearchPrune))
+
+	// Episode search and the local enrichment path. The episode index answers
+	// "inside this work" and "this season only" as filters, which is why it is a
+	// separate index rather than a document type in the work index.
+	s.mux.HandleFunc("GET /api/episodes/search", s.handleEpisodeSearch)
+	s.mux.HandleFunc("POST /api/episodes/index/sync", s.requireAdminAuth(s.handleEpisodeIndexSync))
+	s.mux.HandleFunc("POST /api/library/enrich-local", s.requireAdminAuth(s.handleEnrichFromLocals))
+	s.mux.HandleFunc("GET /api/library/duplicate-works", s.requireAdminAuth(s.handleDuplicateWorks))
+	s.mux.HandleFunc("GET /api/library/provider-only-episodes", s.requireAdminAuth(s.handleMissingEpisodesFromProvider))
 	s.mux.HandleFunc("POST /api/metadata/lookup", s.handleMetadataLookup)
 	s.mux.HandleFunc("GET /api/tmdb/candidates", s.handleTMDBCandidates)
 	s.mux.HandleFunc("POST /api/media/verify", s.handleMediaVerify)

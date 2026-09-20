@@ -353,7 +353,8 @@ func BuildPathContext(segments []string) PathContext {
 			context.SeasonNumber = season
 			context.SeasonFolderTitle = segment
 			// A folder can name both the work and the season: "Silo الموسم الثالث".
-			if prefix := titlePrefixBeforeSeason(segment); prefix != "" {
+			// A container prefix is never accepted as the work name.
+			if prefix := titlePrefixBeforeSeason(segment); prefix != "" && !IsContainerFolderForTitle(prefix) {
 				context.WorkTitle = prefix
 			}
 		}
@@ -361,11 +362,22 @@ func BuildPathContext(segments []string) PathContext {
 	}
 
 	// The work folder is the deepest segment that is neither a category, an
-	// origin, nor a season, and that carries a usable title. Walking from the
-	// deepest segment outward finds the closest possible name.
+	// origin, a season nor a CONTAINER, and that carries a usable title.
+	// Walking outward finds the closest possible name.
+	//
+	// The container check is what stops a browse grouping from being reported as
+	// a work name. Without it a layout like
+	//
+	//	.../Leonardo DiCaprio/أعمال/Inception.2010.mkv
+	//
+	// reports "أعمال" ("works") as the work folder, and every file beneath it
+	// is then titled after the folder rather than after itself.
 	if context.WorkTitle == "" {
 		for index := len(segments) - 1; index >= 0; index-- {
 			segment := segments[index]
+			if IsContainerFolderForTitle(segment) {
+				continue
+			}
 			if DetectCategoryFromSegments([]string{segment}) != "" {
 				continue
 			}

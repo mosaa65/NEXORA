@@ -168,10 +168,13 @@ func TestParserCorpus(t *testing.T) {
 
 		// ---------------- Bad filenames -----------------
 		{
-			// The parser must not invent metadata: a numeric-only name with no
-			// context stays low confidence rather than becoming a confident title.
+			// The parser must not invent metadata: a numeric-only name in a folder
+			// that carries no title has NO evidence at all, so it is reported at the
+			// floor rather than at the weakest usable level. Anything above the floor
+			// here would mean the parser was crediting itself for an inference it did
+			// not make.
 			name: "numeric only file in unknown folder", path: root + "/Unsorted/01.mkv",
-			episode: 0, isEpisode: false, minConfidence: ConfidenceLow,
+			episode: 0, isEpisode: false, minConfidence: 0.05,
 		},
 		{
 			name: "mixed separators and dots", path: root + "/Series/Westworld/Season 01/Westworld_S01E01_1080p_WEB.mp4",

@@ -118,6 +118,35 @@ func (m *mockRepo) SaveProjectionCursor(ctx context.Context, kind string, lastID
 	return nil
 }
 func (m *mockRepo) ResetProjectionCursor(ctx context.Context, kind string) error { return nil }
+
+// LiveWorkIDs reports the works that still exist, which a prune pass keeps.
+// The mock returns an empty set, so a prune sees every indexed id as an orphan.
+func (m *mockRepo) LiveWorkIDs(ctx context.Context) ([]int64, error) {
+	return []int64{}, nil
+}
+
+// Episode projection methods. The mock returns nothing so an episode projection
+// completes immediately; the paging behaviour is covered in internal/search.
+func (m *mockRepo) ListEpisodeDocumentPage(ctx context.Context, afterID int64, limit int) ([]search.EpisodeDocument, error) {
+	return []search.EpisodeDocument{}, nil
+}
+func (m *mockRepo) LiveEpisodeIDs(ctx context.Context) ([]int64, error) {
+	return []int64{}, nil
+}
+
+// Enrichment and consolidation methods. They report nothing done, which is the
+// correct mock shape: the real behaviour needs a database and is covered by the
+// db package and the enrichlocal tool.
+func (m *mockRepo) EnrichFromLocalSnapshots(ctx context.Context, workID int64, limit int) ([]db.EpisodeEnrichmentStats, error) {
+	return []db.EpisodeEnrichmentStats{}, nil
+}
+func (m *mockRepo) LinkOrphanEpisodes(ctx context.Context) (int, error) { return 0, nil }
+func (m *mockRepo) FindDuplicateGroups(ctx context.Context) ([]db.WorkMergeGroup, error) {
+	return []db.WorkMergeGroup{}, nil
+}
+func (m *mockRepo) ListProviderOnlyEpisodes(ctx context.Context, limit int) ([]db.ProviderOnlyEpisode, error) {
+	return []db.ProviderOnlyEpisode{}, nil
+}
 func (m *mockRepo) ListVideoFiles(ctx context.Context, mediaItemID int64) ([]db.VideoFile, error) {
 	return []db.VideoFile{{ID: 1, MediaItemID: mediaItemID, TitleEN: "Test File", FilePath: "test.mp4", FileSize: 1024}}, nil
 }
@@ -297,6 +326,28 @@ func (m *mockRepo) FinishTMDBQueueJob(ctx context.Context, id int64, succeeded b
 // DeleteDocuments mirrors the client contract for the projection path.
 func (m *mockSearch) DeleteDocuments(ctx context.Context, ids []int64) (search.SyncResult, error) {
 	return search.SyncResult{}, nil
+}
+
+// DocumentIDs reports the ids currently indexed. An empty set means a prune
+// finds no orphans to remove.
+func (m *mockSearch) DocumentIDs(ctx context.Context) ([]int64, error) {
+	return []int64{}, nil
+}
+
+// Episode index methods, mirroring the real client so the API can construct an
+// episode projector without a type assertion.
+func (m *mockSearch) IndexEpisodeDocuments(ctx context.Context, documents []search.EpisodeDocument) (search.SyncResult, error) {
+	return search.SyncResult{Indexed: len(documents)}, nil
+}
+func (m *mockSearch) EpisodeDocumentIDs(ctx context.Context) ([]int64, error) {
+	return []int64{}, nil
+}
+func (m *mockSearch) DeleteEpisodeDocuments(ctx context.Context, ids []int64) (search.SyncResult, error) {
+	return search.SyncResult{Indexed: len(ids)}, nil
+}
+func (m *mockSearch) ConfigureEpisodeIndex(ctx context.Context) error { return nil }
+func (m *mockSearch) SearchEpisodes(ctx context.Context, query string, limit int, filter string) (search.EpisodeSearchResult, error) {
+	return search.EpisodeSearchResult{Query: query, Limit: limit}, nil
 }
 
 type mockSearch struct{}

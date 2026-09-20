@@ -807,6 +807,31 @@ func (s *Server) handleClassifyOrigins(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "updated": updated})
 }
 
+// handleSearchPrune removes index documents whose work no longer exists.
+//
+// This is the missing half of the projection: indexing alone is additive, so a
+// deleted or merged work stayed searchable forever and clicking it returned a
+// 404. The index is derived data, which means it has to follow deletions as well
+// as insertions.
+//
+// It is an explicit operation rather than part of a routine sync, because
+// deleting from the index is destructive and must be asked for. A full rebuild
+// (`sync?reset=true`) also prunes, since the operator already requested a
+// from-scratch rebuild.
+func (s *Server) handleSearchPrune(w http.ResponseWriter, r *http.Request) {
+	projector := search.NewProjector(s.search, s.repository, search.DefaultProjectionPageSize, nil)
+	result, err := projector.Prune(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]any{
+			"error":  err.Error(),
+			"result": result,
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, result)
+}
+
 // handleSearchSync rebuilds the search index as a projection of PostgreSQL.
 //
 // Query parameter `reset=true` starts from the beginning, which is the
