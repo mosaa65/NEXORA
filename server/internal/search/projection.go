@@ -127,7 +127,8 @@ func (p *Projector) Rebuild(ctx context.Context, reset bool) (ProjectionResult, 
 		syncResult, err := p.client.IndexDocuments(ctx, page)
 		if err != nil {
 			// Return the progress already made so the caller's report is truthful
-			// about how far the index got before failing.
+			// about how far the index got before failing. documentsProjected counts
+			// pages that succeeded, so the number is the work actually done.
 			result.Documents = documentsProjected
 			result.LastID = afterID
 			return result, fmt.Errorf("index projection page: %w", err)

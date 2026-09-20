@@ -157,6 +157,9 @@ func (p *EpisodeProjector) Rebuild(ctx context.Context, reset bool) (ProjectionR
 		}
 
 		if _, err := p.client.IndexEpisodeDocuments(ctx, page); err != nil {
+			// Report the work already completed. `projected` counts pages that
+			// succeeded, so the caller can say how far the index got instead of only
+			// that it failed.
 			result.Documents = projected
 			result.LastID = afterID
 			return result, fmt.Errorf("index episode projection page: %w", err)
@@ -166,7 +169,7 @@ func (p *EpisodeProjector) Rebuild(ctx context.Context, reset bool) (ProjectionR
 		result.Pages++
 		afterID = page[len(page)-1].ID
 		result.LastID = afterID
-
+		result.Documents = projected
 		if err := p.episodes.SaveProjectionCursor(ctx, kind, afterID, int64(projected)); err != nil {
 			p.logger.Warn("could not persist episode projection cursor", slog.Any("error", err))
 		}
