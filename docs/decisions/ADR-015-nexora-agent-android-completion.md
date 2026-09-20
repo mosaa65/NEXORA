@@ -1,6 +1,6 @@
 # ADR-015: Complete the Android backend inside the existing agent and abstraction
 
-- **Status:** Proposed (awaiting owner approval before implementation)
+- **Status:** Accepted — implemented in phases 6–9
 - **Date:** 2026-09-20
 - **Depends on:** ADR-008 (local copy bridge), ADR-010 (logical media model)
 - **Scope:** Android only. iPhone, USB, external drives and local disks are untouched.

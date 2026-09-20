@@ -94,15 +94,16 @@ func (s *Service) discoverRemovableDrives(ctx context.Context) ([]Device, error)
 			displayName = fmt.Sprintf("%s (%s:)", displayName, letter)
 		}
 
-		devices = append(devices, Device{
-			ID:         "disk_" + letter,
-			Name:       displayName,
-			Model:      "USB Storage",
-			Type:       DeviceStorage,
-			Status:     fmt.Sprintf("متصل (%s:)", letter),
-			FreeSpace:  freeBytes,
-			TotalSpace: totalBytes,
-			FileSystem: fsName,
+			devices = append(devices, Device{
+		ID:           "disk_" + letter,
+		Name:         displayName,
+		Model:        "USB Storage",
+		Type:         DeviceStorage,
+		Status:       fmt.Sprintf("متصل (%s:)", letter),
+		FreeSpace:    freeBytes,
+		TotalSpace:   totalBytes,
+		FileSystem:   fsName,
+		Capabilities: storageCapabilities(),
 		})
 	}
 
