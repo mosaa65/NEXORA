@@ -34,11 +34,32 @@ func (e *TransferError) Unwrap() error {
 }
 
 // Transfer error codes.
+//
+// They are stable identifiers, not messages: the UI maps a code to a message
+// and a behaviour (retry, wait for the device, block). Adding a code here is
+// additive, so an older client that does not know one still receives a
+// classified error rather than a raw Go string.
 const (
 	CodeAFCIOError     = "AFC_IO_ERROR"
 	CodeSourceNotFound = "SOURCE_NOT_FOUND"
 	CodeVerifyFailed   = "VERIFY_FAILED"
 	CodeUserCancelled  = "USER_CANCELLED"
+
+	// Device and destination state.
+	CodeDeviceNotFound       = "DEVICE_NOT_FOUND"
+	CodeDeviceDisconnected   = "DEVICE_DISCONNECTED"
+	CodeStorageNotAvailable  = "STORAGE_NOT_AVAILABLE"
+	CodeDestinationNotFound  = "DESTINATION_NOT_FOUND"
+	CodePermissionDenied     = "PERMISSION_DENIED"
+	CodeInsufficientSpace    = "INSUFFICIENT_SPACE"
+	CodeTransferFailed       = "TRANSFER_FAILED"
+	CodeUnsupportedOperation = "UNSUPPORTED_OPERATION"
+
+	// Transport-specific.
+	CodeMTPError   = "MTP_ERROR"
+	CodeMTPTimeout = "MTP_TIMEOUT"
+	CodeWPDError   = "WPD_ERROR"
+	CodeAuthError  = "AUTH_ERROR"
 )
 
 // NewTransferError builds a structured TransferError.

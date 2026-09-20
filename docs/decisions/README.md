@@ -18,6 +18,7 @@
 | [ADR-012](ADR-012-local-episode-enrichment.md) | Local Episode Enrichment and a Separate Episode Search Index | Accepted / Implemented |
 | [ADR-013](ADR-013-catalogue-consolidation.md) | Catalogue Consolidation — Duplicates, Container Titles and Unlinked Files | Accepted / Implemented |
 | [ADR-014](ADR-014-work-details-single-source.md) | Work Details on a Single Episode Source, in the Platform Card Template | Accepted / Implemented |
+| [ADR-015](ADR-015-nexora-agent-android-completion.md) | Complete the Android Backend Inside the Existing Agent and Abstraction | Proposed — awaiting approval |
 | [ADR-014](ADR-014-work-details-single-source.md) | Work Details as a Single-Source TMDB Layout | Accepted / Implemented |
 
 أي اقتراح غير منفذ (مثل HLS/DASH أو transcoding أو Redis integration) لا يوثق هنا كـ ADR قائم حتى توجد موافقة وتنفيذ قابل للتحقق.

@@ -22,6 +22,54 @@ type Device struct {
 	FreeSpace  int64      `json:"free_space"`
 	TotalSpace int64      `json:"total_space"`
 	FileSystem string     `json:"file_system,omitempty"`
+
+	// Capabilities declares what the transport behind this device can actually
+	// do, so a caller can avoid an operation instead of starting one that can
+	// only fail. It is additive: a device that does not set it is treated as
+	// unknown rather than as incapable, so existing paths keep working.
+	Capabilities *DeviceCapabilities `json:"capabilities,omitempty"`
+}
+
+// DeviceCapabilities describes the operations a backend supports for one
+// device.
+//
+// The values are facts about the transport, not preferences. A device reached
+// over MTP/Shell COM genuinely cannot rename or resume; a device on a real
+// filesystem genuinely can. Recording the difference is what stops the UI from
+// offering an action that is guaranteed to fail.
+type DeviceCapabilities struct {
+	List         bool `json:"list"`
+	Delete       bool `json:"delete"`
+	Rename       bool `json:"rename"`
+	Resume       bool `json:"resume"`
+	StreamWrite  bool `json:"stream_write"`
+	MultiStorage bool `json:"multi_storage"`
+}
+
+// androidCapabilities reports the transport's real limits over Shell COM:
+// browsing and deleting work through the shell item verbs, while rename,
+// resume and a true stream write need WPD (docs/agent/ANDROID.md §2).
+func androidCapabilities() *DeviceCapabilities {
+	return &DeviceCapabilities{
+	List:         true,
+	Delete:       true,
+	Rename:       false,
+	Resume:       false,
+	StreamWrite:  false,
+	MultiStorage: true,
+	}
+}
+
+// storageCapabilities reports a real filesystem, where every operation exists.
+func storageCapabilities() *DeviceCapabilities {
+	return &DeviceCapabilities{
+	List:         true,
+	Delete:       true,
+	Rename:       true,
+	Resume:       true,
+	StreamWrite:  true,
+	MultiStorage: false,
+	}
 }
 
 type DeviceApp struct {
