@@ -392,7 +392,13 @@ Redis is not assigned a runtime caching responsibility in current application co
 - ADR-006: FFmpeg and FFprobe as External Media Processing Tools
 - ADR-007: Provider-ID Related Titles Graph
 - ADR-008: Local Copy Bridge for USB Device Transfer
-
+- ADR-009: Incremental, Fault-Tolerant Media Indexing Pipeline
+- ADR-010: Logical Media Model and Entity Resolution
+- ADR-011: Rebuildable Search Projection and Cooperative Scan Control
+- ADR-012: Local Episode Enrichment and a Separate Episode Search Index
+- ADR-013: Catalogue Consolidation — Duplicates, Container Titles and Unlinked Files
+- ADR-014: Work Details on a Single Episode Source, in the Platform Card Template
+- ADR-015: Complete the Android Backend Inside the Existing Agent and Abstraction (Proposed)
 ## 12. Known Risks and Non-Decisions
 
 هذه ليست أوامر إصلاح تلقائية:

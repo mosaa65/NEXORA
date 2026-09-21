@@ -335,18 +335,45 @@ func buildWindowsPortableDevices(records []windowsPortableRecord) []Device {
 		if name == "" {
 			continue
 		}
-		deviceType, model, prefix, status := windowsPortableDeviceKind(name, item.Type)
+			deviceType, model, prefix, status := windowsPortableDeviceKind(name, item.Type)
 		list = append(list, Device{
-			ID:         fmt.Sprintf("%s%d_%s", prefix, i, name),
-			Name:       name,
-			Model:      model,
-			Type:       deviceType,
-			Status:     status,
-			FreeSpace:  item.FreeSpace,
-			TotalSpace: item.TotalSpace,
+		ID:           fmt.Sprintf("%s%d_%s", prefix, i, name),
+		Name:         name,
+		Model:        model,
+		Type:         deviceType,
+		Status:       status,
+		FreeSpace:    item.FreeSpace,
+		TotalSpace:   item.TotalSpace,
+		Capabilities: capabilitiesFor(deviceType),
 		})
 	}
 	return list
+}
+
+// capabilitiesFor returns the transport limits for a device type.
+//
+// It is the single place that answers "what can this transport do", so the
+// answer cannot drift between the discovery paths.
+func capabilitiesFor(deviceType DeviceType) *DeviceCapabilities {
+	switch deviceType {
+	case DeviceAndroid:
+	return androidCapabilities()
+	case DeviceIOS:
+	// AFC exposes a real file interface, so listing and stream writes work;
+	// rename is not exposed by the backend.
+	return &DeviceCapabilities{
+	List:         true,
+	Delete:       false,
+	Rename:       false,
+	Resume:       true,
+	StreamWrite:  true,
+	MultiStorage: false,
+	}
+	case DeviceStorage:
+	return storageCapabilities()
+	default:
+	return nil
+	}
 }
 
 func windowsPortableDeviceKind(name, dType string) (DeviceType, string, string, string) {
@@ -415,14 +442,15 @@ func (s *Service) discoverIOSDevices(ctx context.Context) ([]Device, error) {
 			}
 			lockdown.Close()
 		}
-		list = append(list, Device{
-			ID:         fmt.Sprintf("ios_%d_%s", i, udid),
-			Name:       name,
-			Model:      "هاتف آيفون",
-			Type:       DeviceIOS,
-			Status:     "متصل",
-			FreeSpace:  freeBytes,
-			TotalSpace: totalBytes,
+			list = append(list, Device{
+		ID:           fmt.Sprintf("ios_%d_%s", i, udid),
+		Name:         name,
+		Model:        "هاتف آيفون",
+		Type:         DeviceIOS,
+		Status:       "متصل",
+		FreeSpace:    freeBytes,
+		TotalSpace:   totalBytes,
+		Capabilities: capabilitiesFor(DeviceIOS),
 		})
 	}
 	return list, nil

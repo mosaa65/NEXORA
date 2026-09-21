@@ -413,6 +413,56 @@ export async function getMediaSeasonMetadata(mediaId, locale = "ar-SA") {
   return requestJSON(`/api/media/${encodeURIComponent(mediaId)}/metadata/seasons?locale=${encodeURIComponent(locale)}`);
 }
 
+/**
+ * Searches the episode index, which is a separate Meilisearch index from the
+ * work index. It is the single source for a work's seasons and episodes: every
+ * hit arrives already enriched and merged, so the details screen no longer has
+ * to reconcile local seasons with provider snapshots in the browser.
+ *
+ * @param {object} options
+ * @param {number} options.workId   restrict to one work
+ * @param {number} [options.season] restrict to one season number
+ * @param {string} [options.q]      free text over episode and work titles
+ * @param {boolean} [options.local] true to keep only episodes with a file,
+ *                                  false for the provider-only "coming soon" ones
+ * @param {number} [options.limit]  page size, default 50, maximum 200
+ * @param {number} [options.offset] how many hits to skip (paging)
+ */
+export async function searchEpisodes({ workId, season, q, local, limit, offset } = {}) {
+  const params = new URLSearchParams();
+  if (workId) params.set("work", String(workId));
+  if (season !== undefined && season !== null && season !== "") params.set("season", String(season));
+  if (q) params.set("q", q);
+  if (typeof local === "boolean") params.set("local", String(local));
+  if (limit) params.set("limit", String(limit));
+  if (offset) params.set("offset", String(offset));
+  return requestJSON(`/api/episodes/search?${params.toString()}`);
+}
+
+/**
+ * Every episode of one work, across pages.
+ *
+ * A single request cannot return a whole long-running show: the endpoint caps a
+ * page at 200 hits and the library holds a work with 23 seasons. Paging here is
+ * what makes "the seasons and episodes of this work" one list rather than the
+ * first six seasons of it.
+ */
+export async function searchAllEpisodes(workId, { pageSize = 200 } = {}) {
+  const hits = [];
+  let offset = 0;
+  // Bounded so a backend that never advances cannot spin forever.
+  for (let page = 0; page < 50; page += 1) {
+    const result = await searchEpisodes({ workId, limit: pageSize, offset });
+    const batch = result?.hits || [];
+    hits.push(...batch);
+    const total = Number(result?.estimatedTotalHits || 0);
+    offset += batch.length;
+    if (batch.length < pageSize) break;
+    if (total && offset >= total) break;
+  }
+  return hits;
+}
+
 export async function enrichMedia(mediaId, options = {}) {
   const selected = options.tmdbId;
   const query = selected ? `?tmdb_id=${encodeURIComponent(selected)}` : "";

@@ -1,16 +1,59 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Icon from "../components/Icon.jsx";
 import RelatedMediaRail from "../components/RelatedMediaRail.jsx";
-import PlayableFilesExplorer from "../components/PlayableFilesExplorer.jsx";
+import RangeSelectionBar from "../components/RangeSelectionBar.jsx";
 import { useTransfer } from "../context/TransferContext.jsx";
-import { getMediaDetail, enrichMedia, getMediaMetadataSnapshot, getMediaSeasonMetadata, getMediaRelated, resolveAPIURL } from "../lib/api.js";
+import { getMediaDetail, enrichMedia, getMediaMetadataSnapshot, getMediaSeasonMetadata, getMediaRelated, searchAllEpisodes, resolveAPIURL } from "../lib/api.js";
 import { horizontalWheel } from "../lib/horizontalScroll.js";
 
 const hasArabicText = (value) => /[\u0600-\u06FF]/.test(value || "");
 // TMDB orders cast by billing priority. The first 24 are the featured cast
 // presented by NEXORA; the complete cast count remains visible in the badge.
 const FEATURED_CAST_LIMIT = 24;
+// The episode index returns a page at a time, and the endpoint caps a page at
+// 200 hits. A long-running show exceeds that, so the whole work is fetched
+// across pages rather than truncated to the first one.
+const EPISODE_PAGE_SIZE = 200;
+
+function formatSize(bytes) {
+  const value = Number(bytes || 0);
+  if (!Number.isFinite(value) || value <= 0) return "";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const unit = Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1);
+  const amount = value / 1024 ** unit;
+  return `${amount >= 10 || unit === 0 ? amount.toFixed(0) : amount.toFixed(1)} ${units[unit]}`;
+}
+
+function formatRuntime(minutes) {
+  const value = Number(minutes || 0);
+  if (!Number.isFinite(value) || value <= 0) return "";
+  return value < 60 ? `${value} دقيقة` : `${Math.floor(value / 60)}س${value % 60 ? ` ${value % 60}د` : ""}`;
+}
+
+/**
+ * Groups the flat episode result into seasons.
+ *
+ * The episode index returns one row per episode with its season number, so the
+ * grouping is a fold over ONE source rather than a reconciliation between local
+ * seasons and provider snapshots — which is what the previous screen did, and
+ * why it could disagree with itself.
+ */
+function groupIntoSeasons(hits) {
+  const byNumber = new Map();
+  for (const episode of hits) {
+    const seasonNumber = Number(episode.season_number ?? 0);
+    if (!byNumber.has(seasonNumber)) byNumber.set(seasonNumber, []);
+    byNumber.get(seasonNumber).push(episode);
+  }
+  return [...byNumber.entries()]
+    .sort((left, right) => left[0] - right[0])
+    .map(([seasonNumber, episodes]) => ({
+      seasonNumber,
+      episodes: [...episodes].sort((left, right) => (left.episode_number || 0) - (right.episode_number || 0)),
+      localCount: episodes.filter((episode) => episode.has_local_file).length,
+    }));
+}
 
 function getContentRatingInfo(rating) {
   if (!rating) return null;
@@ -67,15 +110,23 @@ export default function MediaDetailsPage({
 
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [selectedSeasonIdx, setSelectedSeasonIdx] = useState(0);
   const [isEnriching, setIsEnriching] = useState(false);
   const [enrichMsg, setEnrichMsg] = useState("");
   const [tmdb, setTmdb] = useState(null);
   const [tmdbEnglish, setTmdbEnglish] = useState(null);
+  // Season posters only. The episode index does not carry artwork, so the
+  // provider snapshots supply presentation data — never episode facts.
   const [seasonSnapshots, setSeasonSnapshots] = useState([]);
-  const [englishSeasonSnapshots, setEnglishSeasonSnapshots] = useState([]);
-  const [selectedMetadataSeason, setSelectedMetadataSeason] = useState(0);
+  // The single season/episode source, exactly as the episode index returned it.
+  const [episodeHits, setEpisodeHits] = useState([]);
+  const [selectedSeasonNumber, setSelectedSeasonNumber] = useState(null);
+  const [episodeQuery, setEpisodeQuery] = useState("");
   const [relatedItems, setRelatedItems] = useState([]);
+  // Episode selection drives the existing USB/phone copy flow. A Set of episode
+  // ids rather than an index, so filtering or a season switch cannot move the
+  // selection onto a different episode.
+  const [selectedEpisodeIds, setSelectedEpisodeIds] = useState(() => new Set());
+  const [rangeSelection, setRangeSelection] = useState(null);
   const { openTransferModal, selectMultipleFiles } = useTransfer();
 
   useEffect(() => {
@@ -126,14 +177,25 @@ export default function MediaDetailsPage({
         setTmdbEnglish(englishPayload || null);
       });
 
-      Promise.allSettled([
-        getMediaSeasonMetadata(media.id, "ar-SA"),
-        getMediaSeasonMetadata(media.id, "en-US"),
-      ]).then(([arabicSeasons, englishSeasons]) => {
-        if (!alive) return;
-        setSeasonSnapshots(arabicSeasons.status === "fulfilled" ? arabicSeasons.value?.items || [] : []);
-        setEnglishSeasonSnapshots(englishSeasons.status === "fulfilled" ? englishSeasons.value?.items || [] : []);
-      });
+      // The single season/episode source: every episode of this work, across
+      // pages, already enriched and merged by the backend.
+      searchAllEpisodes(media.id, { pageSize: EPISODE_PAGE_SIZE })
+        .then((hits) => {
+          if (alive) setEpisodeHits(hits);
+        })
+        .catch(() => {
+          if (alive) setEpisodeHits([]);
+        });
+
+      // Season posters are presentation-only data the episode index does not
+      // carry, so they are read separately and are NOT an episode source.
+      getMediaSeasonMetadata(media.id, "ar-SA")
+        .then((data) => {
+          if (alive) setSeasonSnapshots(data?.items || []);
+        })
+        .catch(() => {
+          if (alive) setSeasonSnapshots([]);
+        });
 
       getMediaRelated(media.id).then((data) => {
         if (alive) setRelatedItems(data.items || []);
@@ -149,6 +211,43 @@ export default function MediaDetailsPage({
       alive = false;
     };
   }, [media?.id]);
+
+  // Seasons derived from the single source.
+  const seasons = useMemo(() => groupIntoSeasons(episodeHits), [episodeHits]);
+
+  // The first season, or the one the viewer picked. Kept as a NUMBER rather
+  // than an index, so a re-group cannot silently point at a different season.
+  //
+  // Season 0 is the provider's bucket for specials, and it sorts first. Opening
+  // a show on its specials rather than on season 1 is the wrong default, so the
+  // first real season is preferred whenever one exists.
+  const defaultSeasonNumber = seasons.find((season) => season.seasonNumber > 0)?.seasonNumber
+    ?? seasons[0]?.seasonNumber
+    ?? null;
+  const activeSeasonNumber = selectedSeasonNumber ?? defaultSeasonNumber;
+  const activeSeason = seasons.find((season) => season.seasonNumber === activeSeasonNumber) || null;
+
+  // A local filter over the already-loaded episodes, so typing does not hit the
+  // server on every keystroke.
+  const visibleEpisodes = useMemo(() => {
+    if (!activeSeason) return [];
+    const needle = episodeQuery.trim().toLowerCase();
+    if (!needle) return activeSeason.episodes;
+    return activeSeason.episodes.filter((episode) => {
+      const haystack = [episode.episode_title_ar, episode.episode_title_en, String(episode.episode_number)]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(needle);
+    });
+  }, [activeSeason, episodeQuery]);
+
+  // A work can hold files the episode index does not describe (a file with no
+  // season or episode number). They stay reachable through the file list.
+  const orphanFiles = useMemo(
+    () => (detail?.files || []).filter((file) => !(Number(file.season_number) > 0)),
+    [detail]
+  );
 
   async function handleEnrichMetadata() {
     if (!current?.id) return;
@@ -181,13 +280,14 @@ export default function MediaDetailsPage({
           setTmdb(arabicPayload || englishPayload || null);
           setTmdbEnglish(englishPayload || null);
         });
-        Promise.allSettled([
-          getMediaSeasonMetadata(current.id, "ar-SA"),
-          getMediaSeasonMetadata(current.id, "en-US"),
-        ]).then(([arabicSeasons, englishSeasons]) => {
-          setSeasonSnapshots(arabicSeasons.status === "fulfilled" ? arabicSeasons.value?.items || [] : []);
-          setEnglishSeasonSnapshots(englishSeasons.status === "fulfilled" ? englishSeasons.value?.items || [] : []);
-        });
+        getMediaSeasonMetadata(current.id, "ar-SA")
+          .then((data) => setSeasonSnapshots(data?.items || []))
+          .catch(() => {});
+        // Enrichment filled episode fields the index may not have carried yet,
+        // so the single source is re-read rather than patched locally.
+        searchAllEpisodes(detail.id, { pageSize: EPISODE_PAGE_SIZE })
+          .then((hits) => setEpisodeHits(hits))
+          .catch(() => {});
       } else {
         setEnrichMsg("لم يتم العثور على تطابق.");
       }
@@ -252,9 +352,6 @@ export default function MediaDetailsPage({
   }
 
   const current = detail;
-  const seasonsList = current.seasons && current.seasons.length > 0 ? current.seasons : [];
-  const currentSeason = seasonsList[selectedSeasonIdx] || seasonsList[0];
-  const activeEpisodes = currentSeason?.episodes || current.files || [];
   const cast = tmdb?.aggregate_credits?.cast || tmdb?.credits?.cast || [];
   const featuredCast = [...cast]
     .sort((left, right) => (Number.isFinite(left?.order) ? left.order : Number.MAX_SAFE_INTEGER) - (Number.isFinite(right?.order) ? right.order : Number.MAX_SAFE_INTEGER))
@@ -279,12 +376,6 @@ export default function MediaDetailsPage({
   const productionCountries = tmdb?.production_countries || tmdbEnglish?.production_countries || [];
   const spokenLanguages = tmdb?.spoken_languages || tmdbEnglish?.spoken_languages || [];
   const collection = tmdb?.belongs_to_collection || tmdbEnglish?.belongs_to_collection;
-  const localizedSeasons = seasonSnapshots.map((snapshot) => snapshot.payload || {}).filter((season) => season.season_number !== undefined);
-  const englishSeasonsByNumber = new Map(englishSeasonSnapshots.map((snapshot) => [snapshot.seasonNumber, snapshot.payload || {}]));
-  const selectedRemoteSeason = localizedSeasons[selectedMetadataSeason] || localizedSeasons[0];
-  const englishSelectedRemoteSeason = selectedRemoteSeason ? englishSeasonsByNumber.get(selectedRemoteSeason.season_number) : null;
-  const remoteEpisodes = selectedRemoteSeason?.episodes || [];
-  const englishEpisodesByNumber = new Map((englishSelectedRemoteSeason?.episodes || []).map((episode) => [episode.episode_number, episode]));
   const contentRating = current.contentRating || current.content_rating || tmdb?.content_rating || "";
   const ratingInfo = getContentRatingInfo(contentRating);
   const posterURL = resolveAPIURL(current.posterPath) || "/nexora-poster-placeholder.PNG";
@@ -293,17 +384,65 @@ export default function MediaDetailsPage({
   const arabicTitle = hasArabicText(current.titleAr) ? current.titleAr : "لا تتوفر ترجمة عربية لهذا العنوان";
   const tmdbImageURL = (path, size = "w342") => (path ? `https://image.tmdb.org/t/p/${size}${path}` : "");
 
+  // Season posters are keyed by season number and used for presentation only.
+  const seasonPosterByNumber = new Map(
+    seasonSnapshots.map((snapshot) => [
+      Number(snapshot.seasonNumber ?? snapshot.payload?.season_number),
+      snapshot.payload?.poster_path || "",
+    ])
+  );
+
+  const totalEpisodes = seasons.reduce((sum, season) => sum + season.episodes.length, 0);
+  const localEpisodes = seasons.reduce((sum, season) => sum + season.localCount, 0);
+
   // Audio / Subtitles flags
   const hasArAudio = current.hasArabicAudio || (current.highlights || []).some((h) => h.includes("مدبلج") || h.includes("دبلجة") || h.includes("سبيستون") || h.includes("عربي"));
-  const hasArSubs = current.hasArabicSubtitles || true; // NEXORA default subtitle engine
 
-  // Wire the File-Explorer "نسخ" actions into the existing global transfer flow.
-  const handleCopyFiles = (files) => {
-    const list = Array.isArray(files) ? files : [files];
+  // An episode without a file cannot play — that is the meaning of the
+  // "coming soon" state, so it renders a label instead of a play button.
+  const playEpisode = (episode) => {
+    if (!episode.has_local_file) return;
+    onQuickPlay(current, episode);
+  };
+
+  // Only an episode the library holds can be copied; a coming-soon episode has
+  // no file to send.
+  const copyableEpisodes = visibleEpisodes.filter((episode) => episode.has_local_file);
+  const selectedEpisodes = copyableEpisodes.filter((episode) => selectedEpisodeIds.has(episode.id));
+
+  const toggleEpisode = (episode) => {
+    if (!episode.has_local_file) return;
+    setSelectedEpisodeIds((previous) => {
+      const next = new Set(previous);
+      if (next.has(episode.id)) next.delete(episode.id);
+      else next.add(episode.id);
+      return next;
+    });
+  };
+
+  const clearEpisodeSelection = () => setSelectedEpisodeIds(new Set());
+
+  // "من حلقة → إلى حلقة", by episode NUMBER and within the visible season, which
+  // is how an operator thinks about a range.
+  const applyEpisodeRange = (from, to) => {
+    setRangeSelection(from && to ? { from, to } : null);
+    if (!from || !to) return;
+    setSelectedEpisodeIds(new Set(
+      copyableEpisodes
+        .filter((episode) => episode.episode_number >= from && episode.episode_number <= to)
+        .map((episode) => episode.id)
+    ));
+  };
+
+  // Hands the selection to the existing local Copy Bridge flow, which is the
+  // same destination the file explorer used to feed.
+  const copyEpisodes = (episodes) => {
+    const list = (episodes || selectedEpisodes).filter((episode) => episode.has_local_file);
+    if (list.length === 0) return;
     const mediaTitle = current.titleAr || current.titleEn || "";
     if (list.length === 1) {
       openTransferModal(list[0], mediaTitle, posterURL);
-    } else if (list.length > 1) {
+    } else {
       selectMultipleFiles(list, mediaTitle, posterURL);
       openTransferModal();
     }
@@ -437,12 +576,14 @@ export default function MediaDetailsPage({
               <button
                 type="button"
                 onClick={() => {
-                  const firstPlayable = (activeEpisodes && activeEpisodes[0]) || (current.files && current.files[0]) || null;
-                  if (activeEpisodes && activeEpisodes.length > 0) {
-                    selectMultipleFiles(activeEpisodes, current.titleAr || current.titleEn, posterURL);
-                    openTransferModal();
-                  } else if (firstPlayable) {
-                    openTransferModal(firstPlayable, current.titleAr || current.titleEn, posterURL);
+                  const firstEpisode = visibleEpisodes.find((episode) => episode.has_local_file) || visibleEpisodes[0];
+                  const playable = (firstEpisode && firstEpisode.has_local_file ? firstEpisode : null)
+                    || (current.files && current.files[0])
+                    || null;
+                  if (seasons.length > 0) {
+                    setSelectedSeasonNumber(seasons[0].seasonNumber);
+                  } else if (playable) {
+                    onQuickPlay(current, playable);
                   }
                 }}
                 className="inline-flex items-center gap-1.5 shrink-0 rounded-xl sm:rounded-2xl border border-emerald-500/40 bg-emerald-950/60 px-3 sm:px-4 py-2 sm:py-3 text-[11px] sm:text-xs font-black text-emerald-200 transition hover:bg-emerald-900/80 active:scale-95 shadow-md whitespace-nowrap"
@@ -519,142 +660,82 @@ export default function MediaDetailsPage({
       )}
 
       {/* ========================================================================= */}
-      {/* 3. Priority 2: الأجزاء والمواسم والحلقات (Seasons & Compact Episodes List) */}
       {/* ========================================================================= */}
-      {/* Local Video Files / Seasons */}
-      {seasonsList.length > 0 && (
-        <section className="space-y-4 rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4 sm:p-6 shadow-[var(--shadow-sm)]">
+      {/* 3. Priority 2: seasons and episodes, in the platform card template */}
+      {/* ========================================================================= */}
+      {seasons.length > 0 && (
+        <section className="space-y-5 rounded-3xl border-[var(--border-default)] bg-[var(--bg-card)] p-4 sm:p-6 shadow-[var(--shadow-sm)]">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border-subtle)] pb-3">
             <div>
               <h2 className="text-base sm:text-lg font-black text-[var(--text-primary)] flex items-center gap-2">
-                <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-fuchsia-500/20 text-fuchsia-400 text-xs">📺</span>
-                المواسم وحلقات التشغيل المتاحة
+                <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-amber-500/20 text-amber-400 text-xs">📺</span>
+                المواسم والحلقات
               </h2>
-              <p className="mt-0.5 text-xs text-[var(--text-muted)]">حلقات الفيديو المحلية الجاهزة للدفق المباشر بأعلى جودة.</p>
+              <p className="mt-0.5 text-xs text-[var(--text-muted)]">
+                {localEpisodes} من {totalEpisodes} حلقة متوفرة في المكتبة
+              </p>
             </div>
-            <span className="rounded-full bg-fuchsia-500/10 px-3.5 py-1 text-xs font-black text-fuchsia-300 border border-fuchsia-500/20">
-              {seasonsList.length} مواسم متوفرة
-            </span>
-          </div>
-
-          {/* Season Selector Tabs */}
-          <div className="flex flex-wrap gap-2 pt-1">
-            {seasonsList.map((season, idx) => (
-              <button
-                key={season.id || idx}
-                type="button"
-                onClick={() => setSelectedSeasonIdx(idx)}
-                className={`rounded-2xl px-4 py-2 text-xs font-bold transition flex items-center gap-2 ${
-                  selectedSeasonIdx === idx
-                    ? "bg-gradient-to-r from-fuchsia-600 to-purple-600 text-white shadow-md shadow-fuchsia-900/40 scale-[1.02]"
-                    : "border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:border-fuchsia-500/50 hover:text-[var(--text-primary)]"
-                }`}
-              >
-                <span>{season.title_ar || season.title_en || `الموسم ${season.season_number || idx + 1}`}</span>
-                <span className="rounded-full bg-black/30 px-2 py-0.5 text-[10px] font-black">
-                  {season.episodes?.length || 0} حلقة
-                </span>
-              </button>
-            ))}
-          </div>
-
-          {/* Compact, Beautiful Local Episodes Grid — File-Explorer style */}
-          <div className="pt-2">
-            <PlayableFilesExplorer
-              items={activeEpisodes}
-              title={`حلقات الموسم الحالي`}
-              icon="tv"
-              countBadge={`${activeEpisodes.length} حلقة`}
-              onQuickPlay={(item) => onQuickPlay(current, item)}
-              onShowDetails={(item) => navigate(`/watch/${current.id}?file=${item.id}`)}
-              onWatch={(item) => navigate(`/watch/${current.id}?file=${item.id}&play=fs`)}
-              onCopySelected={handleCopyFiles}
-              storageKey="nexora_episodes_view_mode"
-              defaultMode="medium"
-            />
-          </div>
-        </section>
-      )}
-
-      {/* Direct Video Files list if no seasons */}
-      {seasonsList.length === 0 && current.files && current.files.length > 0 && (
-        <section className="space-y-4 rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4 sm:p-6 shadow-[var(--shadow-sm)]">
-          <PlayableFilesExplorer
-            items={current.files}
-            title="ملفات الفيديو المتاحة للتشغيل"
-            icon="film"
-            countBadge={`${current.files.length} ملف`}
-            onQuickPlay={(item) => onQuickPlay(current, item)}
-            onShowDetails={(item) => navigate(`/watch/${current.id}?file=${item.id}`)}
-            onWatch={(item) => navigate(`/watch/${current.id}?file=${item.id}&play=fs`)}
-            onCopySelected={handleCopyFiles}
-            storageKey="nexora_files_view_mode"
-            defaultMode="medium"
-          />
-        </section>
-      )}
-
-      {/* ========================================================================= */}
-      {/* TMDB Seasons & Episodes - High Quality Professional Cards (Like Main Catalogue) */}
-      {/* ========================================================================= */}
-      {localizedSeasons.length > 0 && (
-        <section className="space-y-5 rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4 sm:p-6 shadow-[var(--shadow-sm)]">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border-subtle)] pb-3">
-            <div>
-              <h2 className="text-base sm:text-lg font-black text-[var(--text-primary)] flex items-center gap-2">
-                <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-amber-500/20 text-amber-400 text-xs">✨</span>
-                مواسم وأجزاء العمل من TMDB
-              </h2>
-              <p className="mt-0.5 text-xs text-[var(--text-muted)]">اختر الموسم لمعاينة الحلقات وتفاصيل الدليل.</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative">
+                <Icon name="search" className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
+                <input
+                  type="search"
+                  value={episodeQuery}
+                  onChange={(event) => setEpisodeQuery(event.target.value)}
+                  placeholder="ابحث في حلقات هذا العمل..."
+                  aria-label="filter episodes of this work"
+                  className="w-44 sm:w-56 rounded-xl border-[var(--border-default)] bg-[var(--bg-elevated)] py-2 pr-9 pl-3 text-xs text-[var(--text-primary)] outline-none transition focus:border-[var(--color-accent)]"
+                />
+              </div>
+              <RangeSelectionBar
+                items={copyableEpisodes}
+                onApplyRange={applyEpisodeRange}
+                onCopy={copyEpisodes}
+              />
             </div>
-            <span className="rounded-full bg-amber-500/10 px-3.5 py-1 text-xs font-black text-amber-300 border border-amber-500/20">
-              {localizedSeasons.length} مواسم مسجلة
-            </span>
           </div>
 
-          {/* Professional Season Cards Carousel (Matching NEXORA Cinema Card Aesthetics) */}
+          {/* Season cards — the platform card template, as a horizontal rail */}
           <div onWheel={horizontalWheel} className="flex gap-3.5 overflow-x-auto pb-3 scrollbar-thin">
-            {localizedSeasons.map((season, index) => {
-              const englishSeason = englishSeasonsByNumber.get(season.season_number);
-              const seasonPoster = tmdbImageURL(season.poster_path || englishSeason?.poster_path) || "/nexora-poster-placeholder.PNG";
-              const isSelected = selectedRemoteSeason?.season_number === season.season_number;
-              const sTitleEN = englishSeason?.name || `Season ${season.season_number}`;
-              const sTitleAR = hasArabicText(season.name) ? season.name : `الموسم ${season.season_number}`;
-              const epCount = season.episode_count || season.episodes?.length || 0;
-
+            {seasons.map((season) => {
+              const isActive = season.seasonNumber === activeSeasonNumber;
+              const poster = seasonPosterByNumber.get(Number(season.seasonNumber));
+              const seasonPoster = resolveAPIURL(poster) || tmdbImageURL(poster, "w342") || "/nexora-poster-placeholder.PNG";
               return (
                 <button
                   type="button"
-                  key={season.season_number}
-                  onClick={() => setSelectedMetadataSeason(index)}
+                  key={season.seasonNumber}
+                  onClick={() => {
+                    setSelectedSeasonNumber(season.seasonNumber);
+                    clearEpisodeSelection();
+                  }}
+                  aria-pressed={isActive}
+                  aria-label={`Season ${season.seasonNumber}`}
                   className={`group relative flex w-32 sm:w-40 shrink-0 flex-col overflow-hidden rounded-2xl border text-right transition-all duration-300 ${
-                    isSelected
+                    isActive
                       ? "border-amber-400 bg-amber-950/20 shadow-lg shadow-amber-900/30 ring-2 ring-amber-400 scale-[1.03]"
-                      : "border-[var(--border-default)] bg-[var(--bg-card)] hover:border-amber-400/60 hover:shadow-md"
+                      : "border border-[var(--border-default)] bg-[var(--bg-card)] hover:border-amber-400/60 hover:shadow-md"
                   }`}
-                  aria-label={`اختيار ${sTitleAR}`}
                 >
                   <div className="relative aspect-[3/4] w-full overflow-hidden bg-[#151225]">
                     <img
                       src={seasonPoster}
-                      alt={sTitleEN}
+                      alt={`Season ${season.seasonNumber}`}
                       className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                       loading="lazy"
-                      onError={(e) => {
-                        e.currentTarget.src = "/nexora-poster-placeholder.PNG";
+                      onError={(event) => {
+                        event.currentTarget.src = "/nexora-poster-placeholder.PNG";
                       }}
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/30" />
-                    
-                    {/* Top Episode Count Badge */}
+
                     <div className="absolute top-2 right-2">
-                      <span className="rounded-md border border-white/20 bg-black/60 backdrop-blur-md px-1.5 py-0.5 text-[9px] font-black text-amber-300">
-                        {epCount} حلقة
+                      <span className="rounded-md border-white/20 bg-black/60 backdrop-blur-md px-1.5 py-0.5 text-[9px] font-black text-amber-300">
+                        {season.episodes.length} حلقة
                       </span>
                     </div>
 
-                    {/* Bottom Status / Selection Glow */}
-                    {isSelected && (
+                    {isActive && (
                       <div className="absolute bottom-2 inset-x-2 flex justify-center">
                         <span className="rounded-full bg-amber-500 px-2.5 py-0.5 text-[9px] font-black text-black shadow">
                           المحدد حالياً ✓
@@ -663,12 +744,12 @@ export default function MediaDetailsPage({
                     )}
                   </div>
 
-                  <div className="p-2 sm:p-2.5 flex flex-col justify-between flex-1">
+                  <div className="p-2 sm:p-2.5 flex-col justify-between flex-1">
                     <p className="truncate text-xs font-black text-[var(--text-primary)] group-hover:text-amber-300 transition">
-                      {sTitleAR}
+                      {season.seasonNumber === 0 ? "حلقات خاصة" : `الموسم ${season.seasonNumber}`}
                     </p>
                     <p dir="ltr" className="mt-0.5 truncate text-left text-[10px] text-[var(--text-muted)]">
-                      {sTitleEN}
+                      {season.seasonNumber === 0 ? "Specials" : `Season ${season.seasonNumber}`}
                     </p>
                   </div>
                 </button>
@@ -676,47 +757,143 @@ export default function MediaDetailsPage({
             })}
           </div>
 
-          {/* Selected Season Episodes - Ultra-Compact Horizontal Rail */}
-          {selectedRemoteSeason && (
+          {/* Selected season episodes, in the same card template as the catalogue */}
+          {activeSeason && (
             <div className="pt-2 border-t border-[var(--border-subtle)]">
-              <div className="flex items-center justify-between mb-3">
+              <div className="mb-3 flex-wrap items-center justify-between gap-2">
                 <h3 className="text-xs sm:text-sm font-black text-[var(--text-primary)] flex items-center gap-2">
                   <span>حلقات:</span>
-                  <span className="text-amber-400 font-extrabold">{hasArabicText(selectedRemoteSeason.name) ? selectedRemoteSeason.name : (englishSelectedRemoteSeason?.name || selectedRemoteSeason.name)}</span>
+                  <span className="text-amber-400 font-extrabold">
+                    {activeSeason.seasonNumber === 0 ? "حلقات خاصة" : `الموسم ${activeSeason.seasonNumber}`}
+                  </span>
                 </h3>
-                <span className="text-[11px] text-[var(--text-muted)] font-semibold">
-                  {remoteEpisodes.length} حلقة متوفرة في الدليل
-                </span>
+                <div className="flex items-center gap-2">
+                  {selectedEpisodes.length > 0 && (
+                    <span className="rounded-full bg-[var(--color-accent)]/15 px-2.5 py-1 text-[10px] font-black text-[var(--color-accent)]">
+                      {selectedEpisodes.length} محدد
+                    </span>
+                  )}
+                  <span className="text-[11px] font-semibold text-[var(--text-muted)]">
+                    {activeSeason.localCount} من {activeSeason.episodes.length} متوفرة
+                  </span>
+                  {selectedEpisodes.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => copyEpisodes(selectedEpisodes)}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-3 py-1.5 text-[11px] font-black text-white shadow-sm transition hover:brightness-110 active:scale-95"
+                    >
+                      <span>📲</span>
+                      نسخ المحدد ({selectedEpisodes.length})
+                    </button>
+                  )}
+                </div>
               </div>
 
+              {visibleEpisodes.length === 0 && (
+                <p className="py-8 text-center text-xs text-[var(--text-muted)]">
+                  {episodeQuery ? "لا توجد حلقات تطابق بحثك في هذا الموسم." : "لا توجد حلقات في هذا الموسم."}
+                </p>
+              )}
+
               <div onWheel={horizontalWheel} className="flex gap-3 overflow-x-auto pb-2.5 scrollbar-thin">
-                {remoteEpisodes.map((episode) => {
-                  const englishEpisode = englishEpisodesByNumber.get(episode.episode_number);
-                  const titleEN = englishEpisode?.name || episode.name || `Episode ${episode.episode_number}`;
-                  const titleAR = hasArabicText(episode.name) ? episode.name : null;
-                  const still = tmdbImageURL(episode.still_path || englishEpisode?.still_path, "w342") || "/nexora-episode-placeholder.PNG";
-                  
+                {visibleEpisodes.map((episode) => {
+                  const stillURL = resolveAPIURL(episode.still_path) || tmdbImageURL(episode.still_path, "w342") || "/nexora-episode-placeholder.PNG";
+                  const titleAR = hasArabicText(episode.episode_title_ar) ? episode.episode_title_ar : null;
+                  const titleEN = episode.episode_title_en || `Episode ${episode.episode_number}`;
+                  const available = Boolean(episode.has_local_file);
+                  const selected = selectedEpisodeIds.has(episode.id);
+
                   return (
-                    <article key={episode.id || episode.episode_number} className="w-52 sm:w-60 shrink-0 overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)] flex flex-col justify-between hover:border-amber-500/50 transition">
+                    <article
+                      key={episode.id}
+                      className={`w-52 sm:w-60 shrink-0 overflow-hidden rounded-2xl border bg-[var(--bg-elevated)] flex-col justify-between transition ${
+                        selected
+                          ? "border-[var(--color-accent)] ring-2 ring-[var(--color-accent)]/40"
+                          : available
+                            ? "border border-[var(--border-default)] hover:border-amber-500/50"
+                            : "border border-[var(--border-subtle)] opacity-70"
+                      }`}
+                    >
                       <div className="aspect-video bg-[var(--bg-surface)] overflow-hidden relative">
-                        <img src={still} alt={titleEN} className="h-full w-full object-cover" loading="lazy" onError={(e) => { e.currentTarget.src = "/nexora-episode-placeholder.PNG"; }} />
-                        <span className="absolute top-2 right-2 rounded-md bg-black/80 backdrop-blur-md px-2 py-0.5 text-[10px] font-black text-amber-300 border border-white/10">
+                        <img
+                          src={stillURL}
+                          alt={titleEN}
+                          className={`h-full w-full object-cover ${available ? "" : "opacity-60 grayscale"}`}
+                          loading="lazy"
+                          onError={(event) => {
+                            event.currentTarget.src = "/nexora-episode-placeholder.PNG";
+                          }}
+                        />
+                        <span className="absolute top-2 right-2 rounded-md bg-black/80 backdrop-blur-md px-2 py-0.5 text-[10px] font-black text-amber-300 border-white/10">
                           حلقة {episode.episode_number}
                         </span>
-                        {episode.runtime && (
-                          <span className="absolute bottom-2 left-2 rounded-md bg-black/80 px-1.5 py-0.2 text-[9px] font-bold text-white/90">
-                            {episode.runtime} د
+                        {episode.file_count > 1 && (
+                              <span className="absolute bottom-2 left-2 rounded-md bg-cyan-950/85 px-1.5 py-0.5 text-[9px] font-black text-cyan-200 border-cyan-300/25">
+                            {episode.file_count} <span>إصدارات</span>
                           </span>
                         )}
+                        {available ? (
+                          <button
+                            type="button"
+                            onClick={() => toggleEpisode(episode)}
+                            aria-pressed={selected}
+                            aria-label={selected ? "إلغاء التحديد" : "تحديد"}
+                            className={`absolute top-2 left-2 flex h-6 w-6 items-center justify-center rounded-lg border-2 backdrop-blur-sm transition ${
+                              selected
+                                ? "border-[var(--color-accent)] bg-[var(--color-accent)] text-white shadow-md"
+                                : "border-white/70 bg-black/45 text-transparent hover:border-[var(--color-accent)]"
+                            }`}
+                          >
+                            <Icon name="checkbox" className="h-3.5 w-3.5" />
+                          </button>
+                        ) : null}
                       </div>
-                      <div className="p-2.5 flex-1 flex flex-col justify-between">
+
+                      <div className="flex flex-1 flex-col justify-between p-2.5">
                         <div>
                           <p dir="ltr" className="truncate text-left text-xs font-black text-[var(--text-primary)]">{titleEN}</p>
                           <p className="mt-0.5 truncate text-[11px] font-bold text-amber-300/90">{titleAR || "لا تتوفر ترجمة عربية"}</p>
+                          {(episode.overview_ar || episode.overview_en) && (
+                            <p className="mt-1 line-clamp-2 text-[10px] leading-relaxed text-[var(--text-secondary)]">
+                              {episode.overview_ar || episode.overview_en}
+                            </p>
+                          )}
                         </div>
-                        <div className="mt-2 flex items-center justify-between pt-1.5 border-t border-[var(--border-subtle)] text-[10px] text-[var(--text-muted)]">
-                          <span>{episode.air_date || "تاريخ العرض"}</span>
-                          <span className="text-amber-400 font-bold">TMDB</span>
+
+                        <div className="mt-2 border-t border-[var(--border-subtle)] pt-1.5">
+                          {/* dir=ltr on the fact row so a latin value is not
+                              reordered by the surrounding RTL context —
+                              "2.0 KB" must not render as "KB 2.0". */}
+                          <div dir="ltr" className="flex flex-wrap items-center justify-start gap-1.5 text-[9.5px] font-bold text-[var(--text-muted)]">
+                            {episode.air_date && <span className="tabular-nums">{episode.air_date}</span>}
+                            {formatRuntime(episode.runtime || episode.duration) && <span>{formatRuntime(episode.runtime || episode.duration)}</span>}
+                            {episode.resolution && (
+                              <span className="rounded border-cyan-300/30 bg-cyan-950/70 px-1.5 py-0.5 text-[9px] font-black text-cyan-100">
+                                {episode.resolution}
+                              </span>
+                            )}
+                            {formatSize(episode.file_size) && (
+                              <span className="rounded bg-[var(--bg-surface)] px-1.5 py-0.5 tabular-nums">{formatSize(episode.file_size)}</span>
+                            )}
+                          </div>
+
+                          <div className="mt-2 flex items-center justify-between">
+                            {available ? (
+                              <button
+                                type="button"
+                                onClick={() => playEpisode(episode)}
+                                className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-fuchsia-600 to-purple-600 px-2.5 py-1.5 text-[10.5px] font-black text-white shadow-sm transition hover:brightness-110 active:scale-95"
+                              >
+                                <Icon name="play" className="h-3 w-3 fill-current text-white" />
+                                تشغيل
+                              </button>
+                            ) : (
+                              <span className="rounded-lg border-[var(--border-subtle)] bg-[var(--bg-card)] px-2.5 py-1.5 text-[10px] font-bold text-[var(--text-muted)]">
+                                قيد الإضافة
+                              </span>
+                            )}
+                            <span className="text-[9px] font-black text-amber-400">TMDB</span>
+                          </div>
                         </div>
                       </div>
                     </article>
@@ -725,6 +902,27 @@ export default function MediaDetailsPage({
               </div>
             </div>
           )}
+        </section>
+      )}
+      {/* Files the episode index does not describe stay reachable here. */}
+      {orphanFiles.length > 0 && (
+        <section className="space-y-3 rounded-3xl border-[var(--border-default)] bg-[var(--bg-card)] p-4 sm:p-6 shadow-[var(--shadow-sm)]">
+          <h3 className="border-b border-[var(--border-subtle)] pb-3 text-xs font-black text-[var(--text-muted)]">
+            ملفات أخرى في هذا العمل
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {orphanFiles.map((file) => (
+              <button
+                key={file.id || file.path || file.file_name}
+                type="button"
+                onClick={() => onQuickPlay(current, file)}
+                className="inline-flex items-center gap-2 rounded-xl border-[var(--border-default)] bg-[var(--bg-elevated)] px-3 py-2 text-[11px] font-bold text-[var(--text-primary)] transition hover:border-[var(--color-accent)]"
+              >
+                <Icon name="film" className="h-3.5 w-3.5 text-[var(--text-muted)]" />
+                <span className="max-w-[220px] truncate">{file.file_name || file.title_en || file.path}</span>
+              </button>
+            ))}
+          </div>
         </section>
       )}
 
@@ -766,7 +964,7 @@ export default function MediaDetailsPage({
                 <div className="min-w-0 flex-1">
                   <p className="text-[11px] font-bold text-sky-300">الترجمة والنصوص (Subtitles)</p>
                   <p className="text-xs font-black text-white truncate">
-                    {hasArSubs ? "ترجمة عربية معتمدة + English" : "الإنجليزية والأصلية"}
+                    ترجمة عربية معتمدة + English
                   </p>
                 </div>
               </div>
@@ -777,7 +975,7 @@ export default function MediaDetailsPage({
               {[
                 ["نوع العمل", current.type === "series" ? "مسلسل تلفزيوني" : "فيلم سينمائي"],
                 ["الحالة الفنية", tmdb.status || "مكتمل"],
-                ["إجمالي الأجزاء", tmdb.number_of_seasons ? `${tmdb.number_of_seasons} مواسم • ${tmdb.number_of_episodes || seasonsList.reduce((acc, s) => acc + (s.episodes?.length || 0), 0)} حلقة` : null],
+                ["إجمالي الأجزاء", seasons.length > 0 ? `${seasons.length} مواسم • ${totalEpisodes} حلقة` : null],
                 ["اللغة الأصلية", (tmdb.original_language || "en").toUpperCase()],
                 ["مدة العرض", tmdb.runtime ? `${tmdb.runtime} دقيقة` : (tmdb.episode_run_time?.[0] ? `${tmdb.episode_run_time[0]} دقيقة` : "غير محدد")],
                 ["تاريخ الإصدار", tmdb.release_date || tmdb.first_air_date || current.year],

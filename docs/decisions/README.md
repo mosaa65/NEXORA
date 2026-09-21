@@ -15,6 +15,10 @@
 | [ADR-009](ADR-009-incremental-indexing-pipeline.md) | Incremental, Fault-Tolerant Media Indexing Pipeline | Accepted / Implemented |
 | [ADR-010](ADR-010-logical-media-model.md) | Logical Media Model and Entity Resolution | Accepted / Implemented |
 | [ADR-011](ADR-011-search-projection-and-scan-control.md) | Rebuildable Search Projection and Cooperative Scan Control | Accepted / Implemented |
-| [ADR-012](ADR-012-videojs-player-shell.md) | Video.js as the Player Engine Behind a NEXORA Control Shell | Accepted / Implemented |
+<<| [ADR-012](ADR-012-local-episode-enrichment.md) | Local Episode Enrichment and a Separate Episode Search Index | Accepted / Implemented |
+| [ADR-013](ADR-013-catalogue-consolidation.md) | Catalogue Consolidation — Duplicates, Container Titles and Unlinked Files | Accepted / Implemented |
+| [ADR-014](ADR-014-work-details-single-source.md) | Work Details on a Single Episode Source, in the Platform Card Template | Accepted / Implemented |
+| [ADR-015](ADR-015-nexora-agent-android-completion.md) | Complete the Android Backend Inside the Existing Agent and Abstraction | Proposed — awaiting approval |
+| [ADR-016](ADR-016-videojs-player-shell.md) | Video.js as the Player Engine Behind a NEXORA Control Shell | Accepted / Implemented |
 
 أي اقتراح غير منفذ (مثل HLS/DASH أو transcoding أو Redis integration) لا يوثق هنا كـ ADR قائم حتى توجد موافقة وتنفيذ قابل للتحقق.

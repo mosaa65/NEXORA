@@ -589,6 +589,30 @@ func enrichFromFolders(parsed *ParsedName, ancestors []string, evidence *Evidenc
 	if titleFromFolder == "" {
 		titleFromFolder = primary
 	}
+
+	// A container folder is never a work title. The nearest ancestor that is a
+	// real name wins, and if none exists the filename supplies the title.
+	//
+	// This is the fix for a real library layout:
+	//
+	//	.../مكتبة حسب الممثلين/Leonardo DiCaprio/أعمال/Titanic.1997.mkv
+	//
+	// "أعمال" means "works" and is a browse grouping. The nearest real name
+	// above it is "Leonardo DiCaprio" — an ACTOR, not a work — so using an
+	// ancestor would be worse than using nothing. The filename is therefore
+	// left as the only candidate, and "Titanic" is recovered from it.
+	//
+	// The previous behaviour accepted the container as a title whenever no
+	// better candidate existed, which is how works literally named "أعمال" and
+	// "Media" were created.
+	if IsContainerFolderForTitle(titleFromFolder) {
+		titleFromFolder = ""
+	}
+	if detectSpecial(normalizeWorkingName(titleFromFolder)) != "" && len(ancestors) > 1 {
+		// A folder that is only a special marker ("OVA", "Specials") is not a
+		// title either; the show name lives above it.
+		titleFromFolder = ancestors[1]
+	}
 	// A folder that is only a special marker ("OVA", "Specials") is not a title;
 	// the show name lives above it.
 	if detectSpecial(normalizeWorkingName(titleFromFolder)) != "" {
@@ -603,6 +627,71 @@ func enrichFromFolders(parsed *ParsedName, ancestors []string, evidence *Evidenc
 	if parsed.Title != "" {
 		evidence.FilenameTitle = true
 	}
+}
+
+// containerFolderTitles are folder names that describe a container, a browse
+// grouping or a category rather than a work.
+//
+// This list is deliberately duplicated from identity.containerFolderNames rather
+// than imported: the scanner cannot depend on the identity package (identity
+// depends on nothing, but the scanner is imported BY the code that wires them),
+// and a shared list is the only way the two can agree. Both call sites are
+// covered by tests that assert the same inputs classify the same way.
+var containerFolderTitles = map[string]struct{}{
+	"اعمال": {}, "أعمال": {}, "افلام": {}, "أفلام": {}, "مسلسلات": {}, "مسلسل": {},
+	"مكتبه": {}, "مكتبة": {}, "القسم": {}, "قسم": {}, "الكل": {}, "متنوع": {},
+	// "أخرى" folds through the alef-maqsura rule to "اخري", so the folded form
+	// is stored rather than the written one.
+	"افلام ومسلسلات": {}, "اخري": {}, "اخرى": {}, "جديد": {}, "قديم": {},
+	"مكتبة حسب الممثلين": {}, "الممثلين": {}, "حسب الممثلين": {},
+	// Actor and people folders. An actor's name is a real name, so without
+	// these the nearest non-container ancestor would title every film in the
+	// folder after the actor.
+	"actors": {}, "actor": {}, "actresses": {}, "people": {}, "cast": {},
+	"مثلين": {}, "مثلون": {}, "الممثلون": {}, "فنانون": {}, "نجوم": {},
+	"franchises": {}, "collection": {}, "collections": {}, "boxset": {}, "box set": {},
+	"movies": {}, "films": {}, "series": {}, "tv": {}, "shows": {},
+	"library": {}, "media": {}, "video": {}, "videos": {}, "unsorted": {},
+	"misc": {}, "other": {}, "others": {}, "extra": {}, "extras": {},
+	"featurettes": {}, "bonus": {}, "sample": {}, "samples": {},
+}
+
+// IsContainerFolderForTitle reports whether a folder name is a container rather
+// than a work title.
+//
+// Two checks run, because a container appears in two shapes:
+//
+//  1. the folder IS a container name ("أعمال", "Movies");
+//  2. the folder is a container name with a QUALIFIER added ("مسلسلات تركية",
+//     "أفلام أجنبية", "مكتبة حسب الممثلين"), which owners write constantly.
+//
+// Shape 2 is why a plain map lookup is not enough. The first container word in
+// the folder decides, so "مسلسلات تركية" is a container because it begins with
+// "مسلسلات", while "طائر الرفراف" is not because no word is a container word.
+//
+// The first word must match rather than any word: a work whose name happens to
+// contain a container word (for example "The Library") must not be rejected.
+func IsContainerFolderForTitle(folder string) bool {
+	normalized := NormalizeTitleForSearch(folder)
+	if normalized == "" {
+		return false
+	}
+	// Shape 1: the whole name is a known container.
+	if _, exists := containerFolderTitles[normalized]; exists {
+		return true
+	}
+	// Shape 2: the name starts with a container word and the remaining words are
+	// not a work title. This is checked by requiring the folder to be longer than
+	// the container word and to still begin with it.
+	for container := range containerFolderTitles {
+		if container == normalized {
+			return true
+		}
+		if strings.HasPrefix(normalized, container+" ") {
+			return true
+		}
+	}
+	return false
 }
 
 // titlePrefixBeforeSeason extracts the show name from a folder that also names

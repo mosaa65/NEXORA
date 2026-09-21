@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/lib/pq"
+
 	"nexora/server/internal/search"
 )
 
@@ -89,6 +91,30 @@ func (r *Repository) LoadProjectionCursors(ctx context.Context) (map[string]int6
 	return cursors, rows.Err()
 }
 
+// LiveWorkIDs returns every work id that still exists in the catalogue.
+//
+// Merged works are excluded: they have no standalone identity, so their index
+// entry is a leftover that should be pruned rather than kept.
+func (r *Repository) LiveWorkIDs(ctx context.Context) ([]int64, error) {
+	rows, err := r.db.QueryContext(ctx, `
+	SELECT id FROM media_items WHERE merged_into_id IS NULL
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("list live work ids: %w", err)
+	}
+	defer rows.Close()
+
+	ids := make([]int64, 0, 1024)
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan live work id: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
 // SaveProjectionCursor persists the resume position after a page is indexed.
 //
 // It is written per page rather than at the end of the run, so an interrupted
@@ -134,29 +160,31 @@ func (r *Repository) ListSearchDocumentPage(ctx context.Context, afterID int64, 
 
 	rows, err := r.db.QueryContext(ctx, `
 	SELECT
-			mi.id,
-			mi.title_ar,
-			mi.title_en,
-			mi.type,
-			mi.plot_ar,
-			mi.plot_en,
-			mi.release_year,
-			mi.rating,
-			mi.poster_path,
-			mi.banner_path,
-			COALESCE(array_to_json(mi.genres), '[]'::json)::text AS genres,
-			COALESCE(mi.content_rating, mi.metadata_facets->>'content_rating', '') AS content_rating,
-			c.slug,
-			c.name_ar,
-			c.name_en,
-			COALESCE(mi.file_count, 0), mi.status, COALESCE(mi.season_count, 0),
-			COALESCE(NULLIF(mi.metadata_facets->>'number_of_seasons', '')::int, 0),
-			COALESCE(NULLIF(mi.metadata_facets->>'number_of_episodes', '')::int, 0),
-			COALESCE(mi.total_file_size, 0),
-			COALESCE(mi.best_resolution, ''),
-			COALESCE(NULLIF(mi.metadata_facets->>'runtime', '')::int, mi.runtime_minutes, 0),
-			COALESCE(mi.has_arabic_audio, false),
-			COALESCE(mi.has_arabic_subtitles, false)
+	mi.id,
+	mi.title_ar,
+	mi.title_en,
+	COALESCE(mi.title_normalized, ''),
+	COALESCE((SELECT array_agg(a.alias) FROM media_aliases a WHERE a.media_item_id = mi.id), ARRAY[]::text[]),
+	mi.type,
+	mi.plot_ar,
+	mi.plot_en,
+	mi.release_year,
+	mi.rating,
+	mi.poster_path,
+	mi.banner_path,
+	COALESCE(array_to_json(mi.genres), '[]'::json)::text AS genres,
+	COALESCE(mi.content_rating, mi.metadata_facets->>'content_rating', '') AS content_rating,
+	c.slug,
+	c.name_ar,
+	c.name_en,
+	COALESCE(mi.file_count, 0), mi.status, COALESCE(mi.season_count, 0),
+	COALESCE(NULLIF(mi.metadata_facets->>'number_of_seasons', '')::int, 0),
+	COALESCE(NULLIF(mi.metadata_facets->>'number_of_episodes', '')::int, 0),
+	COALESCE(mi.total_file_size, 0),
+	COALESCE(mi.best_resolution, ''),
+	COALESCE(NULLIF(mi.metadata_facets->>'runtime', '')::int, mi.runtime_minutes, 0),
+	COALESCE(mi.has_arabic_audio, false),
+	COALESCE(mi.has_arabic_subtitles, false)
 	FROM media_items mi
 	LEFT JOIN categories c ON c.id = mi.category_id
 	WHERE mi.id > $1
@@ -171,67 +199,10 @@ func (r *Repository) ListSearchDocumentPage(ctx context.Context, afterID int64, 
 
 	documents := make([]search.MediaDocument, 0, limit)
 	for rows.Next() {
-		var doc search.MediaDocument
-		var titleAR, plotAR, plotEN, posterPath, bannerPath, categorySlug, categoryAR, categoryEN, contentRating sql.NullString
-		var releaseYear sql.NullInt64
-		var rating sql.NullFloat64
-		var genresText string
-		var fileCount int
-		var summary mediaCardSummary
-
-		if err := rows.Scan(
-			&doc.ID,
-			&titleAR,
-			&doc.TitleEN,
-			&doc.Type,
-			&plotAR,
-			&plotEN,
-			&releaseYear,
-			&rating,
-			&posterPath,
-			&bannerPath,
-			&genresText,
-			&contentRating,
-			&categorySlug,
-			&categoryAR,
-			&categoryEN,
-			&fileCount, &summary.Status, &summary.SeasonCount, &summary.TMDBSeasonCount,
-			&summary.TMDBEpisodeCount, &summary.TotalSize, &summary.BestResolution,
-			&summary.RuntimeMinutes, &summary.HasArabicAudio, &summary.HasArabicSubtitles,
-		); err != nil {
+		doc, err := scanMediaDocument(rows)
+		if err != nil {
 			return nil, fmt.Errorf("scan search document page: %w", err)
 		}
-
-		doc.TitleAR = nullableString(titleAR)
-		doc.PlotAR = nullableString(plotAR)
-		doc.PlotEN = nullableString(plotEN)
-		doc.PosterPath = nullableString(posterPath)
-		doc.BannerPath = nullableString(bannerPath)
-		doc.ContentRating = nullableString(contentRating)
-		doc.CategorySlug = nullableString(categorySlug)
-		doc.CategoryAR = nullableString(categoryAR)
-		doc.CategoryEN = nullableString(categoryEN)
-		if releaseYear.Valid {
-			doc.ReleaseYear = int(releaseYear.Int64)
-		}
-		if rating.Valid {
-			doc.Rating = rating.Float64
-		}
-		if err := decodeJSONField(genresText, &doc.Genres); err != nil {
-			doc.Genres = nil
-		}
-
-		doc.FileCount = fileCount
-		doc.Status = summary.Status
-		doc.SeasonCount = summary.SeasonCount
-		doc.TMDBSeasonCount = summary.TMDBSeasonCount
-		doc.TMDBEpisodeCount = summary.TMDBEpisodeCount
-		doc.TotalSize = summary.TotalSize
-		doc.BestResolution = summary.BestResolution
-		doc.RuntimeMinutes = summary.RuntimeMinutes
-		doc.HasArabicAudio = summary.HasArabicAudio
-		doc.HasArabicSubtitles = summary.HasArabicSubtitles
-
 		documents = append(documents, doc)
 	}
 	if err := rows.Err(); err != nil {
@@ -297,58 +268,89 @@ func (r *Repository) materializeMediaDocuments(ctx context.Context, query string
 
 	documents := make([]search.MediaDocument, 0, 16)
 	for rows.Next() {
-		var doc search.MediaDocument
-		var titleAR, plotAR, plotEN, posterPath, bannerPath, categorySlug, categoryAR, categoryEN, contentRating sql.NullString
-		var releaseYear sql.NullInt64
-		var rating sql.NullFloat64
-		var genresText string
-		var fileCount int
-		var summary mediaCardSummary
-
-		if err := rows.Scan(
-			&doc.ID, &titleAR, &doc.TitleEN, &doc.Type, &plotAR, &plotEN,
-			&releaseYear, &rating, &posterPath, &bannerPath, &genresText, &contentRating,
-			&categorySlug, &categoryAR, &categoryEN,
-			&fileCount, &summary.Status, &summary.SeasonCount, &summary.TMDBSeasonCount,
-			&summary.TMDBEpisodeCount, &summary.TotalSize, &summary.BestResolution,
-			&summary.RuntimeMinutes, &summary.HasArabicAudio, &summary.HasArabicSubtitles,
-		); err != nil {
+		doc, err := scanMediaDocument(rows)
+		if err != nil {
 			return nil, fmt.Errorf("scan media document: %w", err)
 		}
-
-		doc.TitleAR = nullableString(titleAR)
-		doc.PlotAR = nullableString(plotAR)
-		doc.PlotEN = nullableString(plotEN)
-		doc.PosterPath = nullableString(posterPath)
-		doc.BannerPath = nullableString(bannerPath)
-		doc.ContentRating = nullableString(contentRating)
-		doc.CategorySlug = nullableString(categorySlug)
-		doc.CategoryAR = nullableString(categoryAR)
-		doc.CategoryEN = nullableString(categoryEN)
-		if releaseYear.Valid {
-			doc.ReleaseYear = int(releaseYear.Int64)
-		}
-		if rating.Valid {
-			doc.Rating = rating.Float64
-		}
-		if err := decodeJSONField(genresText, &doc.Genres); err != nil {
-			doc.Genres = nil
-		}
-		doc.FileCount = fileCount
-		doc.Status = summary.Status
-		doc.SeasonCount = summary.SeasonCount
-		doc.TMDBSeasonCount = summary.TMDBSeasonCount
-		doc.TMDBEpisodeCount = summary.TMDBEpisodeCount
-		doc.TotalSize = summary.TotalSize
-		doc.BestResolution = summary.BestResolution
-		doc.RuntimeMinutes = summary.RuntimeMinutes
-		doc.HasArabicAudio = summary.HasArabicAudio
-		doc.HasArabicSubtitles = summary.HasArabicSubtitles
-
 		documents = append(documents, doc)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate media documents: %w", err)
 	}
 	return documents, nil
+}
+
+// scanMediaDocument decodes one media-document row.
+//
+// Centralising the scan keeps the paged reader and the single-document reader
+// from drifting apart: both call this, so a column can never be added to one
+// query and forgotten in the other.
+func scanMediaDocument(rows *sql.Rows) (search.MediaDocument, error) {
+	var doc search.MediaDocument
+	var titleAR, titleNormalized, plotAR, plotEN, posterPath, bannerPath sql.NullString
+	var categorySlug, categoryAR, categoryEN, contentRating sql.NullString
+	var releaseYear sql.NullInt64
+	var rating sql.NullFloat64
+	var genresText string
+	var alternateTitles []string
+	var fileCount int
+	var summary mediaCardSummary
+
+	if err := rows.Scan(
+		&doc.ID,
+		&titleAR,
+		&doc.TitleEN,
+		&titleNormalized,
+		pq.Array(&alternateTitles),
+		&doc.Type,
+		&plotAR,
+		&plotEN,
+		&releaseYear,
+		&rating,
+		&posterPath,
+		&bannerPath,
+		&genresText,
+		&contentRating,
+		&categorySlug,
+		&categoryAR,
+		&categoryEN,
+		&fileCount, &summary.Status, &summary.SeasonCount, &summary.TMDBSeasonCount,
+		&summary.TMDBEpisodeCount, &summary.TotalSize, &summary.BestResolution,
+		&summary.RuntimeMinutes, &summary.HasArabicAudio, &summary.HasArabicSubtitles,
+	); err != nil {
+		return doc, err
+	}
+
+	doc.TitleAR = nullableString(titleAR)
+	doc.TitleNormalized = nullableString(titleNormalized)
+	doc.AlternateTitles = alternateTitles
+	doc.PlotAR = nullableString(plotAR)
+	doc.PlotEN = nullableString(plotEN)
+	doc.PosterPath = nullableString(posterPath)
+	doc.BannerPath = nullableString(bannerPath)
+	doc.ContentRating = nullableString(contentRating)
+	doc.CategorySlug = nullableString(categorySlug)
+	doc.CategoryAR = nullableString(categoryAR)
+	doc.CategoryEN = nullableString(categoryEN)
+	if releaseYear.Valid {
+		doc.ReleaseYear = int(releaseYear.Int64)
+	}
+	if rating.Valid {
+		doc.Rating = rating.Float64
+	}
+	if err := decodeJSONField(genresText, &doc.Genres); err != nil {
+		doc.Genres = nil
+	}
+
+	doc.FileCount = fileCount
+	doc.Status = summary.Status
+	doc.SeasonCount = summary.SeasonCount
+	doc.TMDBSeasonCount = summary.TMDBSeasonCount
+	doc.TMDBEpisodeCount = summary.TMDBEpisodeCount
+	doc.TotalSize = summary.TotalSize
+	doc.BestResolution = summary.BestResolution
+	doc.RuntimeMinutes = summary.RuntimeMinutes
+	doc.HasArabicAudio = summary.HasArabicAudio
+	doc.HasArabicSubtitles = summary.HasArabicSubtitles
+	return doc, nil
 }
