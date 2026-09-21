@@ -51,6 +51,12 @@ function PlayerIcon({ name, className = "h-6 w-6" }) {
   if (name === "playlist") {
     return <svg {...common}><path d="M5 6h14M5 12h14M5 18h9" /><path d="M18 16v5m-2.5-2.5h5" /></svg>;
   }
+  if (name === "check") {
+    return <svg {...common}><path d="M5 12.5l4.5 4.5L19 7" /></svg>;
+  }
+  if (name === "skip-next") {
+    return <svg {...common} fill="currentColor" stroke="none"><path d="M6 5.4v13.2c0 .78.86 1.26 1.53.86l8.2-6.6a1 1 0 000-1.72L7.53 4.54A1 1 0 006 5.4z" /><rect x="17" y="5" width="2.2" height="14" rx="1" /></svg>;
+  }
   return null;
 }
 
@@ -115,6 +121,9 @@ export default function NexoraPlayer({
   const [resumeAt, setResumeAt] = useState(0);
   const [askResume, setAskResume] = useState(false);
   const [episodeDrawerOpen, setEpisodeDrawerOpen] = useState(false);
+  const [menu, setMenu] = useState(null); // "cc" | "rate" | "quality" | null
+  const [toast, setToast] = useState(null); // transient message
+  const [nextCountdown, setNextCountdown] = useState(null); // seconds until auto-next
 
   // ---------------------------------------------------------------------------
   // Progress persistence (localStorage, same key/shape as the legacy player so
@@ -240,6 +249,26 @@ export default function NexoraPlayer({
     setCaptionIndex(next);
   }, []);
 
+  // Transient toast (used by ±10s skip and source/caption changes).
+  const showToast = useCallback((message) => {
+    setToast(message);
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(() => setToast(null), 1400);
+  }, []);
+
+  // Explicitly pick a caption track by index (-1 = off). Called by the CC menu.
+  const selectCaptionIndex = useCallback((index) => {
+    const player = playerRef.current;
+    if (!player) return;
+    const list = player.textTracks();
+    if (!list) return;
+    for (let i = 0; i < list.length; i += 1) {
+      list[i].mode = i === index ? "showing" : "disabled";
+    }
+    setCaptionIndex(index);
+    setMenu(null);
+  }, []);
+
   // ---------------------------------------------------------------------------
   // Player creation. Runs once per mounted node.
   // ---------------------------------------------------------------------------
@@ -353,7 +382,12 @@ export default function NexoraPlayer({
     };
     const onEnded = () => {
       saveProgress(true);
-      onNext?.();
+      // Offer the next episode with a countdown instead of a hard cut.
+      if (onNext && (playlist.length > 1) && currentFileId) {
+        setNextCountdown(10);
+      } else {
+        onNext?.();
+      }
     };
 
     player.on("play", onPlay);
@@ -468,6 +502,36 @@ export default function NexoraPlayer({
     root.addEventListener("keydown", onKeyDown);
     return () => root.removeEventListener("keydown", onKeyDown);
   }, [cycleCaptions, seekBy, showControls, toggleFullscreen, toggleMute, togglePlay]);
+
+  // Close an open popover (CC / rate / quality) on outside click or Escape.
+  useEffect(() => {
+    if (!menu) return undefined;
+    const onDown = (event) => {
+      if (!event.target.closest?.(".nexora-popover, .nexora-bar-button")) setMenu(null);
+    };
+    const onKey = (event) => {
+      if (event.key === "Escape") setMenu(null);
+    };
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [menu]);
+
+  // Next-episode countdown: decrement each second, then advance. Cancel returns
+  // the viewer to the ended frame without switching.
+  useEffect(() => {
+    if (nextCountdown === null) return undefined;
+    if (nextCountdown <= 0) {
+      setNextCountdown(null);
+      onNext?.();
+      return undefined;
+    }
+    const timer = setTimeout(() => setNextCountdown((n) => (n === null ? null : n - 1)), 1000);
+    return () => clearTimeout(timer);
+  }, [nextCountdown, onNext]);
 
   // Timeline hover: quantize the pointer position to a ten-second bucket and
   // fetch the cached FFmpeg frame for that bucket. The same endpoint the legacy
@@ -653,7 +717,7 @@ export default function NexoraPlayer({
             <span className="nexora-queue-count">{remainingEpisodes.length} متبقية</span>
             <h3 className="nexora-queue-title">الحلقات المتبقية</h3>
           </div>
-          <div className="nexora-queue-rail">
+          <div className="nexora-queue-grid">
             {remainingEpisodes.map((episode, index) => {
               const number = currentPlaylistIndex + index + 2;
               const label =
@@ -676,28 +740,22 @@ export default function NexoraPlayer({
                   }}
                 >
                   <span className="nexora-queue-thumb">
-                    {thumb ? (
-                      <img
-                        src={thumb}
-                        alt=""
-                        loading="lazy"
-                        onError={(event) => {
-                          // Fall back to the work poster once; if that also fails
-                          // (or there is none) hide the image and keep the frame.
-                          const img = event.currentTarget;
-                          if (poster && !img.dataset.fallback) {
-                            img.dataset.fallback = "1";
-                            img.src = poster;
-                          } else {
-                            img.style.display = "none";
-                          }
-                        }}
-                      />
-                    ) : null}
+                    <img
+                      src={thumb || poster || "/nexora-episode-placeholder.PNG"}
+                      alt=""
+                      loading="lazy"
+                      onError={(event) => {
+                        const img = event.currentTarget;
+                        if (poster && !img.dataset.fallback) {
+                          img.dataset.fallback = "1";
+                          img.src = poster;
+                        }
+                      }}
+                    />
+                    <span className="nexora-queue-index">{number}</span>
                     {episode.duration > 0 && (
                       <span className="nexora-queue-duration">{clock(episode.duration)}</span>
                     )}
-                    <span className="nexora-queue-index">{number}</span>
                   </span>
                   <span className="nexora-queue-meta">
                     <b>{label}</b>
@@ -735,14 +793,18 @@ export default function NexoraPlayer({
               className="nexora-timeline-preview absolute bottom-5 z-50 flex w-40 flex-col overflow-hidden rounded-lg border-white/20 bg-black/95 shadow-xl"
               style={{ left: `${Math.max(0, Math.min(82, (hoverTime / (duration || 1)) * 100))}%` }}
             >
-              {previewSrc && (
-                <img
-                  src={previewSrc}
-                  alt="معاينة المشهد"
-                  className="aspect-video w-full object-cover"
-                  onError={() => setPreviewSrc("")}
-                />
-              )}
+              <span className="nexora-preview-frame">
+                {previewSrc ? (
+                  <img
+                    src={previewSrc}
+                    alt="معاينة المشهد"
+                    className="aspect-video w-full object-cover"
+                    onError={() => setPreviewSrc("")}
+                  />
+                ) : (
+                  <span className="nexora-preview-loading" aria-hidden="true" />
+                )}
+              </span>
               <span className="px-2 py-1 text-center text-[11px] font-bold text-white">{clock(hoverTime)}</span>
             </span>
           )}
@@ -758,6 +820,13 @@ export default function NexoraPlayer({
             className="nexora-player-progress w-full"
             style={{ "--player-progress": `${duration ? (time / duration) * 100 : 0}%` }}
           />
+          {hoverTime !== null && (
+            <span
+              className="nexora-timeline-cursor"
+              style={{ left: `${(hoverTime / (duration || 1)) * 100}%` }}
+              aria-hidden="true"
+            />
+          )}
         </div>
 
         {isFullscreen && remainingEpisodes.length > 0 && (
@@ -774,26 +843,49 @@ export default function NexoraPlayer({
           </div>
         )}
 
-        <div className="flex items-center gap-1.5">
+        <div className="relative flex items-center justify-between gap-1.5">
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              className="nexora-bar-button"
+              onClick={togglePlay}
+              aria-label={playing ? "إيقاف مؤقت" : "تشغيل"}
+            >
+              <PlayerIcon name={playing ? "pause" : "play"} className="h-5 w-5" />
+            </button>
           <button
             type="button"
             className="nexora-bar-button"
-            onClick={togglePlay}
-            aria-label={playing ? "إيقاف مؤقت" : "تشغيل"}
+            onClick={() => { seekBy(-SEEK_SECONDS); showToast("−10 ثوانٍ"); }}
+            aria-label="رجوع 10 ثوانٍ"
           >
-            <PlayerIcon name={playing ? "pause" : "play"} className="h-5 w-5" />
-          </button>
-          <button type="button" className="nexora-bar-button" onClick={() => seekBy(-SEEK_SECONDS)} aria-label="رجوع 10 ثوانٍ">
             <PlayerIcon name="rewind" className="h-5 w-5" />
           </button>
-          <button type="button" className="nexora-bar-button" onClick={() => seekBy(SEEK_SECONDS)} aria-label="تقديم 10 ثوانٍ">
+          <button
+            type="button"
+            className="nexora-bar-button"
+            onClick={() => { seekBy(SEEK_SECONDS); showToast("+10 ثوانٍ"); }}
+            aria-label="تقديم 10 ثوانٍ"
+          >
             <PlayerIcon name="forward" className="h-5 w-5" />
           </button>
-          <span className="nexora-time tabular-nums">
+          {onNext && remainingEpisodes.length > 0 && (
+            <button
+              type="button"
+              className="nexora-bar-button"
+              onClick={() => { onNext?.(); showToast("الحلقة التالية"); }}
+              aria-label="الحلقة التالية"
+              title="الحلقة التالية"
+            >
+              <PlayerIcon name="skip-next" className="h-5 w-5" />
+            </button>
+          )}
+          </div>
+          <span className="nexora-time nexora-time--center tabular-nums">
             {clock(time)} <span className="opacity-40">/</span> {clock(duration)}
           </span>
 
-          <div className="ms-auto flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5">
             <button type="button" className="nexora-bar-button" onClick={toggleMute} aria-label={muted ? "إلغاء الكتم" : "كتم الصوت"}>
               <PlayerIcon name={muted || volume === 0 ? "mute" : "volume"} className="h-5 w-5" />
             </button>
@@ -808,25 +900,80 @@ export default function NexoraPlayer({
               className="nexora-vol"
             />
             {tracks.length > 0 && (
+              <span className="nexora-popover-host">
+                <button
+                  type="button"
+                  className={`nexora-bar-button ${captionIndex >= 0 ? "nexora-bar-button--active" : ""}`}
+                  onClick={() => setMenu((m) => (m === "cc" ? null : "cc"))}
+                  aria-label="اختيار الترجمة"
+                  aria-expanded={menu === "cc"}
+                >
+                  CC
+                </button>
+                {menu === "cc" && (
+                  <div className="nexora-popover nexora-popover--cc" role="menu">
+                    <p className="nexora-popover-title">الترجمة</p>
+                    <button
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={captionIndex < 0}
+                      className={`nexora-popover-item ${captionIndex < 0 ? "is-on" : ""}`}
+                      onClick={() => selectCaptionIndex(-1)}
+                    >
+                      <span>إيقاف</span>
+                      {captionIndex < 0 && <PlayerIcon name="check" className="h-4 w-4" />}
+                    </button>
+                    {tracks.map((track, i) => (
+                      <button
+                        key={track.src || i}
+                        type="button"
+                        role="menuitemradio"
+                        aria-checked={captionIndex === i}
+                        className={`nexora-popover-item ${captionIndex === i ? "is-on" : ""}`}
+                        onClick={() => selectCaptionIndex(i)}
+                      >
+                        <span>{track.label || track.srcLang || `مسارات ${i + 1}`}</span>
+                        {captionIndex === i && <PlayerIcon name="check" className="h-4 w-4" />}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </span>
+            )}
+
+            <span className="nexora-popover-host">
               <button
                 type="button"
-                className={`nexora-bar-button ${captionIndex >= 0 ? "nexora-bar-button--active" : ""}`}
-                onClick={cycleCaptions}
-                aria-label="تبديل الترجمة"
+                className="nexora-bar-button nexora-bar-button--text"
+                onClick={() => setMenu((m) => (m === "rate" ? null : "rate"))}
+                aria-label="سرعة التشغيل"
+                aria-expanded={menu === "rate"}
               >
-                CC
+                {rate}×
               </button>
-            )}
-            <select
-              aria-label="سرعة التشغيل"
-              value={rate}
-              onChange={(event) => applyRate(Number(event.target.value))}
-              className="nexora-rate"
-            >
-              {RATES.map((value) => (
-                <option key={value} value={value}>{value}×</option>
-              ))}
-            </select>
+              {menu === "rate" && (
+                <div className="nexora-popover nexora-popover--rate" role="menu">
+                  <p className="nexora-popover-title">السرعة</p>
+                  {RATES.map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={rate === value}
+                      className={`nexora-popover-item ${rate === value ? "is-on" : ""}`}
+                      onClick={() => {
+                        applyRate(value);
+                        setMenu(null);
+                        showToast(`السرعة ${value}×`);
+                      }}
+                    >
+                      <span>{value}×</span>
+                      {rate === value && <PlayerIcon name="check" className="h-4 w-4" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </span>
             {supportsPiP && (
               <button type="button" className="nexora-bar-button" onClick={togglePiP} aria-label="نافذة مصغرة">
                 <PlayerIcon name="pip" className="h-5 w-5" />
@@ -838,6 +985,25 @@ export default function NexoraPlayer({
           </div>
         </div>
       </div>
+
+      {/* Transient feedback (skip, rate, next). */}
+      {toast && <div className="nexora-toast" role="status">{toast}</div>}
+
+      {/* Next-episode countdown, platforms-style. */}
+      {nextCountdown !== null && (
+        <div className="nexora-next" dir="rtl">
+          <p className="nexora-next-label">الحلقة التالية خلال {nextCountdown}</p>
+          <div className="nexora-next-actions">
+            <button type="button" className="nexora-next-play" onClick={() => { setNextCountdown(null); onNext?.(); }}>
+              <PlayerIcon name="play" className="h-4 w-4" />
+              تشغيل الآن
+            </button>
+            <button type="button" className="nexora-next-cancel" onClick={() => setNextCountdown(null)}>
+              إلغاء
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
