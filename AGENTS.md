@@ -63,8 +63,8 @@ Immediate Code
 
 المسار الحالي القابل للتحقق:
 
-- Native HTML5 `<video>` هو playback engine الحالي.
-- Custom React controls فوقه في `VideoPlayer.jsx`.
+- Video.js يشغّل عنصر HTML5 `<video>` وهو playback engine الحالي داخل شل تحكم NEXORA.
+- Custom NEXORA controls فوقه في `client/src/components/NexoraPlayer.jsx` (انظر ADR-012).
 - Direct HTTP Range streaming عبر Go `http.ServeContent` هو المسار الحالي.
 - لا يتم تحميل ملف الفيديو كاملًا في ذاكرة الخادم في stream handler.
 - FFmpeg ليس جزءًا من playback hot path الحالي.

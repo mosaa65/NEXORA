@@ -33,6 +33,10 @@ const VIEW_CLASSES = {
  * @param {string} [props.icon] Icon name shown beside the heading (default "film").
  * @param {string} [props.countBadge] Optional count badge text next to the title.
  * @param {(item: Object, index: number) => void} props.onQuickPlay
+ * @param {(item: Object, index: number) => void} [props.onShowDetails] Opens the
+ *   item's details/playback screen (renders a per-item «تفاصيل» button).
+ * @param {(item: Object, index: number) => void} [props.onWatch] Plays the item
+ *   fullscreen (renders a per-item «مشاهدة» button).
  * @param {(items: Array<Object>) => void} [props.onCopySelected] Called when the
  *   user initiates a copy of a group of selected items (used by the range bar).
  * @param {string} [props.storageKey] localStorage key for the view mode.
@@ -45,6 +49,8 @@ export default function PlayableFilesExplorer({
   icon = "film",
   countBadge = "",
   onQuickPlay,
+  onShowDetails,
+  onWatch,
   onCopySelected,
   storageKey = "nexora_files_view_mode",
   defaultMode = "medium",
@@ -113,6 +119,37 @@ export default function PlayableFilesExplorer({
   const itemNumber = (item, idx) => item?.episode_number || item?.episodeNumber || idx + 1;
   const itemTitle = (item, idx) =>
     item?.title_ar || item?.title_en || `الحلقة ${itemNumber(item, idx)}`;
+
+  // Per-item actions: «تفاصيل» (open the watch screen on this episode) and
+  // «مشاهدة» (play it fullscreen). Hidden while multi-select is active.
+  const renderItemActions = (item, idx) => {
+    if (selectionMode) return null;
+    if (!onShowDetails && !onWatch) return null;
+    return (
+      <div className="mt-2.5 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+        {onShowDetails && (
+          <button
+            type="button"
+            onClick={() => onShowDetails(item, idx)}
+            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2 text-xs font-black text-[var(--text-primary)] transition hover:border-fuchsia-500/60 hover:text-fuchsia-300"
+          >
+            <Icon name="info" className="h-3.5 w-3.5" />
+            تفاصيل
+          </button>
+        )}
+        {onWatch && (
+          <button
+            type="button"
+            onClick={() => onWatch(item, idx)}
+            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-fuchsia-600 to-purple-600 px-3 py-2 text-xs font-black text-white shadow-md transition hover:brightness-110 active:scale-[0.98]"
+          >
+            <Icon name="play" className="h-3.5 w-3.5" />
+            مشاهدة
+          </button>
+        )}
+      </div>
+    );
+  };
 
   const renderCardActions = (item, idx) => {
     const selected = selection.isSelected(item);
@@ -206,6 +243,7 @@ export default function PlayableFilesExplorer({
                 {codec} • {item?.file_size || item?.size ? `${(Number(item?.file_size || item?.size) / (1024 * 1024)).toFixed(1)} MB` : "تشغيل فوري"}
               </p>
             )}
+            {renderItemActions(item, idx)}
           </div>
         </article>
       );
@@ -260,6 +298,7 @@ export default function PlayableFilesExplorer({
           {isGrid && mode !== "extralarge" && (
             <p className="mt-0.5 text-[10px] text-[var(--text-muted)] truncate">{codec} • تشغيل فوري</p>
           )}
+          {renderItemActions(item, idx)}
         </div>
       </article>
     );

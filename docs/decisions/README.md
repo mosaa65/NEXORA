@@ -4,7 +4,7 @@
 
 | ADR | العنوان | الحالة |
 |---|---|---|
-| [ADR-001](ADR-001-native-html5-video-player.md) | Native HTML5 Video Player with Custom React Controls | Existing / Verified |
+| [ADR-001](ADR-001-native-html5-video-player.md) | Native HTML5 Video Player with Custom React Controls | Superseded by ADR-012 |
 | [ADR-002](ADR-002-direct-http-range-streaming.md) | Direct HTTP Range Streaming | Existing / Verified |
 | [ADR-003](ADR-003-filesystem-media-storage.md) | Filesystem-Based Media Storage | Existing / Verified |
 | [ADR-004](ADR-004-postgresql-catalogue-source-of-truth.md) | PostgreSQL as Catalogue Source of Truth | Existing / Verified |
@@ -15,5 +15,6 @@
 | [ADR-009](ADR-009-incremental-indexing-pipeline.md) | Incremental, Fault-Tolerant Media Indexing Pipeline | Accepted / Implemented |
 | [ADR-010](ADR-010-logical-media-model.md) | Logical Media Model and Entity Resolution | Accepted / Implemented |
 | [ADR-011](ADR-011-search-projection-and-scan-control.md) | Rebuildable Search Projection and Cooperative Scan Control | Accepted / Implemented |
+| [ADR-012](ADR-012-videojs-player-shell.md) | Video.js as the Player Engine Behind a NEXORA Control Shell | Accepted / Implemented |
 
 أي اقتراح غير منفذ (مثل HLS/DASH أو transcoding أو Redis integration) لا يوثق هنا كـ ADR قائم حتى توجد موافقة وتنفيذ قابل للتحقق.

@@ -21,9 +21,13 @@ const AdminOverviewPage = React.lazy(() => import("./pages/admin/AdminOverviewPa
 const AdminTransferPage = React.lazy(() => import("./pages/admin/AdminTransferPage.jsx"));
 const TMDBSettingsPage = React.lazy(() => import("./pages/TMDBSettingsPage.jsx"));
 const AdminLoginPage = React.lazy(() => import("./pages/AdminLoginPage.jsx"));
+// Dev-only harness for the Video.js player. Not linked anywhere in the UI.
+const DevPlayerPage = React.lazy(() => import("./pages/DevPlayerPage.jsx"));
+const WatchPage = React.lazy(() => import("./pages/WatchPage.jsx"));
 
-import VideoPlayer from "./components/VideoPlayer.jsx";
 import { TransferProvider } from "./context/TransferContext.jsx";
+import { PlaybackProvider, usePlayback } from "./context/PlaybackContext.jsx";
+import MiniPlayerDock from "./components/MiniPlayerDock.jsx";
 import TransferModal from "./components/transfer/TransferModal.jsx";
 import MiniTransferCenter from "./components/transfer/MiniTransferCenter.jsx";
 import { categorySeed, getCategoryMeta } from "./data/library.js";
@@ -104,11 +108,23 @@ function AppRoutes() {
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
 
-  // Global Real Video Player Modal State
-  const [playingMediaState, setPlayingMediaState] = useState(null);
+  // The floating dock keeps a video alive across pages; opening a new watch
+  // screen should replace it, so gameplay never has two players at once.
+  const { close: closeDock, isActive: dockActive } = usePlayback();
 
+  // Playback now lives on its own screen (/watch/:id) instead of a floating modal.
   function handleQuickPlay(item, episodeOrFile) {
-    setPlayingMediaState({ media: item, initialFile: episodeOrFile || null });
+    if (!item?.id) return;
+    if (dockActive) closeDock();
+    const query = episodeOrFile?.id ? `?file=${episodeOrFile.id}` : "";
+    navigate(`/watch/${item.id}${query}`);
+  }
+
+  // Expanding the floating dock returns to the watch screen and hands playback
+  // back to the page (closing the dock so only one player exists).
+  function handleExpandDock(payload) {
+    closeDock();
+    if (payload?.mediaId) navigate(`/watch/${payload.mediaId}${payload.fileId ? `?file=${payload.fileId}` : ""}`);
   }
 
   useEffect(() => {
@@ -239,6 +255,17 @@ function AppRoutes() {
               />
             }
           />
+
+          {/* Watch Screen — playback page inside the customer shell (keeps the
+              search bar and navigation, like every other page). */}
+          <Route
+            path="watch/:id"
+            element={
+              <Suspense fallback={<div className="min-h-[60vh]" />}>
+                <WatchPage />
+              </Suspense>
+            }
+          />
         </Route>
 
         {/* ========================================================================= */}
@@ -276,18 +303,27 @@ function AppRoutes() {
           <Route path="overview" element={<AdminOverviewPage health={health} onSyncIndex={handleSyncIndex} />} />
         </Route>
 
+        {/* ========================================================================= */}
+        {/* DEV HARNESS — not linked in the UI, reachable by URL only.                */}
+        {/* Renders the Video.js-based NexoraPlayer against a real catalogue file     */}
+        {/* in isolation, without opening the full playback modal.                    */}
+        {/* ========================================================================= */}
+        <Route
+          path="/dev/player"
+          element={
+            <Suspense fallback={<div className="min-h-screen bg-[var(--bg-base)]" />}>
+              <DevPlayerPage />
+            </Suspense>
+          }
+        />
+
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 
-      {/* Global Real Video Player Modal */}
-      {playingMediaState && (
-        <RealVideoPlayerModal
-          media={playingMediaState.media}
-          initialFile={playingMediaState.initialFile}
-          onClose={() => setPlayingMediaState(null)}
-        />
-      )}
+      {/* Global mini player — lives above the routes so a minimised video keeps
+          playing while the user navigates to other pages. */}
+      <MiniPlayerDock onExpand={handleExpandDock} />
 
 {/* Global USB Transfer Experience (Modern Modal, Mini Transfer Center) */}
       <TransferModal />
@@ -299,197 +335,12 @@ function AppRoutes() {
 export default function App() {
   return (
     <TransferProvider>
+    <PlaybackProvider>
     <HashRouter>
       <AppRoutes />
     </HashRouter>
+    </PlaybackProvider>
     </TransferProvider>
   );
 }
 
-function RealVideoPlayerModal({ media, initialFile, onClose }) {
-  const [mediaDetail, setMediaDetail] = useState(null);
-  const [activeFile, setActiveFile] = useState(initialFile || null);
-  const [subtitles, setSubtitles] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let alive = true;
-    if (media?.id) {
-      setLoading(true);
-      getMediaDetail(media.id)
-        .then((data) => {
-          if (!alive) return;
-          setMediaDetail(data);
-          if (!activeFile) {
-            const firstEp = data.seasons?.[0]?.episodes?.[0] || data.files?.[0];
-            if (firstEp) setActiveFile(firstEp);
-          }
-        })
-        .catch(() => {})
-        .finally(() => {
-          if (alive) setLoading(false);
-        });
-    } else {
-      setLoading(false);
-    }
-    return () => {
-      alive = false;
-    };
-  }, [media?.id]);
-
-  useEffect(() => {
-    let alive = true;
-    if (activeFile?.id) {
-      getFileSubtitles(activeFile.id)
-        .then((res) => {
-          if (!alive) return;
-          const subs = (res.subtitles || []).map((sub) => ({
-            kind: "captions",
-            label: sub.label || (sub.language === "ar" ? "العربية" : sub.language),
-            src: resolveAPIURL(`/api/stream/file/${activeFile.id}/subtitles/${sub.index}`),
-            srcLang: sub.language || "ar",
-            default: sub.language === "ar",
-          }));
-          setSubtitles(subs);
-        })
-        .catch(() => {
-          if (alive) setSubtitles([]);
-        });
-    } else {
-      setSubtitles([]);
-    }
-    return () => {
-      alive = false;
-    };
-  }, [activeFile?.id]);
-
-  const seasons = mediaDetail?.seasons || [];
-  const directFiles = mediaDetail?.files || [];
-  const hasSeasons = seasons.length > 0;
-
-  const allPlayableItems = hasSeasons
-    ? seasons.flatMap((s) =>
-        (s.episodes || []).map((ep) => ({
-          ...ep,
-          seasonNumber: s.season_number,
-        }))
-      )
-    : directFiles;
-
-  const currentFile = activeFile || allPlayableItems[0] || null;
-  const currentFileIndex = allPlayableItems.findIndex((item) => item.id === currentFile?.id || (!item.id && item.file_path === currentFile?.file_path));
-  const nextFile = currentFileIndex >= 0 ? allPlayableItems[currentFileIndex + 1] : null;
-
-  function playNextFile() {
-    if (nextFile) setActiveFile(nextFile);
-  }
-
-  const streamSrc = currentFile?.id
-    ? resolveAPIURL(`/api/stream/file/${currentFile.id}`)
-    : currentFile?.file_path
-    ? resolveAPIURL(`/api/stream?path=${encodeURIComponent(currentFile.file_path)}`)
-    : "";
-
-  const title = media.titleAr || media.titleEn || "تشغيل الوسائط";
-  const poster = resolveAPIURL(media.bannerPath || media.posterPath) || "";
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 p-3 sm:p-6 backdrop-blur-2xl text-right" dir="rtl">
-      <div className="relative flex h-[92vh] w-full max-w-7xl flex-col overflow-hidden rounded-[2rem] border border-white/15 bg-[#0A0914] p-4 sm:p-6 shadow-2xl">
-        {/* Player Header */}
-        <div className="mb-4 flex items-center justify-between border-b border-white/10 pb-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-xs font-bold text-white transition hover:bg-white/20"
-          >
-            <span>العودة ‹</span>
-          </button>
-
-          <div className="text-right">
-            <p className="text-xs sm:text-sm font-bold text-fuchsia-300">
-              {title} {currentFile ? `· ${currentFile.title_ar || currentFile.title_en || (currentFile.episode_number ? `الحلقة ${currentFile.episode_number}` : "ملف التشغيل")}` : ""}
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2 text-xs font-mono font-bold text-emerald-400 bg-emerald-950/60 px-3 py-1 rounded-full border border-emerald-500/30">
-            <span>{currentFile?.resolution || "1080p"} · بث شبكي فوري LAN</span>
-          </div>
-        </div>
-
-        {/* Video & Real Episodes Grid */}
-        <div className="grid flex-1 gap-6 overflow-hidden lg:grid-cols-[1.35fr_0.65fr]">
-          {/* Real Video Player Component */}
-          <div className="relative flex flex-col justify-center overflow-hidden rounded-2xl border border-white/10 bg-black">
-            {streamSrc ? (
-              <VideoPlayer
-                key={streamSrc}
-                src={streamSrc}
-                title={title}
-                poster={poster}
-                tracks={subtitles}
-                fileId={currentFile?.id}
-                onNext={playNextFile}
-                playlist={allPlayableItems}
-                currentFileId={currentFile?.id}
-                onSelectFile={setActiveFile}
-              />
-            ) : (
-              <div className="flex flex-col items-center justify-center p-8 text-center text-white/60">
-                <p className="text-sm font-bold">
-                  {loading ? "جارٍ فحص ملفات الفيديو المتاحة..." : "لا يتوفر ملف فيديو صالح للتشغيل في قاعدة البيانات لهذا العمل."}
-                </p>
-                <p className="mt-2 text-xs text-white/40">
-                  قم بفهرسة مجلد الميديا لتفعيل التشغيل الفوري.
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Real Episodes List Sidebar */}
-          <div className="flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0D0E18] p-4 text-right">
-            <div className="mb-3 flex items-center justify-between border-b border-white/10 pb-3">
-              <span className="rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-bold text-white/70">
-                {allPlayableItems.length} حلقات / ملفات
-              </span>
-              <h4 className="text-sm font-black text-white">قائمة الحلقات الفعلية</h4>
-            </div>
-
-            <div className="flex-1 space-y-2 overflow-y-auto pr-1">
-              {allPlayableItems.map((item, idx) => {
-                const isSelected = currentFile && (currentFile.id === item.id || currentFile.file_path === item.file_path);
-                const epTitle = item.title_ar || item.title_en || (item.episode_number ? `الحلقة ${item.episode_number}` : `الملف #${idx + 1}`);
-                return (
-                  <button
-                    key={item.id || idx}
-                    type="button"
-                    onClick={() => setActiveFile(item)}
-                    className={`flex w-full items-center justify-between rounded-xl p-3 text-right transition ${
-                      isSelected
-                        ? "bg-gradient-to-r from-purple-900/90 to-fuchsia-900/90 border border-fuchsia-500/50 text-white shadow-lg"
-                        : "border border-white/5 bg-white/[0.02] text-white/70 hover:bg-white/5 hover:text-white"
-                    }`}
-                  >
-                    <span className="text-[11px] font-mono text-white/50">{item.resolution || "1080p"}</span>
-                    <div>
-                      <p className="text-xs font-bold text-white">{epTitle}</p>
-                      <p className="text-[10px] text-white/40">
-                        {item.seasonNumber ? `الموسم ${item.seasonNumber} · ` : ""}
-                        {item.file_size ? `${(Number(item.file_size) / (1024 * 1024)).toFixed(0)} MB` : "فيديو محلي"}
-                      </p>
-                    </div>
-                  </button>
-                );
-              })}
-              {allPlayableItems.length === 0 && !loading && (
-                <div className="p-8 text-center text-xs text-white/40">
-                  لا توجد حلقات فعلية مسجلة لهذا العمل في قاعدة البيانات.
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}

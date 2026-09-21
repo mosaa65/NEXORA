@@ -25,7 +25,8 @@ export default defineConfig({
         manualChunks: {
           vendor: ["react", "react-dom", "react-router-dom"],
           motion: ["framer-motion"],
-          player: ["plyr"]
+          // `video.js` is the engine the NEXORA player (NexoraPlayer.jsx) uses.
+          player: ["video.js"]
         }
       }
     }

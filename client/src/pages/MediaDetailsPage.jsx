@@ -566,6 +566,8 @@ export default function MediaDetailsPage({
               icon="tv"
               countBadge={`${activeEpisodes.length} حلقة`}
               onQuickPlay={(item) => onQuickPlay(current, item)}
+              onShowDetails={(item) => navigate(`/watch/${current.id}?file=${item.id}`)}
+              onWatch={(item) => navigate(`/watch/${current.id}?file=${item.id}&play=fs`)}
               onCopySelected={handleCopyFiles}
               storageKey="nexora_episodes_view_mode"
               defaultMode="medium"
@@ -583,6 +585,8 @@ export default function MediaDetailsPage({
             icon="film"
             countBadge={`${current.files.length} ملف`}
             onQuickPlay={(item) => onQuickPlay(current, item)}
+            onShowDetails={(item) => navigate(`/watch/${current.id}?file=${item.id}`)}
+            onWatch={(item) => navigate(`/watch/${current.id}?file=${item.id}&play=fs`)}
             onCopySelected={handleCopyFiles}
             storageKey="nexora_files_view_mode"
             defaultMode="medium"

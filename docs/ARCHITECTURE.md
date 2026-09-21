@@ -308,7 +308,7 @@ SRT is converted to WebVTT in response. Other advertised formats are not all con
 ```text
 User chooses file
   → RealVideoPlayerModal constructs API stream URL
-  → VideoPlayer passes URL to native <video>
+  → NexoraPlayer feeds URL to the Video.js-managed <video>
   → browser requests GET /api/stream/file/{id} (often with Range)
   → Go looks up path in PostgreSQL
   → serveCataloguePath (DB-resolved, trusted) or mediaPathAllowed for client-supplied ?path=
