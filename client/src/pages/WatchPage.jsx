@@ -5,7 +5,7 @@ import EpisodeCard from "../components/watch/EpisodeCard.jsx";
 import RelatedRail from "../components/watch/RelatedRail.jsx";
 import Icon from "../components/Icon.jsx";
 import { usePlayback } from "../context/PlaybackContext.jsx";
-import { getMediaDetail, getFileSubtitles, resolveAPIURL } from "../lib/api.js";
+import { getMediaDetail, getFileSubtitles, searchAllEpisodes, resolveAPIURL } from "../lib/api.js";
 import {
   clock,
   isEpisodic,
@@ -33,6 +33,7 @@ export default function WatchPage() {
 
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [indexEpisodes, setIndexEpisodes] = useState(null); // episodes from the episode index
   const [activeFile, setActiveFile] = useState(null);
   const [subtitles, setSubtitles] = useState([]);
   const [fullscreen, setFullscreen] = useState(false);
@@ -62,19 +63,49 @@ export default function WatchPage() {
     };
   }, [id]);
 
+  // Episodes come from the dedicated episode index (the same source the details
+  // page uses); `detail.seasons`/`detail.files` are only a fallback for works
+  // the index does not describe.
+  useEffect(() => {
+    let alive = true;
+    searchAllEpisodes(id, { pageSize: 200 })
+      .then((hits) => {
+        if (!alive) return;
+        const list = (hits || []).filter((h) => h && h.id != null);
+        setIndexEpisodes(list.length > 0 ? list : null);
+      })
+      .catch(() => {
+        if (alive) setIndexEpisodes(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [id]);
+
   const type = detail?.type || "movie";
   const episodic = isEpisodic(type);
   const seasons = detail?.seasons || [];
   const files = detail?.files || [];
   const hasSeasons = seasons.length > 0;
 
-  const episodes = useMemo(
+  const detailEpisodes = useMemo(
     () =>
       hasSeasons
         ? seasons.flatMap((s) => (s.episodes || []).map((ep) => ({ ...ep, seasonNumber: s.season_number })))
         : files,
     [hasSeasons, seasons, files]
   );
+
+  // Prefer the episode index; fall back to the work's own seasons/files. Index
+  // hits carry the playable file id separately from the episode id, so normalise
+  // a single `streamId` both sources expose for streaming and subtitles.
+  const episodes = useMemo(() => {
+    const source = (indexEpisodes && indexEpisodes.length > 0) ? indexEpisodes : detailEpisodes;
+    return source.map((item) => ({
+      ...item,
+      streamId: item.file_id || item.fileId || item.id,
+    }));
+  }, [indexEpisodes, detailEpisodes]);
 
   useEffect(() => {
     if (episodes.length === 0) return;
@@ -89,15 +120,15 @@ export default function WatchPage() {
 
   useEffect(() => {
     let alive = true;
-    if (currentFile?.id) {
-      getFileSubtitles(currentFile.id)
+    if (currentFile?.streamId) {
+      getFileSubtitles(currentFile.streamId)
         .then((res) => {
           if (!alive) return;
           setSubtitles(
             (res.subtitles || []).map((sub) => ({
               kind: "captions",
               label: sub.label || (sub.language === "ar" ? "العربية" : sub.language),
-              src: resolveAPIURL(`/api/stream/file/${currentFile.id}/subtitles/${sub.index}`),
+              src: resolveAPIURL(`/api/stream/file/${currentFile.streamId}/subtitles/${sub.index}`),
               srcLang: sub.language || "ar",
               default: sub.language === "ar",
             }))
@@ -110,10 +141,10 @@ export default function WatchPage() {
     return () => {
       alive = false;
     };
-  }, [currentFile?.id]);
+  }, [currentFile?.streamId]);
 
-  const streamSrc = currentFile?.id
-    ? resolveAPIURL(`/api/stream/file/${currentFile.id}`)
+  const streamSrc = currentFile?.streamId
+    ? resolveAPIURL(`/api/stream/file/${currentFile.streamId}`)
     : currentFile?.file_path
       ? resolveAPIURL(`/api/stream?path=${encodeURIComponent(currentFile.file_path)}`)
       : "";
@@ -139,9 +170,9 @@ export default function WatchPage() {
     : "";
 
   const resumeFrom = (() => {
-    if (!currentFile?.id) return null;
+    if (!currentFile?.streamId) return null;
     try {
-      const saved = JSON.parse(localStorage.getItem(`nexora:playback:${currentFile.id}`) || "null");
+      const saved = JSON.parse(localStorage.getItem(`nexora:playback:${currentFile.streamId}`) || "null");
       if (saved?.position > 30 && !saved.completed) return saved.position;
     } catch {}
     return null;
@@ -163,7 +194,7 @@ export default function WatchPage() {
     if (!streamSrc) return;
     minimize({
       mediaId: id,
-      fileId: currentFile?.id,
+      fileId: currentFile?.streamId,
       src: streamSrc,
       title,
       poster,
@@ -172,7 +203,7 @@ export default function WatchPage() {
       onSelectFile: setActiveFile,
       onNext: playNext,
     });
-  }, [id, currentFile?.id, streamSrc, title, poster, subtitles, episodes, minimize, playNext]);
+  }, [id, currentFile?.streamId, streamSrc, title, poster, subtitles, episodes, minimize, playNext]);
 
   const playerNode = streamSrc ? (
     <NexoraPlayer
@@ -181,10 +212,10 @@ export default function WatchPage() {
       title={title}
       poster={poster}
       tracks={subtitles}
-      fileId={currentFile?.id}
+      fileId={currentFile?.streamId}
       onNext={playNext}
       playlist={episodes}
-      currentFileId={currentFile?.id}
+      currentFileId={currentFile?.streamId}
       onSelectFile={setActiveFile}
       fullscreenTarget={stageRef}
       onMinimize={minimizeToDock}
@@ -209,12 +240,12 @@ export default function WatchPage() {
 
   const wantsFullscreen = params.get("play") === "fs";
   useEffect(() => {
-    if (!wantsFullscreen || !currentFile?.id) return;
+    if (!wantsFullscreen || !currentFile?.streamId) return;
     const raf = requestAnimationFrame(() => {
       stageRef.current?.requestFullscreen?.().catch(() => {});
     });
     return () => cancelAnimationFrame(raf);
-  }, [wantsFullscreen, currentFile?.id]);
+  }, [wantsFullscreen, currentFile?.streamId]);
 
   const sideTitle = listTitle(type);
 

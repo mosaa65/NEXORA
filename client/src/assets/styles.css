@@ -329,92 +329,16 @@ select {
 .nexora-queue-grid::-webkit-scrollbar { width: .4rem; }
 .nexora-queue-grid::-webkit-scrollbar-thumb { border-radius: 999px; background: rgba(217, 70, 239, .5); }
 
-.nexora-queue-card {
-  display: flex;
-  flex-direction: column;
-  gap: .45rem;
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, .08);
-  border-radius: .75rem;
-  background: rgba(255, 255, 255, .04);
-  padding: .3rem;
-  color: #fff;
-  text-align: right;
-  transition: background-color .16s ease, border-color .16s ease, transform .16s ease;
+/* The fullscreen queue reuses EpisodeCard; only the palette is darkened to sit
+   on the overlay, and the grid is capped so the video stays visible. */
+.nexora-queue-grid .nexora-episode-card {
+  background: rgba(12, 10, 22, .92);
+  border-color: rgba(255, 255, 255, .1);
 }
 
-.nexora-queue-card:hover,
-.nexora-queue-card:focus-visible {
-  border-color: rgba(232, 121, 249, .55);
-  background: rgba(217, 70, 239, .14);
-  outline: none;
-  transform: translateY(-2px);
-}
-
-.nexora-queue-thumb {
-  position: relative;
-  display: block;
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  overflow: hidden;
-  border-radius: .5rem;
-  background: #000;
-}
-
-.nexora-queue-thumb img { width: 100%; height: 100%; object-fit: cover; }
-
-.nexora-queue-duration {
-  position: absolute;
-  bottom: .2rem;
-  left: .25rem;
-  border-radius: .25rem;
-  background: rgba(0, 0, 0, .82);
-  padding: .05rem .3rem;
-  font-size: .6rem;
-  font-weight: 700;
-  color: #fff;
-}
-
-.nexora-queue-index {
-  position: absolute;
-  top: .2rem;
-  right: .25rem;
-  display: grid;
-  min-width: 1.2rem;
-  height: 1.2rem;
-  place-items: center;
-  border-radius: .25rem;
-  background: rgba(217, 70, 239, .9);
-  padding: 0 .25rem;
-  font-size: .62rem;
-  font-weight: 800;
-  color: #fff;
-}
-
-.nexora-queue-meta {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: .1rem;
-  padding: 0 .25rem .2rem;
-}
-
-.nexora-queue-meta b {
-  overflow: hidden;
-  font-size: .74rem;
-  font-weight: 800;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.nexora-queue-meta small {
-  overflow: hidden;
-  color: rgba(255, 255, 255, .5);
-  font-size: .64rem;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+.nexora-queue-grid .nexora-episode-title { color: #fff; }
+.nexora-queue-grid .nexora-episode-facts { color: rgba(255, 255, 255, .55); }
+.nexora-queue-grid .nexora-episode-facts span { background: rgba(255, 255, 255, .08); }
 
 
 /* ---------------------------------------------------------------------------
@@ -473,42 +397,56 @@ select {
 }
 
 .nexora-center-button {
-  display: grid;
-  place-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  display: flex;
+  position: relative;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 999px;
   background: rgba(10, 9, 20, 0.55);
   color: #fff;
-  backdrop-filter: blur(6px);
-  transition: transform .15s ease, background-color .15s ease;
+  backdrop-filter: blur(8px);
+  transition: transform .15s ease, background-color .15s ease, border-color .15s ease;
 }
 
+/* ±10s jump: the arrow sits slightly high, the number tucked beneath it —
+   aligned as a unit, never spilling past the ring. */
 .nexora-center-seek {
-  position: relative;
-  width: 3.1rem;
-  height: 3.1rem;
+  width: 3.4rem;
+  height: 3.4rem;
+  flex-direction: column;
+  gap: 0;
+  line-height: 1;
 }
+
+.nexora-center-seek svg { transform: translateY(-1px); }
 
 .nexora-center-seek small {
-  position: absolute;
-  bottom: .28rem;
-  font-size: .58rem;
-  font-weight: 800;
-  opacity: .75;
+  position: static;
+  margin-top: 1px;
+  font-size: .62rem;
+  font-weight: 900;
+  letter-spacing: -.02em;
+  opacity: .9;
 }
 
 .nexora-center-main {
-  width: 4rem;
-  height: 4rem;
-  border-color: rgba(232, 121, 249, 0.5);
-  background: linear-gradient(135deg, #c084fc, #9333ea);
-  box-shadow: 0 0 34px rgba(192, 132, 252, .45);
+  width: 4.6rem;
+  height: 4.6rem;
+  border-color: rgba(232, 121, 249, 0.55);
+  background: linear-gradient(135deg, #c026d3, #7c3aed);
+  box-shadow: 0 0 40px rgba(192, 132, 252, .5);
 }
+
+.nexora-center-main svg { margin-inline-start: 2px; }
 
 .nexora-center-button:hover {
   transform: scale(1.06);
-  background: rgba(217, 70, 239, .34);
+  border-color: rgba(232, 121, 249, .7);
+  background: rgba(217, 70, 239, .4);
 }
+
+.nexora-center-main:hover { background: linear-gradient(135deg, #d030e0, #8b5cf6); }
 
 /* The single NEXORA control bar. Video.js' own bar is disabled, so this is the
    only control surface and no button or timeline is duplicated. */
@@ -952,12 +890,13 @@ select {
 }
 
 .nexora-watch-list {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
   flex: 1 1 auto;
   min-height: 0;
   max-height: min(74vh, 44rem);
-  flex-direction: column;
-  gap: .55rem;
+  gap: .7rem;
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: .7rem;
@@ -1319,165 +1258,170 @@ select {
 }
 
 /* ===========================================================================
-   EpisodeCard — the square episode tile
+   EpisodeCard — the square episode tile (mirrors the work-details card)
    =========================================================================== */
 
 .nexora-episode-card {
+  position: relative;
   display: flex;
   flex: 0 0 auto;
-  flex-direction: row;
-  align-items: stretch;
-  gap: .6rem;
+  flex-direction: column;
+  width: 100%;
   overflow: hidden;
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, .08));
-  border-radius: .8rem;
+  border: 1px solid var(--border-default);
+  border-radius: 1rem;
   background: var(--bg-elevated);
-  padding: .4rem;
-  transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+  text-align: right;
+  cursor: pointer;
+  transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
 }
 
 .nexora-episode-card:hover {
   border-color: rgba(232, 121, 249, .5);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, .3);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, .34);
+  transform: translateY(-2px);
 }
 
 .nexora-episode-card.is-active {
-  border-color: rgba(232, 121, 249, .8);
-  box-shadow: 0 10px 30px rgba(147, 51, 234, .35), inset 3px 0 0 #e879f9;
+  border-color: rgba(232, 121, 249, .75);
+  box-shadow: 0 0 0 2px rgba(232, 121, 249, .35), 0 14px 34px rgba(147, 51, 234, .3);
 }
 
-.nexora-episode-card.is-unavailable { opacity: .6; }
+.nexora-episode-card.is-unavailable { opacity: .72; }
 
+/* ---- Still frame ---- */
 .nexora-episode-thumb {
   position: relative;
   display: block;
-  flex: 0 0 auto;
-  width: 8.5rem;
+  width: 100%;
   aspect-ratio: 16 / 9;
   overflow: hidden;
-  border: 0;
-  border-radius: .55rem;
-  padding: 0;
   background: #000;
-  cursor: pointer;
 }
-
-.nexora-episode-thumb:disabled { cursor: not-allowed; }
 
 .nexora-episode-thumb img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform .35s ease, opacity .2s ease;
+  transition: transform .5s ease, opacity .2s ease;
 }
 
-.nexora-episode-card:hover .nexora-episode-thumb img { transform: scale(1.06); }
-.nexora-episode-card.is-unavailable .nexora-episode-thumb img { filter: grayscale(1); }
+.nexora-episode-card:hover .nexora-episode-thumb img { transform: scale(1.05); }
 
-.nexora-episode-scrim {
+.nexora-episode-card.is-unavailable .nexora-episode-thumb img {
+  opacity: .55;
+  filter: grayscale(1);
+}
+
+.nexora-episode-thumb::after {
+  content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, rgba(0,0,0,.35) 0%, transparent 40%, transparent 62%, rgba(0,0,0,.7) 100%);
+  background: linear-gradient(180deg, rgba(5, 4, 12, .32), transparent 42%, rgba(5, 4, 12, .12));
   pointer-events: none;
 }
 
-.nexora-episode-num {
+/* ---- Badges over the still ---- */
+.nexora-episode-number {
   position: absolute;
-  top: .4rem;
-  inset-inline-start: .4rem;
-  border-radius: .35rem;
-  border: 1px solid rgba(253, 224, 71, .3);
+  top: .5rem;
+  inset-inline-end: .5rem;
+  z-index: 2;
+  border-radius: .45rem;
+  border: 1px solid rgba(255, 255, 255, .12);
   background: rgba(0, 0, 0, .72);
-  padding: .1rem .45rem;
-  font-size: .62rem;
-  font-weight: 800;
-  color: #fde047;
+  padding: .12rem .5rem;
+  color: #fbbf24;
+  font-size: .66rem;
+  font-weight: 900;
   backdrop-filter: blur(6px);
 }
 
-.nexora-episode-badges {
+.nexora-episode-duration {
   position: absolute;
-  bottom: .4rem;
-  inset-inline-start: .4rem;
-  display: flex;
-  flex-wrap: wrap;
-  gap: .3rem;
+  bottom: .5rem;
+  inset-inline-start: .5rem;
+  z-index: 2;
+  border-radius: .4rem;
+  background: rgba(0, 0, 0, .82);
+  padding: .08rem .4rem;
+  color: #fff;
+  font-size: .64rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }
 
-.nexora-episode-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: .2rem;
-  border-radius: .3rem;
+.nexora-episode-versions {
+  position: absolute;
+  bottom: .5rem;
+  inset-inline-end: .5rem;
+  z-index: 2;
+  border-radius: .4rem;
+  border: 1px solid rgba(34, 211, 238, .3);
+  background: rgba(8, 51, 68, .85);
   padding: .08rem .4rem;
+  color: #a5f3fc;
   font-size: .6rem;
   font-weight: 800;
-  backdrop-filter: blur(6px);
 }
 
-.nexora-episode-badge--done { border: 1px solid rgba(16, 185, 129, .4); background: rgba(6, 78, 59, .8); color: #6ee7b7; }
-.nexora-episode-badge--versions { border: 1px solid rgba(34, 211, 238, .35); background: rgba(8, 51, 68, .82); color: #a5f3fc; }
-.nexora-episode-badge--missing { border: 1px solid rgba(148, 163, 184, .35); background: rgba(30, 41, 59, .85); color: #cbd5e1; }
-
-.nexora-episode-play {
+.nexora-episode-done {
   position: absolute;
-  inset: 0;
+  top: .5rem;
+  inset-inline-start: .5rem;
+  z-index: 2;
   display: grid;
+  width: 1.35rem;
+  height: 1.35rem;
   place-items: center;
-  opacity: 0;
-  transition: opacity .2s ease;
-  pointer-events: none;
-}
-
-.nexora-episode-play svg {
-  width: 1.9rem;
-  height: 1.9rem;
-  padding: .45rem;
   border-radius: 999px;
-  background: linear-gradient(135deg, rgba(217, 70, 239, .95), rgba(109, 40, 217, .95));
+  background: rgba(16, 185, 129, .92);
   color: #fff;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, .5);
 }
-
-.nexora-episode-card:hover .nexora-episode-play,
-.nexora-episode-card.is-active .nexora-episode-play { opacity: 1; }
 
 .nexora-episode-progress {
   position: absolute;
   inset-inline: 0;
   bottom: 0;
+  z-index: 2;
   height: 3px;
   background: rgba(255, 255, 255, .25);
 }
 
-.nexora-episode-progress i { display: block; height: 100%; background: #d946ef; }
+.nexora-episode-progress i { display: block; height: 100%; background: #e879f9; }
 
-.nexora-episode-duration {
+/* Play overlay button */
+.nexora-episode-play {
   position: absolute;
-  bottom: .4rem;
-  inset-inline-end: .4rem;
-  border-radius: .3rem;
-  background: rgba(0, 0, 0, .82);
-  padding: .08rem .4rem;
-  font-size: .6rem;
-  font-weight: 700;
-  color: #fff;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: rgba(0, 0, 0, .34);
+  opacity: 0;
+  transition: opacity .2s ease;
 }
 
-.nexora-episode-meta {
+.nexora-episode-card:hover .nexora-episode-play,
+.nexora-episode-card.is-active .nexora-episode-play { opacity: 1; }
+
+.nexora-episode-play span { display: grid; width: 2.6rem; height: 2.6rem; place-items: center; border-radius: 999px; background: linear-gradient(135deg, #c026d3, #7c3aed); color: #fff; box-shadow: 0 8px 22px rgba(147, 51, 234, .5); }
+.nexora-episode-play svg { width: 1rem; height: 1rem; }
+
+/* ---- Body under the still ---- */
+.nexora-episode-body {
   display: flex;
-  min-width: 0;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: .3rem;
-  padding: .15rem .2rem;
-  text-align: right;
+  gap: .4rem;
+  padding: .6rem .7rem .7rem;
 }
 
 .nexora-episode-title {
   overflow: hidden;
   color: var(--text-primary);
-  font-size: .8rem;
+  font-size: .84rem;
   font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1488,48 +1432,39 @@ select {
   flex-wrap: wrap;
   gap: .3rem;
   font-size: .64rem;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-muted);
 }
 
 .nexora-episode-facts span {
   border-radius: .3rem;
   background: var(--bg-surface);
-  padding: .06rem .4rem;
+  padding: .08rem .42rem;
+  font-variant-numeric: tabular-nums;
 }
 
-.nexora-episode-resume { color: #f0abfc; font-size: .66rem; font-weight: 800; }
-
-.nexora-episode-actions {
+.nexora-episode-foot {
   display: flex;
   gap: .4rem;
   margin-top: auto;
-  padding-top: .3rem;
+  padding-top: .35rem;
 }
 
-.nexora-episode-details,
-.nexora-episode-watch {
+.nexora-episode-watch,
+.nexora-episode-details {
   display: inline-flex;
-  flex: 1 1 0;
   align-items: center;
   justify-content: center;
-  gap: .25rem;
-  border-radius: .5rem;
-  padding: .32rem .5rem;
-  font-size: .68rem;
+  gap: .28rem;
+  border-radius: .55rem;
+  padding: .38rem .55rem;
+  font-size: .7rem;
   font-weight: 800;
-  transition: border-color .16s ease, color .16s ease, filter .16s ease;
+  transition: filter .15s ease, border-color .15s ease, color .15s ease;
 }
-
-.nexora-episode-details {
-  border: 1px solid var(--border-default);
-  background: var(--bg-surface);
-  color: var(--text-secondary);
-}
-
-.nexora-episode-details:hover { border-color: rgba(232, 121, 249, .5); color: #f0abfc; }
 
 .nexora-episode-watch {
+  flex: 1 1 auto;
   border: 1px solid rgba(232, 121, 249, .5);
   background: linear-gradient(135deg, #c026d3, #7c3aed);
   color: #fff;
@@ -1537,20 +1472,27 @@ select {
 
 .nexora-episode-watch:hover { filter: brightness(1.12); }
 
-/* The side list itself becomes a comfortable column of episode rows. */
-.nexora-watch-list {
-  display: flex;
+.nexora-episode-details {
+  flex: 0 0 auto;
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+}
+
+.nexora-episode-details:hover { border-color: rgba(232, 121, 249, .5); color: #f0abfc; }
+
+.nexora-episode-soon {
   flex: 1 1 auto;
-  min-height: 0;
-  max-height: min(74vh, 44rem);
-  flex-direction: column;
-  gap: .6rem;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding: .7rem;
-  scrollbar-gutter: stable;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(217, 70, 239, .5) transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: .55rem;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-card);
+  padding: .38rem .55rem;
+  color: var(--text-muted);
+  font-size: .68rem;
+  font-weight: 700;
 }
 
 /* ===========================================================================

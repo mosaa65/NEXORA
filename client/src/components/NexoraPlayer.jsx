@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import videojs from "video.js";
 import "video.js/dist/video-js.css";
+import EpisodeCard from "./watch/EpisodeCard.jsx";
 
 const SEEK_SECONDS = 10;
 const RATES = [0.75, 1, 1.25, 1.5, 2];
@@ -634,21 +635,21 @@ export default function NexoraPlayer({
         </div>
       )}
 
-      {/* NEXORA centre controls — the ±10s jump buttons Video.js does not have.
-          The layer itself never swallows pointer events (so clicks still reach
-          the video and the bar below); only the buttons do. */}
+      {/* NEXORA centre controls — a large play/pause plus ±10s jumps. The layer
+          never swallows pointer events (clicks still reach the video and bar);
+          only the buttons do. Hidden on idle / while the resume prompt is up. */}
       <div
         dir="ltr"
-        className={`nexora-center pointer-events-none absolute inset-0 z-20 flex-col items-center justify-center gap-4 transition-opacity duration-500 ${visible && !askResume ? "opacity-100" : "opacity-0"}`}
+        className={`nexora-center pointer-events-none absolute inset-0 z-20 items-center justify-center gap-4 ${visible && !askResume ? "opacity-100" : "opacity-0"}`}
       >
-        <div className="pointer-events-auto flex items-center gap-3 sm:gap-5">
+        <div className="pointer-events-auto flex items-center gap-4 sm:gap-6">
           <button
             type="button"
             className="nexora-center-button nexora-center-seek"
-            onClick={() => seekBy(-SEEK_SECONDS)}
+            onClick={() => { seekBy(-SEEK_SECONDS); showToast("−10 ثوانٍ"); }}
             aria-label="رجوع 10 ثوانٍ"
           >
-            <PlayerIcon name="rewind" />
+            <PlayerIcon name="rewind" className="h-7 w-7" />
             <small>10</small>
           </button>
           <button
@@ -657,15 +658,15 @@ export default function NexoraPlayer({
             onClick={togglePlay}
             aria-label={playing ? "إيقاف مؤقت" : "تشغيل"}
           >
-            <PlayerIcon name={playing ? "pause" : "play"} className="h-8 w-8" />
+            <PlayerIcon name={playing ? "pause" : "play"} className="h-9 w-9" />
           </button>
           <button
             type="button"
             className="nexora-center-button nexora-center-seek"
-            onClick={() => seekBy(SEEK_SECONDS)}
+            onClick={() => { seekBy(SEEK_SECONDS); showToast("+10 ثوانٍ"); }}
             aria-label="تقديم 10 ثوانٍ"
           >
-            <PlayerIcon name="forward" />
+            <PlayerIcon name="forward" className="h-7 w-7" />
             <small>10</small>
           </button>
         </div>
@@ -718,52 +719,18 @@ export default function NexoraPlayer({
             <h3 className="nexora-queue-title">الحلقات المتبقية</h3>
           </div>
           <div className="nexora-queue-grid">
-            {remainingEpisodes.map((episode, index) => {
-              const number = currentPlaylistIndex + index + 2;
-              const label =
-                episode.title_ar ||
-                episode.title_en ||
-                (episode.episode_number ? `الحلقة ${episode.episode_number}` : `ملف ${number}`);
-              // Real frame from the episode (cached by the server), with the
-              // work poster as a fallback if the frame cannot be generated.
-              const thumb = episode.id
-                ? `/api/stream/file/${episode.id}/preview?at=0`
-                : poster;
-              return (
-                <button
-                  key={episode.id || episode.file_path || index}
-                  type="button"
-                  className="nexora-queue-card"
-                  onClick={() => {
-                    onSelectFile?.(episode);
-                    setEpisodeDrawerOpen(false);
-                  }}
-                >
-                  <span className="nexora-queue-thumb">
-                    <img
-                      src={thumb || poster || "/nexora-episode-placeholder.PNG"}
-                      alt=""
-                      loading="lazy"
-                      onError={(event) => {
-                        const img = event.currentTarget;
-                        if (poster && !img.dataset.fallback) {
-                          img.dataset.fallback = "1";
-                          img.src = poster;
-                        }
-                      }}
-                    />
-                    <span className="nexora-queue-index">{number}</span>
-                    {episode.duration > 0 && (
-                      <span className="nexora-queue-duration">{clock(episode.duration)}</span>
-                    )}
-                  </span>
-                  <span className="nexora-queue-meta">
-                    <b>{label}</b>
-                    {title ? <small>{title}</small> : null}
-                  </span>
-                </button>
-              );
-            })}
+            {remainingEpisodes.map((episode, index) => (
+              <EpisodeCard
+                key={episode.id || episode.file_path || index}
+                episode={episode}
+                index={currentPlaylistIndex + index + 1}
+                type="series"
+                onPlay={(ep) => {
+                  onSelectFile?.(ep);
+                  setEpisodeDrawerOpen(false);
+                }}
+              />
+            ))}
           </div>
         </section>
       )}
@@ -845,14 +812,6 @@ export default function NexoraPlayer({
 
         <div className="relative flex items-center justify-between gap-1.5">
           <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              className="nexora-bar-button"
-              onClick={togglePlay}
-              aria-label={playing ? "إيقاف مؤقت" : "تشغيل"}
-            >
-              <PlayerIcon name={playing ? "pause" : "play"} className="h-5 w-5" />
-            </button>
           <button
             type="button"
             className="nexora-bar-button"
