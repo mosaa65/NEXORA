@@ -111,6 +111,7 @@ export default function NexoraPlayer({
   const [playing, setPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
   const [time, setTime] = useState(0);
+  const [buffered, setBuffered] = useState(0);
   const [volume, setVolume] = useState(1);
   const [muted, setMuted] = useState(false);
   const [rate, setRate] = useState(1);
@@ -357,6 +358,20 @@ export default function NexoraPlayer({
       setTime(player.currentTime() || 0);
       saveProgress();
     };
+
+    // Furthest buffered second — drives the YouTube-style load bar.
+    const onBuffered = () => {
+      try {
+        const ranges = player.buffered();
+        let end = 0;
+        for (let i = 0; i < ranges.length; i += 1) {
+          if (ranges.start(i) <= (player.currentTime() || 0) + 1) end = Math.max(end, ranges.end(i));
+        }
+        if (!end && ranges.length) end = ranges.end(ranges.length - 1);
+        setBuffered(end || 0);
+      } catch {}
+    };
+
     const onDurationChange = () => setDuration(player.duration() || 0);
     const onVolumeChange = () => {
       setVolume(player.volume() ?? 1);
@@ -394,7 +409,7 @@ export default function NexoraPlayer({
     player.on("play", onPlay);
     player.on("pause", onPause);
     player.on("timeupdate", onTimeUpdate);
-    player.on("durationchange", onDurationChange);
+    player.on("progress", onBuffered);
     player.on("loadedmetadata", onLoadedMetadata);
     player.on("volumechange", onVolumeChange);
     player.on("ratechange", onRateChange);
@@ -410,6 +425,7 @@ export default function NexoraPlayer({
       player.off("play", onPlay);
       player.off("pause", onPause);
       player.off("timeupdate", onTimeUpdate);
+      player.off("progress", onBuffered);
       player.off("durationchange", onDurationChange);
       player.off("loadedmetadata", onLoadedMetadata);
       player.off("volumechange", onVolumeChange);
@@ -581,12 +597,13 @@ export default function NexoraPlayer({
     clickTimer.current = setTimeout(() => togglePlay(), 220);
   }
 
+  // Double-click anywhere on the video toggles fullscreen (YouTube behaviour),
+  // instead of the old half-screen seek. The single click still play/pauses.
   function onShellDoubleClick(event) {
     if (askResume) return;
-    if (event.target.closest?.(".vjs-control-bar, .vjs-big-play-button, button, input, select")) return;
+    if (event.target.closest?.(".vjs-control-bar, .vjs-big-play-button, button, input, select, .nexora-bar, .nexora-center")) return;
     clearTimeout(clickTimer.current);
-    const box = event.currentTarget.getBoundingClientRect();
-    seekBy(event.clientX < box.left + box.width / 2 ? -SEEK_SECONDS : SEEK_SECONDS);
+    toggleFullscreen();
   }
 
   const currentPlaylistIndex = playlist.findIndex(
@@ -775,25 +792,36 @@ export default function NexoraPlayer({
               <span className="px-2 py-1 text-center text-[11px] font-bold text-white">{clock(hoverTime)}</span>
             </span>
           )}
-          <input
-            dir="ltr"
-            aria-label="شريط تقدم الفيديو"
-            type="range"
-            min="0"
-            max={duration || 0}
-            step="0.1"
-            value={time}
-            onChange={onSeek}
-            className="nexora-player-progress w-full"
-            style={{ "--player-progress": `${duration ? (time / duration) * 100 : 0}%` }}
-          />
-          {hoverTime !== null && (
-            <span
-              className="nexora-timeline-cursor"
-              style={{ left: `${(hoverTime / (duration || 1)) * 100}%` }}
-              aria-hidden="true"
+          <div
+            className="nexora-scrub"
+            style={{
+              "--played": `${duration ? (time / duration) * 100 : 0}%`,
+              "--loaded": `${duration ? (Math.max(buffered, time) / duration) * 100 : 0}%`,
+            }}
+          >
+            <span className="nexora-scrub-track" aria-hidden="true">
+              <span className="nexora-scrub-loaded" />
+              <span className="nexora-scrub-played" />
+            </span>
+            <input
+              dir="ltr"
+              aria-label="شريط تقدم الفيديو"
+              type="range"
+              min="0"
+              max={duration || 0}
+              step="0.1"
+              value={time}
+              onChange={onSeek}
+              className="nexora-scrub-input"
             />
-          )}
+            {hoverTime !== null && (
+              <span
+                className="nexora-timeline-cursor"
+                style={{ left: `${(hoverTime / (duration || 1)) * 100}%` }}
+                aria-hidden="true"
+              />
+            )}
+          </div>
         </div>
 
         {isFullscreen && remainingEpisodes.length > 0 && (

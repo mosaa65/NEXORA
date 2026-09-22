@@ -451,64 +451,63 @@ select {
 /* The single NEXORA control bar. Video.js' own bar is disabled, so this is the
    only control surface and no button or timeline is duplicated. */
 .nexora-bar {
-  background: linear-gradient(to top, rgba(0, 0, 0, .92), rgba(0, 0, 0, .55) 55%, transparent);
+  background: linear-gradient(to top, rgba(4, 3, 10, .96) 0%, rgba(4, 3, 10, .72) 46%, rgba(4, 3, 10, 0) 100%);
   color: #fff;
 }
 
 .nexora-time {
-  border-radius: .4rem;
-  background: rgba(0, 0, 0, .35);
-  padding: .2rem .5rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, .1);
+  background: rgba(255, 255, 255, .06);
+  padding: .18rem .6rem;
   font-size: .72rem;
   font-weight: 700;
-  color: rgba(255, 255, 255, .88);
+  color: rgba(255, 255, 255, .92);
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  backdrop-filter: blur(8px);
 }
 
+/* Round glass buttons with a soft glow on hover/active. */
 .nexora-bar-button {
+  position: relative;
   display: grid;
-  min-width: 2rem;
-  height: 2rem;
+  min-width: 2.2rem;
+  height: 2.2rem;
   place-items: center;
-  border-radius: .5rem;
-  background: rgba(255, 255, 255, .07);
-  color: rgba(255, 255, 255, .85);
-  font-size: .62rem;
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .05);
+  color: rgba(255, 255, 255, .9);
+  font-size: .64rem;
   font-weight: 800;
-  transition: background-color .16s ease, color .16s ease;
+  transition: background-color .18s ease, color .18s ease, border-color .18s ease, transform .18s ease, box-shadow .18s ease;
 }
 
 .nexora-bar-button:hover,
 .nexora-bar-button:focus-visible {
-  background: rgba(217, 70, 239, .3);
+  border-color: rgba(232, 121, 249, .55);
+  background: linear-gradient(135deg, rgba(192, 38, 211, .55), rgba(124, 58, 237, .55));
   color: #fff;
   outline: none;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(147, 51, 234, .45);
 }
+
+.nexora-bar-button:active { transform: translateY(0) scale(.94); }
 
 /* Active (visible) caption track highlights the CC toggle, as in the legacy skin. */
 .nexora-bar-button--active {
+  border-color: rgba(240, 171, 252, .7);
+  background: rgba(217, 70, 239, .32);
   color: #f0abfc;
 }
 
 .nexora-vol {
   width: 4.5rem;
+  height: 1.6rem;
   accent-color: #e879f9;
-}
-
-.nexora-rate {
-  border-radius: .45rem;
-  background: rgba(255, 255, 255, .1);
-  padding: .22rem .3rem;
-  font-size: .68rem;
-  font-weight: 700;
-  color: #fff;
-  outline: none;
-  direction: ltr;
-}
-
-.nexora-rate option {
-  background: #151225;
-  color: #fff;
+  cursor: pointer;
 }
 
 /* Idle state hides the NEXORA layers. */
@@ -530,7 +529,7 @@ select {
 @media (max-width: 640px) {
   .nexora-vol { width: 3rem; }
   .nexora-time { font-size: .62rem; }
-  .nexora-bar-button { min-width: 1.75rem; height: 1.75rem; }
+  .nexora-bar-button { min-width: 1.9rem; height: 1.9rem; }
   .nexora-center-main { width: 3.4rem; height: 3.4rem; }
   .nexora-center-seek { width: 2.7rem; height: 2.7rem; }
 }
@@ -1111,22 +1110,22 @@ select {
   right: 1.25rem;
   bottom: 1.25rem;
   z-index: 60;
-  width: min(32rem, 92vw);
+  width: min(33rem, 92vw);
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, .16);
-  border-radius: 1rem;
-  background: #0c0a14;
-  box-shadow: 0 30px 80px rgba(0, 0, 0, .7), 0 0 34px rgba(147, 51, 234, .25);
+  border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: 1.1rem;
+  background: #070610;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, .72), 0 0 0 1px rgba(147, 51, 234, .18), 0 0 44px rgba(147, 51, 234, .22);
 }
 
 .nexora-dock-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: .5rem;
-  padding: .45rem .55rem;
+  gap: .55rem;
+  padding: .5rem .6rem;
   cursor: grab;
-  background: linear-gradient(180deg, rgba(255, 255, 255, .08), rgba(255, 255, 255, 0));
+  background: linear-gradient(180deg, rgba(255, 255, 255, .07), rgba(255, 255, 255, 0));
+  border-bottom: 1px solid rgba(255, 255, 255, .06);
   user-select: none;
 }
 
@@ -1138,26 +1137,44 @@ select {
   color: #fff;
   font-size: .78rem;
   font-weight: 800;
+  text-align: right;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .nexora-dock-btn {
   display: grid;
-  width: 1.95rem;
-  height: 1.95rem;
+  flex: 0 0 auto;
+  width: 2rem;
+  height: 2rem;
   place-items: center;
-  border: 1px solid rgba(255, 255, 255, .15);
-  border-radius: .5rem;
-  background: rgba(255, 255, 255, .06);
-  color: rgba(255, 255, 255, .88);
-  transition: background-color .16s ease, color .16s ease;
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .05);
+  color: rgba(255, 255, 255, .9);
+  transition: background-color .16s ease, color .16s ease, border-color .16s ease, transform .16s ease;
 }
 
-.nexora-dock-btn:hover { background: rgba(217, 70, 239, .35); color: #fff; }
-.nexora-dock-btn--exit:hover { background: rgba(239, 68, 68, .4); }
+.nexora-dock-btn:hover {
+  border-color: rgba(232, 121, 249, .6);
+  background: linear-gradient(135deg, rgba(192, 38, 211, .55), rgba(124, 58, 237, .55));
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.nexora-dock-btn:active { transform: scale(.93); }
+.nexora-dock-btn--exit:hover { border-color: rgba(248, 113, 113, .6); background: rgba(239, 68, 68, .45); }
 
 .nexora-dock-stage { background: #000; }
+
+.nexora-dock-stage .nexora-vjs { border-radius: 0; }
+
+/* Compact the control surface inside the dock so nothing feels cramped. */
+.nexora-dock-stage .nexora-bar { padding: .35rem .7rem .5rem; }
+.nexora-dock-stage .nexora-bar-button { min-width: 2rem; height: 2rem; }
+.nexora-dock-stage .nexora-center-main { width: 3.4rem; height: 3.4rem; }
+.nexora-dock-stage .nexora-center-seek { width: 2.6rem; height: 2.6rem; }
+.nexora-dock-stage .nexora-time { font-size: .66rem; }
 
 /* Note shown on the watch screen while the dock owns playback. */
 .nexora-watch-docked-note {
@@ -1755,4 +1772,87 @@ select {
 
 @media (max-width: 640px) {
   .nexora-time--center { display: none; }
+}
+
+/* ===========================================================================
+   NEXORA scrub bar — YouTube-style play / load / hover layers
+   =========================================================================== */
+
+.nexora-scrub {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 1.35rem;
+  cursor: pointer;
+}
+
+.nexora-scrub-track {
+  position: absolute;
+  inset-inline: 0;
+  top: 50%;
+  height: .4rem;
+  transform: translateY(-50%);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .28);
+  overflow: hidden;
+  transition: height .14s ease;
+}
+
+/* Loaded (buffered) portion — a translucent band ahead of the play head. */
+.nexora-scrub-loaded {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: var(--loaded, 0%);
+  background: rgba(255, 255, 255, .38);
+  transition: width .2s linear;
+}
+
+/* Played portion — the gradient fill. */
+.nexora-scrub-played {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: var(--played, 0%);
+  background: linear-gradient(90deg, #a855f7, #e879f9);
+  box-shadow: 0 0 12px rgba(232, 121, 249, .6);
+}
+
+.nexora-scrub:hover .nexora-scrub-track { height: .58rem; }
+
+/* The real control is an invisible range input stretched over the bar. */
+.nexora-scrub-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+/* Play-head knob, drawn on the played layer's edge. */
+.nexora-scrub::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: var(--played, 0%);
+  width: .85rem;
+  height: .85rem;
+  transform: translate(-50%, -50%) scale(.85);
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 0 10px rgba(232, 121, 249, .8);
+  opacity: 0;
+  transition: opacity .14s ease, transform .14s ease;
+  pointer-events: none;
+}
+
+.nexora-scrub:hover::after { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+
+@media (max-width: 640px) {
+  .nexora-scrub { height: 1.1rem; }
+  .nexora-scrub-track { height: .3rem; }
 }
