@@ -60,6 +60,10 @@ export default function MiniPlayerDock({ onExpand }) {
           onSelectFile={payload.onSelectFile}
           onMinimize={close}
           onExit={close}
+          // The dock is a compact surface: it keeps transport and captions but does
+          // not offer the full settings/quality surface, which belongs to the watch
+          // screen where there is room to read it.
+          compact
           autoResume
         />
       </div>

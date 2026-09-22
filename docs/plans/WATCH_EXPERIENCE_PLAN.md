@@ -1,8 +1,8 @@
 # NEXORA Watch Experience — خطة التطوير الشاملة
 
-> **الحالة:** قيد التنفيذ — نُفّذت المراحل W1–W6 (الأساس المحتوائي، شبكة الحلقات، الاقتراحات، مُنتقي الترجمة/السرعة، Next countdown، fullscreen queue، معاينة الشريط).
+> **الحالة:** منفّذة — المراحل W1–W7 مكتملة، وأُغلقت الفجوات الأربع الأخيرة (قراءة تشغيل واحدة، اختيار جودة/إصدار حقيقي، اختيار مسار صوت حقيقي، منتقي مواسم). التفاصيل المعمارية في [`docs/VIDEO_PLAYER_ARCHITECTURE.md`](../VIDEO_PLAYER_ARCHITECTURE.md) والقرار في [ADR-017](../decisions/ADR-017-playback-plan-and-player-selection.md).
 > **الفرع:** `feature/videojs-player-migration`
-> **الأساس الحالي:** Video.js داخل شل NEXORA (`NexoraPlayer.jsx`) + شاشة تشغيل مخصصة (`WatchPage.jsx`) + مشغّل عائم عام (`MiniPlayerDock` + `PlaybackContext`).
+> **الأساس الحالي:** Video.js داخل وحدة `components/player/*` + شاشة تشغيل مخصصة (`WatchPage.jsx`) + مشغّل عائم عام (`MiniPlayerDock` + `PlaybackContext`).
 > **الهدف:** تحويل شاشة المشاهدة إلى تجربة احترافية تنافس شاهد/نتفلكس/Prime، تتكيّف مع **كل** أنواع المكتبة (أفلام، مسلسلات، أنمي، برامج، رياضة… إلخ).
 
 ---
@@ -19,7 +19,8 @@
 | بطاقات المواسم/الحلقات (main) | بطاقات 3:4 للمواسم + بطاقات 16:9 للحلقات (still + بادجات + شرائح meta + زر تشغيل) |
 
 ### 1.2 بيانات متاحة من الـ API (مُثبَتة)
-- تفاصيل العمل: `type`, `title_ar/en`, `plot_ar/en`, `release_year`, `rating`, `genres`, `poster_path`, `backdrop_path`, `parts_count`, `seasons[]`, `files[]`.
+- **خطة التشغيل (قراءة واحدة):** `GET /api/media/{id}/playback?file=` → `media_id`, `type`, رأس العمل، `files[]` (بترتيب الموسم/الحلقة/الجزء)، `episodes[]`, `seasons[]` (مع `episode_count` و`local_count`)، `source`, `siblings[]`, `next`, `previous`. لكل ملف: `resolution`, `video_codec`, `duration`, `file_size`, `audio_track_count`, `subtitle_count`, `stream_url`.
+- تفاصيل العمل: `type`, `title_ar/en`, `plot_ar/en`, `release_year`, `rating`, `genres`, `poster_path`, `banner_path`, `seasons[]`, `files[]`.
 - لكل حلقة: `episode_number`, `episode_title_ar/en`, `overview_ar/en`, `still_path`, `air_date`, `runtime/duration`, `resolution`, `file_size`, `has_local_file`, `file_count`.
 - لكل ملف: `id`, `file_path`, `duration`, `resolution`, `video_codec`.
 - الاقتراحات: `GET /api/media/{id}/related` (رسم علاقات محلي — يشمل الأجزاء/السلاسل).
@@ -36,14 +37,17 @@
 - [`docs/design-system/DESIGN_SYSTEM.md`](../design-system/DESIGN_SYSTEM.md) — الألوان والمقاسات والمسافات.
 - **بطاقات الحلقة في خطة المشاهدة يجب أن تُبنى بنفس المفردات** (`variant: compact` لشبكة الحلقات/الاقتراحات) لتظهر «من عائلة واحدة» مع الكتالوج.
 
-### 1.4 الفجوات المكتشفة (ما ينقص حاليًا)
-1. **`WatchPage` لا تتكيّف مع `type`** — تعرض "حلقات وملفات" دائمًا، بلا تمييز بين فيلم/مسلسل/أنمي/برنامج.
-2. **لا قسم "أجزاء العمل"** للأفلام ذات `parts_count`.
-3. **لا اقتراحات أسفل الفيديو**.
-4. **مُنتقي ترجمة عادل** (زر CC يدوّر فقط — لا قائمة اختيار واضحة).
-5. **معاينة الشريط الزمني غير موثوقة** (تعتمد FFmpeg عند الطلب؛ لا sprites مسبقة).
-6. **لا "الحلقة التالية" بطاقة بارزة** كما في المنصات.
-7. **لا قسم "شاهدته/التقدّم"** ولا استئناف مرئي واضح.
+### 1.4 الفجوات المكتشفة (ما كان ينقص)
+1. ~~**`WatchPage` لا تتكيّف مع `type`**~~ — أُصلحت (W1) بـ `watchContent.js`.
+2. ~~**لا قسم "أجزاء العمل"**~~ — تعرضه قائمة الملفات لنفس العمل مع بطاقات الأجزاء.
+3. ~~**لا اقتراحات أسفل الفيديو**~~ — `RelatedRail` (W3).
+4. ~~**مُنتقي ترجمة عادل**~~ — قائمة صريحة في `PlayerSettingsMenu` (W4) + إعدادات مظهر.
+5. ~~**معاينة الشريط الزمني غير موثوقة**~~ — debounce + placeholder فوري (W5)؛ sprites مؤجلة.
+6. ~~**لا "الحلقة التالية" بطاقة بارزة**~~ — `PlayerNextOverlay` بعدّاد (W4).
+7. **التقدّم** — يبقى محليًا في `localStorage` عمدًا (خارج النطاق).
+8. ~~**قراءة التشغيل كانت تستدعي endpoint التفاصيل + بحث حلقات مُصفّح**~~ — أُغلقت بـ `/api/media/{id}/playback`.
+9. ~~**لا اختيار جودة/إصدار ولا اختيار صوت حقيقي**~~ — أُغلقا في ADR-017.
+10. ~~**لا منتقي مواسم**~~ — شريط مواسم في `WatchPage`.
 
 ---
 

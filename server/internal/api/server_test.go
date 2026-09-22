@@ -23,14 +23,18 @@ import (
 )
 
 type mockRepo struct {
-	categories []db.CategorySummary
-	known      []scanner.KnownFile
-	works      []identity.Work
-	mediaItem  *db.MediaItemDetail
-	stats      *db.DashboardStats
-	disks      []db.StorageDisk
-	verifiedID int64
-	verified   media.VerifyResult
+	categories   []db.CategorySummary
+	known        []scanner.KnownFile
+	works        []identity.Work
+	mediaItem    *db.MediaItemDetail
+	playbackPlan *db.PlaybackPlan
+	stats        *db.DashboardStats
+	disks        []db.StorageDisk
+	verifiedID   int64
+	verified     media.VerifyResult
+	// streamPath, when set, is what GetVideoFilePath resolves to. The streaming
+	// tests point it at a real file so Range handling is exercised for real.
+	streamPath string
 }
 
 func (m *mockRepo) Health(ctx context.Context) (db.Health, error) {
@@ -151,6 +155,9 @@ func (m *mockRepo) ListVideoFiles(ctx context.Context, mediaItemID int64) ([]db.
 	return []db.VideoFile{{ID: 1, MediaItemID: mediaItemID, TitleEN: "Test File", FilePath: "test.mp4", FileSize: 1024}}, nil
 }
 func (m *mockRepo) GetVideoFilePath(ctx context.Context, id int64) (string, error) {
+	if m.streamPath != "" {
+		return m.streamPath, nil
+	}
 	return "test.mp4", nil
 }
 func (m *mockRepo) GetVideoFileIDByPath(ctx context.Context, path string) (int64, error) {
@@ -181,6 +188,50 @@ func (m *mockRepo) GetMediaItem(ctx context.Context, id int64) (*db.MediaItemDet
 		return m.mediaItem, nil
 	}
 	return &db.MediaItemDetail{ID: id, TitleEN: "Inception", TitleAR: "إنسبشن", Type: "movie"}, nil
+}
+
+// GetPlaybackPlan mirrors the real contract closely enough for the handler test:
+// a movie with two releases of the SAME part, so the sibling list and the
+// next/previous pair both have something to say. The SQL-level ordering and the
+// part/episode identity rules are covered by the repository tests.
+func (m *mockRepo) GetPlaybackPlan(ctx context.Context, mediaID int64, wanted int64) (*db.PlaybackPlan, error) {
+	if m.playbackPlan != nil {
+		return m.playbackPlan, nil
+	}
+	if wanted > 0 && wanted != 1 && wanted != 2 {
+		// Unknown ids fall back to the first file, exactly like the real selector.
+		wanted = 0
+	}
+	source := db.PlaybackFile{
+		ID: 1, MediaItemID: mediaID, TitleEN: "Part One",
+		Resolution: "1920x1080", Duration: 600, StreamURL: "/api/stream/file/1",
+	}
+	next := db.PlaybackFile{
+		ID: 2, MediaItemID: mediaID, TitleEN: "Part Two",
+		Resolution: "1280x720", Duration: 620, StreamURL: "/api/stream/file/2",
+	}
+	files := []db.PlaybackFile{source, next}
+	if wanted == 2 {
+		files = []db.PlaybackFile{next}
+	}
+	plan := &db.PlaybackPlan{
+		MediaItemID:  mediaID,
+		Type:         "movie",
+		TitleEN:      "Inception",
+		TitleAR:      "إنسبشن",
+		Files:        files,
+		Source:       &files[0],
+		EpisodeCount: 0,
+		LocalCount:   2,
+	}
+	if wanted != 2 {
+		plan.Next = &next
+		plan.Siblings = []db.PlaybackSibling{{
+			VideoFileID: next.ID, Resolution: next.Resolution,
+			Duration: next.Duration, StreamURL: next.StreamURL, Label: "1280x720",
+		}}
+	}
+	return plan, nil
 }
 func (m *mockRepo) ListMediaItems(ctx context.Context, opts db.ListMediaOptions) (*db.MediaListResult, error) {
 	return &db.MediaListResult{Total: 1, Limit: opts.Limit, Offset: opts.Offset, Items: []search.MediaDocument{{ID: 1, TitleEN: "Inception"}}}, nil
@@ -800,5 +851,184 @@ func TestSecurityMediaPathAllowed(t *testing.T) {
 		if server.mediaPathAllowed(attack) {
 			t.Errorf("security violation: path %q should NOT be allowed", attack)
 		}
+	}
+}
+func TestMediaPlaybackEndpoint(t *testing.T) {
+	handler := setupTestServer()
+
+	// 1. The default plan starts at the first file and advertises the next one.
+	req := httptest.NewRequest(http.MethodGet, "/api/media/1/playback", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for /api/media/1/playback, got: %d %s", rec.Code, rec.Body.String())
+	}
+	var plan db.PlaybackPlan
+	if err := json.NewDecoder(rec.Body).Decode(&plan); err != nil {
+		t.Fatalf("decode playback response: %v", err)
+	}
+	if plan.Source == nil {
+		t.Fatal("expected a playback source")
+	}
+	if plan.Source.ID != 1 || plan.Source.StreamURL != "/api/stream/file/1" {
+		t.Fatalf("unexpected source: %#v", plan.Source)
+	}
+	if plan.Next == nil || plan.Next.ID != 2 {
+		t.Fatalf("expected next file to be id 2, got: %#v", plan.Next)
+	}
+	if plan.Previous != nil {
+		t.Fatalf("the first file must not have a previous file, got: %#v", plan.Previous)
+	}
+	if len(plan.Siblings) != 1 || plan.Siblings[0].VideoFileID != 2 {
+		t.Fatalf("expected one sibling release, got: %#v", plan.Siblings)
+	}
+	if plan.TitleAR != "إنسبشن" || plan.Type != "movie" {
+		t.Fatalf("work header was not carried into the playback plan: %#v", plan)
+	}
+
+	// 2. An explicit file id selects that file and has no next entry.
+	reqLast := httptest.NewRequest(http.MethodGet, "/api/media/1/playback?file=2", nil)
+	recLast := httptest.NewRecorder()
+	handler.ServeHTTP(recLast, reqLast)
+	if recLast.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for an explicit file, got: %d", recLast.Code)
+	}
+	var lastPlan db.PlaybackPlan
+	if err := json.NewDecoder(recLast.Body).Decode(&lastPlan); err != nil {
+		t.Fatalf("decode playback response: %v", err)
+	}
+	if lastPlan.Source == nil || lastPlan.Source.ID != 2 {
+		t.Fatalf("expected source id 2, got: %#v", lastPlan.Source)
+	}
+	if lastPlan.Next != nil {
+		t.Fatalf("the last file must not have a next file, got: %#v", lastPlan.Next)
+	}
+
+	// 3. A malformed id is rejected instead of resolved.
+	reqBad := httptest.NewRequest(http.MethodGet, "/api/media/abc/playback", nil)
+	recBad := httptest.NewRecorder()
+	handler.ServeHTTP(recBad, reqBad)
+	if recBad.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for a non-numeric media id, got: %d", recBad.Code)
+	}
+
+	// 4. A malformed file query is rejected too.
+	reqBadFile := httptest.NewRequest(http.MethodGet, "/api/media/1/playback?file=-4", nil)
+	recBadFile := httptest.NewRecorder()
+	handler.ServeHTTP(recBadFile, reqBadFile)
+	if recBadFile.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for a negative file id, got: %d", recBadFile.Code)
+	}
+
+	// 5. The work-details page navigates with an EPISODE id in the same query, so
+	// the handler must accept it and still answer rather than resolve nothing.
+	reqEpisode := httptest.NewRequest(http.MethodGet, "/api/media/1/playback?file=1", nil)
+	recEpisode := httptest.NewRecorder()
+	handler.ServeHTTP(recEpisode, reqEpisode)
+	if recEpisode.Code != http.StatusOK {
+		t.Fatalf("expected 200 for an episode-id query, got: %d", recEpisode.Code)
+	}
+	var episodePlan db.PlaybackPlan
+	if err := json.NewDecoder(recEpisode.Body).Decode(&episodePlan); err != nil {
+		t.Fatalf("decode playback response: %v", err)
+	}
+	if episodePlan.Source == nil {
+		t.Fatal("an episode-id query must still produce a source")
+	}
+}
+
+// TestStreamContentTypeByContainer locks in the container→MIME mapping the player
+// depends on: a `.mkv` served as `application/octet-stream` is a decode failure in
+// the browser, not a playback.
+func TestStreamContentTypeByContainer(t *testing.T) {
+	cases := map[string]string{
+		".mkv":   "video/x-matroska",
+		".mp4":   "video/mp4",
+		".webm":  "video/webm",
+		".mov":   "video/quicktime",
+		".avi":   "video/x-msvideo",
+		".wmv":   "video/x-ms-wmv",
+		".ts":    "video/mp2t",
+		".m2ts":  "video/mp2t",
+		".flv":   "video/x-flv",
+		".nope":  "",
+		".MKV":   "video/x-matroska",
+	}
+	for ext, want := range cases {
+		if got := mediaContentType(ext); got != want {
+			t.Errorf("mediaContentType(%q) = %q, want %q", ext, got, want)
+		}
+	}
+}
+
+// TestStreamServesRangeAndHead covers the two behaviours the player and the copy
+// bridge rely on: a byte range answers 206 with Content-Range, and HEAD answers the
+// headers without a body.
+func TestStreamServesRangeAndHead(t *testing.T) {
+	root := t.TempDir()
+	content := []byte("0123456789abcdefghij")
+	mediaPath := filepath.Join(root, "clip.mkv")
+	if err := os.WriteFile(mediaPath, content, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := config.Config{
+		MediaRoots:    []string{root},
+		AssetImageDir: filepath.Join(root, "assets"),
+	}
+	// The repository mock resolves id 1 to the file this test wrote, so the range
+	// behaviour is exercised through the real ServeContent path.
+	repo := &mockRepo{streamPath: mediaPath}
+	handler := NewServer(cfg, repo, scanner.New(scanner.Options{}), &mockSearch{}, &mockMetadata{}, &mockProcessor{}, &mockMigration{}, &mockQuality{}, nil, db.NewResolutionSession())
+
+	get := httptest.NewRequest(http.MethodGet, "/api/stream/file/1", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, get)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for a full stream, got: %d %s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("Accept-Ranges"); got != "bytes" {
+		t.Fatalf("expected Accept-Ranges: bytes, got %q", got)
+	}
+	if got := rec.Header().Get("Content-Type"); got != "video/x-matroska" {
+		t.Fatalf("expected the container content type, got %q", got)
+	}
+
+	rangeReq := httptest.NewRequest(http.MethodGet, "/api/stream/file/1", nil)
+	rangeReq.Header.Set("Range", "bytes=4-7")
+	rangeRec := httptest.NewRecorder()
+	handler.ServeHTTP(rangeRec, rangeReq)
+	if rangeRec.Code != http.StatusPartialContent {
+		t.Fatalf("expected 206 for a range request, got: %d", rangeRec.Code)
+	}
+	if got := rangeRec.Header().Get("Content-Range"); got != "bytes 4-7/20" {
+		t.Fatalf("unexpected Content-Range: %q", got)
+	}
+	if got := rangeRec.Body.String(); got != "4567" {
+		t.Fatalf("unexpected range body: %q", got)
+	}
+
+	headReq := httptest.NewRequest(http.MethodHead, "/api/stream/file/1", nil)
+	headRec := httptest.NewRecorder()
+	handler.ServeHTTP(headRec, headReq)
+	if headRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for HEAD, got: %d", headRec.Code)
+	}
+	if got := headRec.Header().Get("Content-Length"); got != "20" {
+		t.Fatalf("expected Content-Length 20 on HEAD, got %q", got)
+	}
+	if headRec.Body.Len() != 0 {
+		t.Fatalf("HEAD must not return a body, got %d bytes", headRec.Body.Len())
+	}
+
+	// An unsatisfiable range must be a 416, not a silent full-file send. Serving the
+	// whole file after a failed range makes a player resume at the wrong offset.
+	badRange := httptest.NewRequest(http.MethodGet, "/api/stream/file/1", nil)
+	badRange.Header.Set("Range", "bytes=500-600")
+	badRec := httptest.NewRecorder()
+	handler.ServeHTTP(badRec, badRange)
+	if badRec.Code != http.StatusRequestedRangeNotSatisfiable {
+		t.Fatalf("expected 416 for an unsatisfiable range, got: %d", badRec.Code)
 	}
 }

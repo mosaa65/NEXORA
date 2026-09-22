@@ -20,5 +20,6 @@
 | [ADR-014](ADR-014-work-details-single-source.md) | Work Details on a Single Episode Source, in the Platform Card Template | Accepted / Implemented |
 | [ADR-015](ADR-015-nexora-agent-android-completion.md) | Complete the Android Backend Inside the Existing Agent and Abstraction | Proposed — awaiting approval |
 | [ADR-016](ADR-016-videojs-player-shell.md) | Video.js as the Player Engine Behind a NEXORA Control Shell | Accepted / Implemented |
+| [ADR-017](ADR-017-playback-plan-and-player-selection.md) | A Single Playback Read and the Player's Real Selection Surfaces | Accepted / Implemented |
 
 أي اقتراح غير منفذ (مثل HLS/DASH أو transcoding أو Redis integration) لا يوثق هنا كـ ADR قائم حتى توجد موافقة وتنفيذ قابل للتحقق.

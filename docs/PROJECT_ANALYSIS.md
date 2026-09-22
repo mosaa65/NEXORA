@@ -157,13 +157,16 @@ Admin/UI → POST /api/index
 ### Playback flow
 
 ```text
-User → RealVideoPlayerModal → GET /api/media/{id}
-  → current file → NexoraPlayer → Video.js <video src="/api/stream/file/{fileId}">
+User → WatchPage (/watch/:id?file=…)
+  → GET /api/media/{id}/playback          (one read: header, files, episodes, seasons,
+                                           source, siblings, next, previous)
+  → NexoraPlayer → Video.js <video src="/api/stream/file/{fileId}">
   → GET /api/stream/file/{fileId} (عادة مع Range)
   → Repository.GetVideoFilePath → serveCataloguePath → os.Open → http.ServeContent
 ```
 
-- [VERIFIED] عند عدم وجود `id` للملف يبني modal بديلًا `/api/stream?path=...`.
+- [VERIFIED] `?file=` يقبل معرّف `video_files` (من رابط البث أو حفظ المشغل) أو معرّف حلقة (من صفحة التفاصيل)؛ `SelectPlaybackSource` يفحص الفضاءين صراحةً ثم يرجع لأول ملف عند عدم التطابق.
+- [VERIFIED] `App.jsx` يوجّه «تشغيل» إلى `/watch/:id` داخل `CustomerCinemaLayout`، و`MediaDetailsPage` يمرر معرّف الحلقة في نفس الاستعلام.
 
 ## 11. Storage and File System Architecture
 
@@ -192,17 +195,17 @@ User → RealVideoPlayerModal → GET /api/media/{id}
 
 ## 14. Video Player Architecture
 
-- [VERIFIED] المكوّن هو `client/src/components/NexoraPlayer.jsx`؛ يستضيف Video.js (`videojs(...)`) فوق عنصر `<video>` ويضيف الترجمات عبر `addRemoteTextTrack`.
-- [VERIFIED] يوجد UI مخصص فوق Video.js: Play/Pause وزرّا ±10 ثوانٍ في المركز، شريط تقدم HTML range بمعاينة زمنية، volume/mute، speed (0.75–2×)، CC، PiP عند دعمه، وFullscreen.
-- [VERIFIED] الضغط على الفيديو يبدل play/pause؛ double click يطلب seek يسار/يمين حسب نصف الصورة.
-- [VERIFIED] controls تظهر عند mouse move/enter/focus وتختفي بعد 2.5 ثانية من التشغيل أو عند خروج الماوس، مع animation CSS.
-- [VERIFIED] keyboard shortcuts المطبقة بعد التركيز داخل المشغل: Space/K، الأسهم/J/L، M، F، C.
-- [VERIFIED] القائمة الجانبية في modal تسرد كل الملفات/الحلقات؛ وفي fullscreen فقط يظهر زر فوق timeline لدرج الحلقات المتبقية، ويستدعي `onSelectFile` عند اختيار حلقة.
-- [VERIFIED] عند `ended` يستدعي `onNext`، والذي يختار العنصر التالي من القائمة إن وجد.
-- [VERIFIED] التشغيل يحدث على شاشة مخصصة `watch/:id` (`client/src/pages/WatchPage.jsx`) **داخل `CustomerCinemaLayout`** (تحتفظ بشريط البحث والقائمة الجانبية): الحلقات على اليمين والفيديو على اليسار، وملخص واسم الحلقة أسفل الفيديو.
-- [VERIFIED] في صفحة التفاصيل، `PlayableFilesExplorer` يعرض لكل حلقة زرّي «تفاصيل» و«مشاهدة»؛ «مشاهدة» يفتح `/watch/:id?file=…&play=fs` للتشغيل فورًا ملء الشاشة.
-- [VERIFIED] زر «تصغير» ينقل الفيديو إلى نافذة عائمة عامة (`MiniPlayerDock` فوق الـ Router، حالة في `PlaybackContext`) تبقى شغّالة عند التنقل بين الصفحات، مع `autoResume` لاستكمال الموضع. أزرار تصغير/خروج المسرح تظهر أعلى يمين الفيديو أثناء fullscreen (`nexora-fs-chrome`).
-- [VERIFIED] لا توجد حاليًا ميزة intro/recap/credits segment في code path؛ تمت إزالة migration المنشئة وبقي migration `0019_remove_playback_segments.sql` كـ `DROP TABLE IF EXISTS`.
+- [VERIFIED] المكوّنات في `client/src/components/player/`: `NexoraPlayer.jsx` (مضيف Video.js والأحداث والاختصارات وحفظ التقدّم)، `PlayerControls` (الشريط السفلي)، `PlayerScrub` (الشريط الزمني)، `PlayerCenterControls`، `PlayerSettingsMenu` (الجودة/الصوت/الترجمة/السرعة/المعلومات)، `PlayerNextOverlay`، `PlayerStaticOverlays`، `PlayerIcons`، و`usePlayerProgress`. و`client/src/components/NexoraPlayer.jsx` أصبح نقطة تصدير فقط فلم يتغير أي importer.
+- [VERIFIED] يستضيف Video.js عنصر `<video>` مع `controls:false` و`bigPlayButton:false` و`controlBar:false` و`userActions.hotkeys:false`، لأن NEXORA ترسم شريطًا واحدًا وتعريف مفاتيح خاصًا بها (Space/K، ←/J، →/L، M، F، C، N).
+- [VERIFIED] `time` و`buffered` لا يدخلان React state: `PlayerScrub` يشترك في `timeupdate`/`progress` ويجمعها عبر `requestAnimationFrame` ثم يكتب العرض مباشرة في CSS custom properties وعلى عناصر DOM، فلا يعيد تشغيل الفيديو بناء صفحة الحلقات أو قسم الاقتراحات.
+- [VERIFIED] شاشة `/watch/:id` تفتح بقراءة واحدة `GET /api/media/{id}/playback` تُرجع رأس العمل والملفات بترتيب الكتالوج والحلقات والمواسم والمصدر والإصدارات البديلة والتالية/السابقة. لم تعد تستدعي `searchAllEpisodes`.
+- [VERIFIED] اختيار الجودة/الإصدارات حقيقي: sibling releases لنفس الحلقة من جدول `video_files`، ولا يوجد سلّم جودات مخترع لملف واحد.
+- [VERIFIED] اختيار الصوت يعتمد `player.audioTracks()` مع مستمعات `addtrack`/`removetrack`/`change`؛ إن لم يعرض المتصفح مسارات (حسب الحاوية) تُعرض مسارات FFprobe المحفوظة كوصف فقط ويُذكر ذلك صراحةً.
+- [VERIFIED] الترجمات: قائمة صريحة من `GET /api/stream/file/{id}/subtitles` مع إعدادات حجم/خلفية محفوظة في `localStorage` وتُطبق كـ CSS variables. استخراج الترجمة المدمجة إلى WebVTT غير منفّذ.
+- [VERIFIED] الحلقة التالية تأتي من ترتيب الكتالوج (`next` في خطة التشغيل) لا من ترتيب الملفات؛ وعند نهاية موسم/عمل يظهر «انتهى الموسم/انتهى العمل» بدل الانتقال إلى شيء غير موجود.
+- [VERIFIED] `GET /api/stream/file/{id}` يقبل `HEAD`، ويضع نوع محتوى صحيحًا لحاويات لا يعرفها جدول Go (`.mkv`، `.ts`، `.m2ts`، `.avi`، `.wmv`، `.flv`)، ويعيد أي فشل كـ `text/plain` مع `no-store` وليس JSON.
+- [VERIFIED] زر «تصغير» ينقل الفيديو إلى `MiniPlayerDock` فوق الـ Router مع `autoResume`، والـ dock يستخدم `compact` فيُخفي سطح الإعدادات الكامل.
+- [VERIFIED] لا توجد ميزة intro/recap/credits segment؛ وتبقى `0019_remove_playback_segments.sql` كـ `DROP TABLE IF EXISTS`.
 
 ## 15. HTTP Range Implementation
 
@@ -241,8 +244,8 @@ mousemove over timeline
 
 - [VERIFIED] `GET /api/stream/file/{id}/subtitles` يبحث فقط عن subtitle **خارجي** بجوار الفيديو (`.srt,.vtt,.ass,.sub`) ويطابق الاسم الأساسي بقاعدة contains/prefix/equality.
 - [VERIFIED] endpoint آخر يفتح الملف، ويحوّل SRT إلى WebVTT في الاستجابة؛ VTT والامتدادات الأخرى تنسخ كما هي مع `Content-Type: text/vtt`.
-- [VERIFIED] `RealVideoPlayerModal` يجلب قائمة الترجمات ويمرّرها إلى `NexoraPlayer`، الذي يترجمها إلى Video.js text tracks؛ زر CC يدوّر بين showing/disabled فوق قائمة Video.js.
-- [VERIFIED] FFprobe يسجل مسارات subtitles المضمنة في الفيديو كـ metadata، لكن لا يوجد endpoint في الكود الحالي لاستخراج embedded subtitle track وتحويله إلى WebVTT.
+- [VERIFIED] `WatchPage` يجلب قائمة الترجمات ويشرّرها إلى `NexoraPlayer`، الذي يترجمها إلى Video.js text tracks ويقدمها كقائمة صريحة في `PlayerSettingsMenu` مع خيار «إيقاف» وإعدادات حجم/خلفية.
+- [VERIFIED] FFprobe يسجل مسارات subtitles المضمنة في الفيديو كـ metadata، لكن لا يوجد endpoint في الكود الحالي لاستخراج embedded subtitle track وتحويله إلى WebVTT؛ تُعرض كوصف فقط.
 - [INFERRED] إرسال ASS أو SUB خام مع MIME `text/vtt` قد لا يعمل في المتصفح؛ ذلك ليس تحويلًا فعليًا إلى VTT في الكود.
 
 ## 19. Watch Progress System
@@ -255,7 +258,8 @@ mousemove over timeline
 ## 20. Episode Navigation System
 
 - [VERIFIED] modal يحول seasons/episodes إلى `allPlayableItems` أو يستخدم direct files، ويحدد العنصر الحالي والحلقة التالية بالترتيب الحالي للمصفوفة.
-- [VERIFIED] `onEnded` يشغل التالية تلقائيًا إذا كانت موجودة؛ لا يوجد countdown أو تأكيد أو منطق skip intro قائم.
+- [VERIFIED] `WatchPage` يعتمد ترتيب الكتالوج القادم من `/api/media/{id}/playback`: الموسم ثم الحلقة ثم الجزء ثم معرّف الملف. `next`/`previous` محسوبان هناك، لذلك يعمل الانتقال للأفلام ذات الأجزاء ولحلقات بدون صف حلقة بنفس القاعدة.
+- [VERIFIED] عند `ended` يبدأ عدّاد 10 ثوانٍ ويعرض بطاقة الحلقة التالية مع إلغاء؛ وعند نهاية موسم/عمل يظهر «انتهى الموسم/انتهى العمل».
 - [VERIFIED] قائمة fullscreen تعرض فقط `playlist.slice(currentIndex + 1)`، ولا تظهر خارج fullscreen.
 - [UNKNOWN] لا يمكن تأكيد أن ترتيب query من backend يطابق دائمًا ترتيب بث مناسب في كل أنواع الملفات دون فحص بيانات واقعية لكل حالة.
 
@@ -365,11 +369,14 @@ mousemove over timeline
 | Catalog + file ingest | Implemented | scanner → repository → PostgreSQL | `scanner`, `repository`, `server.go` | [VERIFIED] |
 | Search | Implemented | Meilisearch sync/search | `search/client.go` | [VERIFIED] يحتاج service عاملًا. |
 | Direct video streaming | Implemented | `ServeContent`/Range | `api/server.go` | [VERIFIED] |
-| Custom player | Implemented | Video.js + NEXORA control shell | `NexoraPlayer.jsx` | [VERIFIED] |
-| Timeline previews | Implemented | FFmpeg lazy disk cache | `NexoraPlayer.jsx`, `server.go` | [VERIFIED] |
-| External subtitles | Partial | listing + SRT→VTT | `media/subtitles.go` | [VERIFIED] embedded extraction غير منفذ. |
+| Custom player | Implemented | Video.js + NEXORA control shell, split into `components/player/*` | `player/*`, `NexoraPlayer.jsx` | [VERIFIED] |
+| Timeline previews | Implemented | FFmpeg lazy disk cache | `PlayerScrub.jsx`, `handlers_stream.go` | [VERIFIED] |
+| External subtitles | Partial | listing + SRT→VTT + قائمة اختيار وإعدادات مظهر | `media/subtitles.go`, `PlayerSettingsMenu.jsx` | [VERIFIED] embedded extraction غير منفذ. |
+| Audio track selection | Implemented when the browser exposes tracks | `player.audioTracks()` + FFprobe-persisted tracks as read-only fallback | `player/NexoraPlayer.jsx` | [VERIFIED] |
+| Quality / version selection | Implemented | sibling releases of the same episode from `video_files` | `repository_playback.go` | [VERIFIED] لا سلّم جودات مخترع. |
+| Playback plan endpoint | Implemented | one read for the watch screen | `handlers_playback.go` | [VERIFIED] |
 | Watch progress | Implemented, local-only | Browser localStorage | `NexoraPlayer.jsx` | [VERIFIED] |
-| Next episode / fullscreen list | Implemented | current array order and callbacks | `App.jsx`, `NexoraPlayer.jsx` | [VERIFIED] |
+| Next episode / fullscreen list | Implemented | `next`/`previous` from the catalogue order + 10s countdown + end-of-season notice | `repository_playback.go`, `PlayerNextOverlay.jsx` | [VERIFIED] |
 | Related / similar titles | Implemented | TMDB-ID-backed relation graph مع مطابقة local/pending | `repository_related.go`, `MediaDetailsPage.jsx` | [VERIFIED] لا يستدعي TMDB أثناء التصفح. |
 | TMDB/MAL enrichment | Implemented, configuration-dependent | HTTP clients + DB snapshots/cache | `metadata/*` | [VERIFIED] يحتاج credentials/network. |
 | TMDB automatic refresh | Implemented, disabled by default | 10-second queue runner | `api/server.go` | [VERIFIED] settings default false. |
@@ -405,7 +412,11 @@ mousemove over timeline
 | `client/src/main.jsx` | Bootstrap React/providers/error boundary |
 | `client/src/App.jsx` | routes، global UI state، modal integration |
 | `client/src/lib/api.js` | API client وbrowser response cache |
-| `client/src/components/NexoraPlayer.jsx` | Video.js host + NEXORA controls/progress/preview/progress persistence/fullscreen episodes |
+| `client/src/components/player/*` | وحدة المشغل: `NexoraPlayer` (المضيف والأحداث والاختصارات)، `PlayerControls`، `PlayerScrub`، `PlayerCenterControls`، `PlayerSettingsMenu`، `PlayerNextOverlay`، `PlayerStaticOverlays`، `PlayerIcons`، `usePlayerProgress` |
+| `client/src/components/NexoraPlayer.jsx` | نقطة تصدير للوحدة أعلاه (تحفظ مسار الاستيراد القديم) |
+| `client/src/pages/WatchPage.jsx` | شاشة التشغيل: قراءة playback واحدة، منتقي المواسم، شبكة الحلقات، ملخص، rail أعمال مشابهة |
+| `server/internal/db/repository_playback.go` | خطة التشغيل من PostgreSQL: الترتيب، الإصدارات البديلة، التالية/السابقة، حلّ معرّفات الملف/الحلقة |
+| `server/internal/api/handlers_playback.go` | `GET /api/media/{id}/playback` والتحقق من مدخلاته |
 | `client/src/layouts/*` | customer/admin shells |
 | `server/internal/app/app.go` | startup composition، DB migrations، watcher، HTTP lifecycle |
 | `server/internal/api/server.go` | endpoints، stream، previews، subtitles، middleware |

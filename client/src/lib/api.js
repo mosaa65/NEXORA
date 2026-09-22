@@ -401,6 +401,39 @@ export async function getMediaDetail(mediaId) {
   return requestJSON(`/api/media/${encodeURIComponent(mediaId)}`);
 }
 
+/**
+ * getMediaPlayback — the watch screen's single critical-path read.
+ *
+ * Returns the work header, the ordered playable files, the episode list, the
+ * season roll-up, the sibling releases of the chosen episode and the next/previous
+ * entries. `fileId` selects which release to start from; an unknown id falls back
+ * to the catalogue's first file on the server side.
+ */
+export async function getMediaPlayback(mediaId, fileId) {
+  const query = fileId ? `?file=${encodeURIComponent(fileId)}` : "";
+  const plan = await requestJSON(`/api/media/${encodeURIComponent(mediaId)}/playback${query}`);
+  // The watch side list must read in catalogue order (season, then episode) whatever
+  // order the rows arrive in, so the sort is applied to the contract rather than
+  // trusted from the payload. Missing numbers sort as 0 and never jump the queue.
+  if (Array.isArray(plan?.episodes)) {
+    plan.episodes = [...plan.episodes].sort(comparePlaybackOrder);
+  }
+  if (Array.isArray(plan?.files)) {
+    plan.files = [...plan.files].sort(comparePlaybackOrder);
+  }
+  return plan;
+}
+
+/** Catalogue order: season number, then episode/part number, then id. */
+function comparePlaybackOrder(a, b) {
+  const bySeason = (Number(a?.season_number) || 0) - (Number(b?.season_number) || 0);
+  if (bySeason) return bySeason;
+  const numberA = Number(a?.episode_number ?? a?.part_number) || 0;
+  const numberB = Number(b?.episode_number ?? b?.part_number) || 0;
+  if (numberA !== numberB) return numberA - numberB;
+  return (Number(a?.id) || 0) - (Number(b?.id) || 0);
+}
+
 export async function getMediaRelated(mediaId, limit = 18) {
   return requestJSON(`/api/media/${encodeURIComponent(mediaId)}/related?limit=${encodeURIComponent(limit)}`);
 }

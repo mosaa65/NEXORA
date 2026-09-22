@@ -3,13 +3,13 @@ import { resolveAPIURL } from "../../lib/api.js";
 import { episodeFacts, episodeLabel, readProgress } from "../../lib/watchContent.js";
 
 /**
- * EpisodeCard — the square episode tile used by the watch screen's side list
- * and the fullscreen queue.
+ * EpisodeCard — the episode tile used by the watch screen's side list and the
+ * fullscreen queue.
  *
- * It mirrors the platform card template used in the work-details page: a 16:9
- * still with the episode number and version badge overlaid on the image, then a
- * body with the title, a fact row and a single play action. Data is only shown
- * when it exists — nothing is invented.
+ * The still fills the card: only the plain episode number sits on the image
+ * (top-right), so the artwork stays readable, and everything else lives in a
+ * slim data strip underneath. Facts are only shown when they exist — nothing is
+ * invented.
  */
 export default function EpisodeCard({
   episode,
@@ -43,8 +43,8 @@ export default function EpisodeCard({
           }}
         />
 
-        {/* Episode number badge — top right, like the details page. */}
-        <span className="nexora-episode-number">حلقة {number}</span>
+        {/* Episode number — a bare numeral, top right of the still. */}
+        <span className="nexora-episode-number">{number}</span>
 
         {/* Versions badge — bottom left. */}
         {versions > 1 && <span className="nexora-episode-versions">{versions} إصدارات</span>}
@@ -52,8 +52,9 @@ export default function EpisodeCard({
         {/* Unavailable badge. */}
         {!available && <span className="nexora-episode-missing">غير متوفرة</span>}
 
-        {/* Completed check — bottom right. */}
-        {progress?.completed && (
+        {/* Completed check — bottom right. Marked on the still only when the data
+            strip below does not already spell it out. */}
+        {progress?.completed && !(facts.length > 0) && (
           <span className="nexora-episode-done" title="مكتملة">
             <Icon name="checkbox" className="h-3.5 w-3.5" />
           </span>
@@ -74,34 +75,27 @@ export default function EpisodeCard({
         )}
       </div>
 
-      <div className="nexora-episode-body">
-        <p className="nexora-episode-title" title={title}>{title}</p>
-
-        {facts.length > 0 && (
-          <div className="nexora-episode-facts" dir="ltr">
-            {facts.map((fact, i) => (
-              <span key={`${fact}-${i}`}>{fact}</span>
-            ))}
+      {/* Data strip under the image: only what the catalogue actually knows. */}
+      {(facts.length > 0 || !available || progress?.completed) && (
+        <div className="nexora-episode-body">
+          {facts.length > 0 && (
+            <div className="nexora-episode-facts" dir="ltr">
+              {facts.map((fact, i) => (
+                <span key={`${fact}-${i}`}>{fact}</span>
+              ))}
+            </div>
+          )}
+          <div className="nexora-episode-marks">
+            {!available && <span className="nexora-episode-soon">قيد الإضافة</span>}
+            {progress?.completed && (
+              <span className="nexora-episode-done-text">
+                <Icon name="checkbox" className="h-3 w-3" />
+                مكتملة
+              </span>
+            )}
           </div>
-        )}
-
-        <div className="nexora-episode-foot">
-          {available ? (
-            <button type="button" className="nexora-episode-watch" onClick={() => onPlay?.(episode)}>
-              <Icon name="play" className="h-3 w-3" />
-              {progress && !progress.completed ? "متابعة" : "تشغيل"}
-            </button>
-          ) : (
-            <span className="nexora-episode-soon">قيد الإضافة</span>
-          )}
-          {onDetails && (
-            <button type="button" className="nexora-episode-details" onClick={() => onDetails(episode)}>
-              <Icon name="info" className="h-3 w-3" />
-              تفاصيل
-            </button>
-          )}
         </div>
-      </div>
+      )}
     </article>
   );
 }

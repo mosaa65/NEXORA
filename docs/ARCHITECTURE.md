@@ -264,7 +264,6 @@ Logical Work → Season → Episode → Physical File
 - **جلستان فحص متزامنتان غير مسموحتين**: الطلب الثاني يعيد `409 Conflict`.
 
 ### 5.3 Metadata enrichment
-
 ```text
 explicit enrich / TMDB queue job
   → metadata service
@@ -307,19 +306,28 @@ SRT is converted to WebVTT in response. Other advertised formats are not all con
 
 ```text
 User chooses file
-  → RealVideoPlayerModal constructs API stream URL
-  → NexoraPlayer feeds URL to the Video.js-managed <video>
+  → /watch/:id opens with ONE read: GET /api/media/{id}/playback
+       → work header, ordered files, episodes, seasons, source,
+         sibling releases, next/previous
+  → NexoraPlayer feeds /api/stream/file/{videoFileId} to the Video.js-managed <video>
   → browser requests GET /api/stream/file/{id} (often with Range)
   → Go looks up path in PostgreSQL
   → serveCataloguePath (DB-resolved, trusted) or mediaPathAllowed for client-supplied ?path=
   → os.Open + file.Stat
-  → Accept-Ranges: bytes + http.ServeContent
+  → Accept-Ranges: bytes + Content-Type (mime table, then the container map)
+  → http.ServeContent
   → browser decodes supported container/codec
 ```
 
 - `http.ServeContent` is responsible for HTTP Range parsing and partial responses.
 - The server gives it an open `*os.File`; it does not allocate an in-memory copy of the full video.
+- `HEAD` is answered by the same handler as an id-addressed file request, so a player or the
+  copy bridge can read the length and type before downloading.
+- A media request that fails is answered as `text/plain` with `Cache-Control: no-store`, not as
+  JSON: a player receiving an `application/json` body for a media URL reports a decode failure.
 - Current direct streaming has no HLS/DASH manifest, adaptive bitrate ladder, or server-side transcoding.
+  The strategy is Direct Play first; remux and transcode fallbacks are not implemented. See
+  [`VIDEO_PLAYER_ARCHITECTURE.md`](VIDEO_PLAYER_ARCHITECTURE.md).
 
 ### 7.1 Timeline preview flow
 
@@ -399,6 +407,8 @@ Redis is not assigned a runtime caching responsibility in current application co
 - ADR-013: Catalogue Consolidation — Duplicates, Container Titles and Unlinked Files
 - ADR-014: Work Details on a Single Episode Source, in the Platform Card Template
 - ADR-015: Complete the Android Backend Inside the Existing Agent and Abstraction (Proposed)
+- ADR-016: Video.js as the Player Engine Behind a NEXORA Control Shell
+- ADR-017: A Single Playback Read and the Player's Real Selection Surfaces (Accepted)
 ## 12. Known Risks and Non-Decisions
 
 هذه ليست أوامر إصلاح تلقائية:

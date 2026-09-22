@@ -1,59 +1,59 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import NexoraPlayer from "../components/NexoraPlayer.jsx";
 import EpisodeCard from "../components/watch/EpisodeCard.jsx";
 import RelatedRail from "../components/watch/RelatedRail.jsx";
 import Icon from "../components/Icon.jsx";
 import { usePlayback } from "../context/PlaybackContext.jsx";
-import { getMediaDetail, getFileSubtitles, searchAllEpisodes, resolveAPIURL } from "../lib/api.js";
-import {
-  clock,
-  isEpisodic,
-  itemNoun,
-  kindLabel,
-  listTitle,
-} from "../lib/watchContent.js";
+import { getMediaPlayback, getFileSubtitles, resolveAPIURL } from "../lib/api.js";
+import { clock, itemNoun, kindLabel, listTitle, formatSize } from "../lib/watchContent.js";
 
 /**
  * WatchPage — the playback screen for every kind of work in the library.
  *
- * It adapts to `media.type` (movie / series / anime / documentary / …):
- *   - the side list becomes episodes, film parts or files, with the right title;
- *   - a related rail ("watch next") sits beneath the player, scoped to the kind;
- *   - the header carries the kind, year, rating, status and a resume action.
+ * One request (`getMediaPlayback`) supplies the critical path: the work header, the
+ * source, the episode list and the next/previous entries. The previous version
+ * opened with the media detail call plus a paged episode search, which on a long
+ * show meant up to fifty requests before the first frame.
  *
- * Episodes render as square `EpisodeCard` tiles; the player stays in the left
- * column and can be minimised into the global floating dock without leaving the
- * page. Rendered inside the customer layout, so it keeps the site's search bar.
+ * The screen adapts to the work's type: films show their parts/files, episodic
+ * works get a season selector above the episode grid. Related titles load in the
+ * background and never block playback.
  */
 export default function WatchPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [params] = useSearchParams();
 
-  const [detail, setDetail] = useState(null);
+  const [plan, setPlan] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [indexEpisodes, setIndexEpisodes] = useState(null); // episodes from the episode index
-  const [activeFile, setActiveFile] = useState(null);
+  const [failed, setFailed] = useState(false);
+  const [seasonFilter, setSeasonFilter] = useState(null);
   const [subtitles, setSubtitles] = useState([]);
   const [fullscreen, setFullscreen] = useState(false);
   const [tab, setTab] = useState("episodes");
 
-  // The global dock owns the player while minimised, so it survives navigation.
   const { minimize, close: closeDock, isActive: dockActive } = usePlayback();
 
   const stageRef = useRef(null);
   const initialFileId = params.get("file");
 
+  // The global dock owns the player while minimised, so it survives navigation.
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    getMediaDetail(id)
+    setFailed(false);
+    getMediaPlayback(id, initialFileId)
       .then((data) => {
-        if (alive) setDetail(data);
+        if (!alive) return;
+        setPlan(data);
+        // Open on the season of the source, so the list matches what is playing.
+        if (data?.source?.season_number) setSeasonFilter(data.source.season_number);
       })
       .catch(() => {
-        if (alive) setDetail(null);
+        if (!alive) return;
+        setPlan(null);
+        setFailed(true);
       })
       .finally(() => {
         if (alive) setLoading(false);
@@ -61,132 +61,158 @@ export default function WatchPage() {
     return () => {
       alive = false;
     };
-  }, [id]);
+  }, [id, initialFileId]);
 
-  // Episodes come from the dedicated episode index (the same source the details
-  // page uses); `detail.seasons`/`detail.files` are only a fallback for works
-  // the index does not describe.
+  const type = plan?.type || "movie";
+  const episodic = type === "series" || type === "anime" || type === "documentary";
+  const title = plan?.title_ar || plan?.title_en || "تشغيل الوسائط";
+  const titleEn = plan?.title_en || "";
+  const poster = resolveAPIURL(plan?.poster_path || plan?.banner_path) || "";
+  const backdrop = resolveAPIURL(plan?.banner_path || plan?.poster_path) || poster;
+  const plot = plan?.plot_ar || plan?.plot_en || "";
+  const genres = Array.isArray(plan?.genres) ? plan.genres : [];
+
+  const files = plan?.files || [];
+  const episodes = plan?.episodes || [];
+  const seasons = plan?.seasons || [];
+
+  const currentFile = plan?.source || null;
+
   useEffect(() => {
     let alive = true;
-    searchAllEpisodes(id, { pageSize: 200 })
-      .then((hits) => {
+    if (!currentFile?.video_file_id) {
+      setSubtitles([]);
+      return () => {
+        alive = false;
+      };
+    }
+    getFileSubtitles(currentFile.video_file_id)
+      .then((res) => {
         if (!alive) return;
-        const list = (hits || []).filter((h) => h && h.id != null);
-        setIndexEpisodes(list.length > 0 ? list : null);
+        setSubtitles(
+          (res.subtitles || []).map((sub) => ({
+            kind: "captions",
+            label: sub.label || (sub.language === "ar" ? "العربية" : sub.language),
+            src: resolveAPIURL(`/api/stream/file/${currentFile.video_file_id}/subtitles/${sub.index}`),
+            srcLang: sub.language || "ar",
+            default: sub.language === "ar",
+          }))
+        );
       })
-      .catch(() => {
-        if (alive) setIndexEpisodes(null);
-      });
+      .catch(() => alive && setSubtitles([]));
     return () => {
       alive = false;
     };
-  }, [id]);
+  }, [currentFile?.video_file_id]);
 
-  const type = detail?.type || "movie";
-  const episodic = isEpisodic(type);
-  const seasons = detail?.seasons || [];
-  const files = detail?.files || [];
-  const hasSeasons = seasons.length > 0;
+  const streamSrc = currentFile?.video_file_id
+    ? resolveAPIURL(`/api/stream/file/${currentFile.video_file_id}`)
+    : "";
 
-  const detailEpisodes = useMemo(
+  // Which episodes the grid shows: the selected season, or everything when the work
+  // has no seasons (films, standalone documentaries).
+  const visibleEpisodes = useMemo(() => {
+    if (!episodic || seasonFilter === null || seasons.length === 0) return episodes;
+    return episodes.filter((episode) => episode.season_number === seasonFilter);
+  }, [episodic, seasonFilter, seasons.length, episodes]);
+
+  // The side list for a film: its own playable files shaped like episode rows so
+  // one card component renders every kind of work.
+  const fileCards = useMemo(
     () =>
-      hasSeasons
-        ? seasons.flatMap((s) => (s.episodes || []).map((ep) => ({ ...ep, seasonNumber: s.season_number })))
-        : files,
-    [hasSeasons, seasons, files]
+      files.map((file) => ({
+        id: file.id,
+        episode_id: file.episode_id,
+        episode_number: file.episode_number || file.part_number,
+        season_number: file.season_number,
+        title_ar: file.title_ar,
+        title_en: file.title_en,
+        duration: file.duration,
+        resolution: file.resolution,
+        file_size: file.file_size,
+        file_count: 1,
+        has_local_file: true,
+        video_file_id: file.id,
+      })),
+    [files]
   );
 
-  // Prefer the episode index; fall back to the work's own seasons/files. Index
-  // hits carry the playable file id separately from the episode id, so normalise
-  // a single `streamId` both sources expose for streaming and subtitles.
-  const episodes = useMemo(() => {
-    const source = (indexEpisodes && indexEpisodes.length > 0) ? indexEpisodes : detailEpisodes;
-    return source.map((item) => ({
-      ...item,
-      streamId: item.file_id || item.fileId || item.id,
-    }));
-  }, [indexEpisodes, detailEpisodes]);
+  /** Point the player at a specific release of the current episode. */
+  const selectFile = useCallback(
+    (target) => {
+      if (!target) return;
+      // Accept an episode row or a playable file row from either list.
+      const fileId = target.video_file_id || target.id;
+      if (!fileId || String(fileId) === String(currentFile?.video_file_id)) return;
+      const file = files.find((item) => item.id === fileId);
+      if (!file) return;
+      setPlan((current) => (current ? { ...current, source: file } : current));
+      if (file.season_number) setSeasonFilter(file.season_number);
+    },
+    [files, currentFile?.video_file_id]
+  );
 
-  useEffect(() => {
-    if (episodes.length === 0) return;
-    setActiveFile((current) => {
-      if (current) return current;
-      const wanted = initialFileId ? episodes.find((ep) => String(ep.id) === String(initialFileId)) : null;
-      return wanted || episodes[0];
-    });
-  }, [episodes, initialFileId]);
+  /** Playing an episode starts from its catalogue-selected (lowest id) release. */
+  const playEpisode = useCallback(
+    (episode) => {
+      if (!episode?.video_file_id) return;
+      selectFile({ video_file_id: episode.video_file_id });
+    },
+    [selectFile]
+  );
 
-  const currentFile = activeFile || episodes[0] || null;
+  const nextFile = plan?.next || null;
+  const previousFile = plan?.previous || null;
 
-  useEffect(() => {
-    let alive = true;
-    if (currentFile?.streamId) {
-      getFileSubtitles(currentFile.streamId)
-        .then((res) => {
-          if (!alive) return;
-          setSubtitles(
-            (res.subtitles || []).map((sub) => ({
-              kind: "captions",
-              label: sub.label || (sub.language === "ar" ? "العربية" : sub.language),
-              src: resolveAPIURL(`/api/stream/file/${currentFile.streamId}/subtitles/${sub.index}`),
-              srcLang: sub.language || "ar",
-              default: sub.language === "ar",
-            }))
-          );
-        })
-        .catch(() => alive && setSubtitles([]));
-    } else {
-      setSubtitles([]);
-    }
-    return () => {
-      alive = false;
+  // The next-episode card shows the catalogue's own episode copy when the work has
+  // episodes, and falls back to the file's title for a film with several parts.
+  const nextEpisode = useMemo(() => {
+    if (!nextFile) return null;
+    const episode = episodes.find((item) => item.video_file_id === nextFile.id || item.episode_id === nextFile.episode_id);
+    return {
+      ...(episode || {}),
+      season_number: nextFile.season_number,
+      episode_number: nextFile.episode_number || nextFile.part_number,
+      title_ar: episode?.title_ar || nextFile.title_ar,
+      title_en: episode?.title_en || nextFile.title_en,
+      duration: nextFile.duration,
+      resolution: nextFile.resolution,
+      still_path: episode?.still_path,
     };
-  }, [currentFile?.streamId]);
+  }, [nextFile, episodes]);
 
-  const streamSrc = currentFile?.streamId
-    ? resolveAPIURL(`/api/stream/file/${currentFile.streamId}`)
-    : currentFile?.file_path
-      ? resolveAPIURL(`/api/stream?path=${encodeURIComponent(currentFile.file_path)}`)
-      : "";
+  const playNext = useCallback(() => {
+    if (nextFile) selectFile(nextFile);
+  }, [nextFile, selectFile]);
+  const playPrevious = useCallback(() => {
+    if (previousFile) selectFile(previousFile);
+  }, [previousFile, selectFile]);
 
-  const title = detail?.title_ar || detail?.title_en || "تشغيل الوسائط";
-  const titleEn = detail?.title_en || "";
-  const poster = resolveAPIURL(detail?.poster_path || detail?.banner_path) || "";
-  const backdrop = resolveAPIURL(detail?.banner_path || detail?.poster_path) || poster;
-  const plot = detail?.plot_ar || detail?.plot_en || "";
-  const genres = Array.isArray(detail?.genres) ? detail.genres : [];
-  const year = detail?.release_year;
-  const rating = detail?.rating;
-  const status = detail?.status;
-
-  const currentIndex = episodes.findIndex((item) => item.id === currentFile?.id);
-  const nextFile = currentIndex >= 0 ? episodes[currentIndex + 1] : null;
-  const playNext = useCallback(() => nextFile && setActiveFile(nextFile), [nextFile]);
-
+  const currentIndex = files.findIndex((file) => file.id === currentFile?.video_file_id);
   const currentLabel = currentFile
     ? currentFile.title_ar ||
       currentFile.title_en ||
-      (currentFile.episode_number ? `الحلقة ${currentFile.episode_number}` : `${itemNoun(type)} ${currentIndex + 1}`)
+      (currentFile.episode_number
+        ? `الحلقة ${currentFile.episode_number}`
+        : `${itemNoun(type)} ${currentIndex + 1}`)
     : "";
 
-  const resumeFrom = (() => {
-    if (!currentFile?.streamId) return null;
-    try {
-      const saved = JSON.parse(localStorage.getItem(`nexora:playback:${currentFile.streamId}`) || "null");
-      if (saved?.position > 30 && !saved.completed) return saved.position;
-    } catch {}
-    return null;
-  })();
+  // "season" when no later episode of the current season has a file, else "work".
+  const endOfLabel = useMemo(() => {
+    if (!currentFile) return "work";
+    const laterInSeason = episodes.some(
+      (episode) =>
+        episode.season_number === currentFile.season_number &&
+        episode.episode_number > currentFile.episode_number &&
+        episode.has_local_file
+    );
+    return laterInSeason ? "work" : "season";
+  }, [currentFile, episodes]);
 
   const goBack = useCallback(() => {
     if (window.history.state?.idx > 0) navigate(-1);
     else navigate("/");
   }, [navigate]);
-
-  const playFullscreen = useCallback((file) => {
-    if (file) setActiveFile(file);
-    stageRef.current?.requestFullscreen?.().catch(() => {});
-  }, []);
 
   // Hand the current playback to the global dock and stop rendering it here.
   const minimizeToDock = useCallback(() => {
@@ -194,43 +220,16 @@ export default function WatchPage() {
     if (!streamSrc) return;
     minimize({
       mediaId: id,
-      fileId: currentFile?.streamId,
+      fileId: currentFile?.video_file_id,
       src: streamSrc,
       title,
       poster,
       tracks: subtitles,
       playlist: episodes,
-      onSelectFile: setActiveFile,
+      onSelectFile: playEpisode,
       onNext: playNext,
     });
-  }, [id, currentFile?.streamId, streamSrc, title, poster, subtitles, episodes, minimize, playNext]);
-
-  const playerNode = streamSrc ? (
-    <NexoraPlayer
-      key={streamSrc}
-      src={streamSrc}
-      title={title}
-      poster={poster}
-      tracks={subtitles}
-      fileId={currentFile?.streamId}
-      onNext={playNext}
-      playlist={episodes}
-      currentFileId={currentFile?.streamId}
-      onSelectFile={setActiveFile}
-      fullscreenTarget={stageRef}
-      onMinimize={minimizeToDock}
-      onExit={() => {
-        if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
-        goBack();
-      }}
-    />
-  ) : (
-    <div className="nexora-empty-stage">
-      <p className="text-sm font-bold">
-        {loading ? "جارٍ تحضير التشغيل…" : "لا يتوفر ملف فيديو صالح لهذا العمل."}
-      </p>
-    </div>
-  );
+  }, [id, currentFile?.video_file_id, streamSrc, title, poster, subtitles, episodes, minimize, playEpisode, playNext]);
 
   useEffect(() => {
     const sync = () => setFullscreen(document.fullscreenElement === stageRef.current);
@@ -240,14 +239,70 @@ export default function WatchPage() {
 
   const wantsFullscreen = params.get("play") === "fs";
   useEffect(() => {
-    if (!wantsFullscreen || !currentFile?.streamId) return;
+    if (!wantsFullscreen || !streamSrc) return undefined;
     const raf = requestAnimationFrame(() => {
       stageRef.current?.requestFullscreen?.().catch(() => {});
     });
     return () => cancelAnimationFrame(raf);
-  }, [wantsFullscreen, currentFile?.streamId]);
+  }, [wantsFullscreen, streamSrc]);
 
   const sideTitle = listTitle(type);
+
+  // Technical facts of the current source: badges and the info tab read these.
+  const technical = {
+    resolution: currentFile?.resolution || "",
+    video_codec: currentFile?.video_codec || "",
+    container: currentFile?.file_path ? `.${String(currentFile.file_path).split(".").pop()}` : "",
+    duration: currentFile?.duration || 0,
+    file_size: currentFile?.file_size || 0,
+    audio_track_count: currentFile?.audio_track_count || 0,
+    subtitle_count: currentFile?.subtitle_count || 0,
+  };
+
+  const playerNode = streamSrc ? (
+    <NexoraPlayer
+      key={streamSrc}
+      src={streamSrc}
+      title={title}
+      poster={poster}
+      tracks={subtitles}
+      fileId={currentFile?.video_file_id}
+      onNext={playNext}
+      playlist={episodes}
+      currentFileId={currentFile?.video_file_id}
+      onSelectFile={playEpisode}
+      fullscreenTarget={stageRef}
+      onMinimize={minimizeToDock}
+      onExit={() => {
+        if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+        goBack();
+      }}
+      sources={plan?.siblings || []}
+      onSelectSource={(option) => selectFile({ video_file_id: option.video_file_id })}
+      technical={technical}
+      hasNext={Boolean(nextFile)}
+      hasPrevious={Boolean(previousFile)}
+      nextEpisode={nextEpisode}
+      onPlayPrevious={playPrevious}
+      endOfLabel={endOfLabel}
+      onBrowseMore={() => navigate(`/media/${id}`)}
+    />
+  ) : (
+    <div className="nexora-empty-stage">
+      <p className="text-sm font-bold">
+        {loading
+          ? "جارٍ تحضير التشغيل…"
+          : failed
+            ? "تعذر تحميل بيانات التشغيل لهذا العمل."
+            : "لا يتوفر ملف فيديو صالح لهذا العمل."}
+      </p>
+      {failed && (
+        <button type="button" className="nexora-act nexora-act--ghost mt-3" onClick={() => navigate(`/media/${id}`)}>
+          العودة إلى صفحة العمل
+        </button>
+      )}
+    </div>
+  );
 
   return (
     <div className="nexora-watch">
@@ -264,16 +319,13 @@ export default function WatchPage() {
           {titleEn && titleEn !== title ? <p className="nexora-watch-title-en" dir="ltr">{titleEn}</p> : null}
           <div className="nexora-watch-meta">
             <span className="nexora-chip-kind">{kindLabel(type)}</span>
-            {year ? <span>{year}</span> : null}
-            {rating ? <span className="nexora-chip-rating">★ {Number(rating).toFixed(1)}</span> : null}
+            {plan?.release_year ? <span>{plan.release_year}</span> : null}
+            {plan?.rating ? <span className="nexora-chip-rating">★ {Number(plan.rating).toFixed(1)}</span> : null}
             {episodic && seasons.length > 0 ? <span>{seasons.length} مواسم</span> : null}
             {episodes.length > 0 ? <span>{episodes.length} {itemNoun(type)}</span> : null}
-            {currentFile?.resolution ? <span className="nexora-chip-live">{currentFile.resolution} · LAN</span> : null}
+            {technical.resolution ? <span className="nexora-chip-live">{technical.resolution} · LAN</span> : null}
           </div>
         </div>
-        {resumeFrom !== null && (
-          <span className="nexora-watch-resume-chip">متابعة من {clock(resumeFrom)}</span>
-        )}
       </header>
 
       {dockActive && (
@@ -284,57 +336,7 @@ export default function WatchPage() {
       )}
 
       <div className="nexora-watch-grid">
-        {/* Side column: episodes/parts/files + about. */}
-        <aside className="nexora-watch-side">
-          <div className="nexora-tabs">
-            <button type="button" className={tab === "episodes" ? "is-active" : ""} onClick={() => setTab("episodes")}>
-              {sideTitle} <span>{episodes.length}</span>
-            </button>
-            <button type="button" className={tab === "about" ? "is-active" : ""} onClick={() => setTab("about")}>
-              معلومات
-            </button>
-          </div>
-
-          {tab === "episodes" ? (
-            <div className="nexora-watch-list">
-              {episodes.map((item, idx) => (
-                <EpisodeCard
-                  key={item.id || idx}
-                  episode={item}
-                  index={idx}
-                  type={type}
-                  active={currentFile?.id === item.id}
-                  onPlay={playFullscreen}
-                  onDetails={setActiveFile}
-                />
-              ))}
-              {episodes.length === 0 && !loading && (
-                <div className="p-8 text-center text-xs text-white/40">
-                  لا توجد {itemNoun(type)} متوفرة لهذا العمل.
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="nexora-about">
-              <dl>
-                <div><dt>النوع</dt><dd>{kindLabel(type)}</dd></div>
-                <div><dt>السنة</dt><dd>{year || "—"}</dd></div>
-                <div><dt>التقييم</dt><dd>{rating ? `★ ${Number(rating).toFixed(1)}` : "—"}</dd></div>
-                {status ? <div><dt>الحالة</dt><dd>{status}</dd></div> : null}
-                <div><dt>{episodic ? "المواسم" : `عدد ${itemNoun(type)}ات`}</dt><dd>{episodic ? seasons.length : episodes.length}</dd></div>
-                <div><dt>الجودة الحالية</dt><dd>{currentFile?.resolution || "—"}</dd></div>
-              </dl>
-              {plot && <p className="nexora-plot is-open">{plot}</p>}
-              {genres.length > 0 && (
-                <div className="nexora-genres">
-                  {genres.map((genre) => <span key={genre} className="nexora-genre">{genre}</span>)}
-                </div>
-              )}
-            </div>
-          )}
-        </aside>
-
-        {/* Player column (left in RTL). */}
+        {/* Player column (right in RTL, and first when the grid stacks). */}
         <main className="nexora-watch-main">
           <div
             ref={stageRef}
@@ -360,13 +362,21 @@ export default function WatchPage() {
                 <span className="nexora-watch-now-dot" />
                 {currentLabel || "—"}
               </span>
-              {currentFile?.duration > 0 && <span className="nexora-watch-len">{clock(currentFile.duration)}</span>}
+              <div className="nexora-watch-summary-actions">
+                {currentFile?.duration ? <span className="nexora-watch-len">{clock(currentFile.duration)}</span> : null}
+                {previousFile && (
+                  <button type="button" className="nexora-act nexora-act--ghost" onClick={playPrevious}>
+                    السابق
+                  </button>
+                )}
+                {nextFile && (
+                  <button type="button" className="nexora-act nexora-act--play" onClick={playNext}>
+                    التالي
+                  </button>
+                )}
+              </div>
             </div>
-            {currentFile?.overview_ar || currentFile?.overview_en ? (
-              <p className="nexora-watch-plot">{currentFile.overview_ar || currentFile.overview_en}</p>
-            ) : plot ? (
-              <p className="nexora-watch-plot">{plot}</p>
-            ) : null}
+            {plot ? <p className="nexora-watch-plot">{plot}</p> : null}
             {genres.length > 0 && (
               <div className="nexora-genres">
                 {genres.map((genre) => (
@@ -376,16 +386,104 @@ export default function WatchPage() {
             )}
           </section>
         </main>
+
+        {/* Side column: seasons + episodes/parts/files, then about. */}
+        <aside className="nexora-watch-side">
+          <div className="nexora-tabs">
+            <button type="button" className={tab === "episodes" ? "is-active" : ""} onClick={() => setTab("episodes")}>
+              {sideTitle} <span>{episodic ? episodes.length : files.length}</span>
+            </button>
+            <button type="button" className={tab === "about" ? "is-active" : ""} onClick={() => setTab("about")}>
+              معلومات
+            </button>
+          </div>
+
+          {tab === "episodes" ? (
+            <>
+              {/* Season selector: switching seasons swaps the grid without a page
+                  reload, so a work with 20 seasons never renders 500 cards at once. */}
+              {episodic && seasons.length > 1 && (
+                <div className="nexora-season-bar" role="tablist" aria-label="المواسم">
+                  {seasons.map((season) => (
+                    <button
+                      key={season.season_id}
+                      type="button"
+                      role="tab"
+                      aria-selected={seasonFilter === season.season_number}
+                      className={`nexora-season-chip ${seasonFilter === season.season_number ? "is-active" : ""}`}
+                      onClick={() => setSeasonFilter(season.season_number)}
+                    >
+                      {season.poster_path ? (
+                        <img
+                          className="nexora-season-chip-art"
+                          src={resolveAPIURL(season.poster_path)}
+                          alt=""
+                          loading="lazy"
+                        />
+                      ) : null}
+                      <span className="nexora-season-chip-body">
+                        <span className="nexora-season-chip-name">
+                          {season.title_ar || season.title_en || `الموسم ${season.season_number}`}
+                        </span>
+                        <span className="nexora-season-chip-count">
+                          {season.local_count}/{season.episode_count} متوفرة
+                        </span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <div className="nexora-watch-list">
+                {(episodic ? visibleEpisodes : fileCards).map((item, idx) => (
+                  <EpisodeCard
+                    key={item.episode_id || item.video_file_id || item.id || idx}
+                    episode={{ ...item, streamId: item.video_file_id || item.id }}
+                    index={idx}
+                    type={type}
+                    active={(item.video_file_id || item.id) === currentFile?.video_file_id}
+                    onPlay={playEpisode}
+                  />
+                ))}
+                {!loading && (episodic ? visibleEpisodes : files).length === 0 && (
+                  <div className="p-8 text-center text-xs text-white/40">
+                    لا توجد {itemNoun(type)} متوفرة لهذا العمل.
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="nexora-about">
+              <dl>
+                <div><dt>النوع</dt><dd>{kindLabel(type)}</dd></div>
+                <div><dt>السنة</dt><dd>{plan?.release_year || "—"}</dd></div>
+                <div><dt>التقييم</dt><dd>{plan?.rating ? `★ ${Number(plan.rating).toFixed(1)}` : "—"}</dd></div>
+                {plan?.status ? <div><dt>الحالة</dt><dd>{plan.status}</dd></div> : null}
+                <div><dt>{episodic ? "المواسم" : `عدد ${itemNoun(type)}ات`}</dt><dd>{episodic ? seasons.length : files.length}</dd></div>
+                <div><dt>الدقة الحالية</dt><dd>{technical.resolution || "—"}</dd></div>
+                <div><dt>ترميز الفيديو</dt><dd>{technical.video_codec ? technical.video_codec.toUpperCase() : "—"}</dd></div>
+                <div><dt>المدة</dt><dd>{technical.duration ? clock(technical.duration) : "—"}</dd></div>
+                <div><dt>الحجم</dt><dd>{technical.file_size ? formatSize(technical.file_size) : "—"}</dd></div>
+                {technical.audio_track_count > 1 ? (
+                  <div><dt>مسارات الصوت</dt><dd>{technical.audio_track_count}</dd></div>
+                ) : null}
+                {technical.subtitle_count > 0 ? (
+                  <div><dt>ترجمات مدمجة</dt><dd>{technical.subtitle_count}</dd></div>
+                ) : null}
+              </dl>
+              {plot && <p className="nexora-plot is-open">{plot}</p>}
+              {genres.length > 0 && (
+                <div className="nexora-genres">
+                  {genres.map((genre) => <span key={genre} className="nexora-genre">{genre}</span>)}
+                </div>
+              )}
+            </div>
+          )}
+        </aside>
       </div>
 
-      {/* Watch next — suggestions scoped to the kind of work. */}
-      {detail?.id && (
-        <RelatedRail
-          mediaId={detail.id}
-          type={type}
-          excludeIds={[detail.id]}
-        />
-      )}
+      {/* Loaded in the background; playback never waits for it. */}
+      {plan?.media_id && <RelatedRail mediaId={plan.media_id} type={type} excludeIds={[plan.media_id]} />}
     </div>
   );
 }
