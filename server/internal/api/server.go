@@ -76,6 +76,10 @@ type repository interface {
 	ListCorruptedFiles(ctx context.Context) ([]db.CorruptedFile, error)
 	CalculateChecksums(ctx context.Context, mediaItemID int64) (db.ChecksumResult, error)
 	GetMediaItem(ctx context.Context, id int64) (*db.MediaItemDetail, error)
+	// GetPlaybackPlan is the single read behind /api/media/{id}/playback: the work
+	// header, the ordered files, the episodes and the season roll-up in one call.
+	// `wanted` accepts either a video_files id or an episode id.
+	GetPlaybackPlan(ctx context.Context, mediaID int64, wanted int64) (*db.PlaybackPlan, error)
 	ListMediaItems(ctx context.Context, opts db.ListMediaOptions) (*db.MediaListResult, error)
 	ListProviderCollections(ctx context.Context, limit int) ([]db.ProviderCollection, error)
 	GetProviderCollection(ctx context.Context, slug string) (*db.ProviderCollection, error)
@@ -312,6 +316,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("PUT /api/admin/hubs/{slug}", s.requireAdminAuth(s.handleSmartHubSave))
 	s.mux.HandleFunc("POST /api/media", s.requireAdminAuth(s.handleMediaCreate))
 	s.mux.HandleFunc("GET /api/media/{id}", s.handleMediaDetail)
+	s.mux.HandleFunc("GET /api/media/{id}/playback", s.handleMediaPlayback)
 	s.mux.HandleFunc("GET /api/media/{id}/related", s.handleMediaRelated)
 	s.mux.HandleFunc("PUT /api/media/{id}", s.requireAdminAuth(s.handleMediaUpdateFull))
 	s.mux.HandleFunc("DELETE /api/media/{id}", s.requireAdminAuth(s.handleMediaDelete))
@@ -385,6 +390,10 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/stream", s.handleStream)
 	s.mux.HandleFunc("GET /api/stream/image", s.handleStreamImage)
 	s.mux.HandleFunc("GET /api/stream/file/{id}", s.handleStreamByID)
+	// HEAD is answered by the same handler: it resolves the file and returns the
+	// length/type headers without a body, which is what a player or the copy bridge
+	// probes before it decides to download.
+	s.mux.HandleFunc("HEAD /api/stream/file/{id}", s.handleStreamByID)
 	s.mux.HandleFunc("GET /api/stream/file/{id}/preview", s.handleFilePreview)
 	s.mux.HandleFunc("GET /api/stream/file/{id}/subtitles", s.handleFileSubtitles)
 	s.mux.HandleFunc("GET /api/stream/file/{id}/subtitles/{subId}", s.handleFileSubtitleStream)

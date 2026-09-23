@@ -109,7 +109,7 @@ Configure environment variables in `.env` as documented in [Installation & Confi
 | --- | --- |
 | Project type | Smart Media Library Management & Local Streaming System for LAN Networks |
 | Architecture | Centralized Go Server with Thin-Client Zero-Install React Frontend |
-| Frontend | React 18, Vite 5, Tailwind CSS 3, Framer Motion, Plyr.js |
+| Frontend | React 18, Vite 5, Tailwind CSS 3, Framer Motion, Video.js |
 | Backend | Go 1.22 (net/http, fsnotify, pgx v5), FFmpeg, MediaInfo CLI |
 | Database | PostgreSQL 16 Alpine (Core schema, relationships, indexes) |
 | Search & Cache | Meilisearch v1.11 (Instant Arabic/English Search), Redis 7 |
@@ -139,7 +139,7 @@ LAN lounges and gaming centers face severe friction managing tens or hundreds of
 - **High-Performance Streaming:** Native Go HTTP Range Server supporting high-bitrate 4K/1080p video streaming, seeking, audio track identification, and dynamic WebVTT subtitle injection.
 - **Disk & Storage Management:** Active disk space monitoring, S.M.A.R.T health alerts, duplicate file detection via SHA-256 checksums, and missing episode gap identification.
 - **Migration & Organization:** Multi-threaded copy engine with pause/resume, progress tracking, speed calculation, and physical drive folder reorganization wizard.
-- **Client Experience:** Zero-install web browser access, glassmorphic dark UI, instant Meilisearch queries, category filtering, and embedded Plyr video player.
+- **Client Experience:** Zero-install web browser access, glassmorphic dark UI, instant Meilisearch queries, category filtering, and embedded Video.js player.
 
 🇸🇦 **العربية**
 
@@ -148,7 +148,7 @@ LAN lounges and gaming centers face severe friction managing tens or hundreds of
 - **بث عالي الأداء:** خادم Go يدعم طلبات HTTP Range لتشغيل وسحب مقاطع الفيديو بدقة 4K و1080p بسلاسة، مع التعرف على مسارات الصوت واستخراج الترجمات فورياً بتنسيق WebVTT.
 - **إدارة الأقراص والتخزين:** مراقبة المساحات التخزينية، وتنبيهات صحة الأقراص، واكتشاف الملفات المكررة عبر بصمة SHA-256، وتحديد الحلقات المفقودة.
 - **محرك النقل والتنظيم:** محرك نقل متعدد المسارات يدعم الإيقاف والاستكمال ومراقبة السرعة مع معالج إعادة هيكلة المجلدات في الأقراص الصلبة.
-- **تجربة العملاء:** تصفح فوري عبر المتصفح بدون تثبيت، واجهة زجاجية داكنة فاخرة، بحث فوري عبر Meilisearch، تصفية الفئات، ومشغل فيديو Plyr مدمج.
+- **تجربة العملاء:** تصفح فوري عبر المتصفح بدون تثبيت، واجهة زجاجية داكنة فاخرة، بحث فوري عبر Meilisearch، تصفية الفئات، ومشغل فيديو Video.js مدمج.
 
 ---
 
@@ -183,7 +183,7 @@ Select any image to view it at full size. Captured directly from the running NEX
 - ⚡ **Zero-Latency Search:** Typo-tolerant instant search in Arabic and English powered by Meilisearch v1.11.
 - 🚀 **Go Concurrency Engine:** Parallel filesystem scanner utilizing Go goroutines to parse 100+ TB drives in seconds.
 - 🎬 **Smart Filename Parser:** Robust Regex engine capable of parsing complex release names (`Attack.on.Titan.S04E05.1080p.mkv` and `ون بيس الحلقة 1086 4k.mp4`).
-- 📺 **HTTP Range Streaming:** Seamless scrubbing and seeking in HTML5 Plyr player without pre-buffering full files.
+- 📺 **HTTP Range Streaming:** Seamless scrubbing and seeking in the HTML5 Video.js player without pre-buffering full files.
 - 🌐 **100% Offline Resilience:** Local disk caching for TMDB/MAL posters, banners, and extracted WebVTT subtitles.
 - 🗃️ **Multi-Threaded Migration Engine:** Local file copy with SHA-256 integrity checksum validation and pause/resume support.
 - 🎨 **Glassmorphism UI:** Modern Royal Purple and Electric Blue dark-mode theme built with React, Tailwind CSS, and Framer Motion micro-animations.
@@ -193,7 +193,7 @@ Select any image to view it at full size. Captured directly from the running NEX
 - ⚡ **بحث لحظي معدوم التأخير:** بحث فوري تسامحي يدعم العربية والإنجليزية بسرعة استجابة تقل عن 10 ميلي ثانية بواسطة Meilisearch.
 - 🚀 **محرك تزامن بلغ Go:** ماسح أقراص متوازي يعتمد على الـ Goroutines لفهرسة أقراص التخزين الضخمة في ثوانٍ معدودة.
 - 🎬 **محلل أسماء ذكي:** محرك Regex متطور يفهم تسميات الملفات المعقدة باللغتين العربية والإنجليزية.
-- 📺 **بث مجزأ عبر HTTP Range:** تقديم ورجع فوري للفيديو في مشغل Plyr دون الحاجة لتحميل الملف كاملاً.
+- 📺 **بث مجزأ عبر HTTP Range:** تقديم ورجع فوري للفيديو في مشغل Video.js دون الحاجة لتحميل الملف كاملاً.
 - 🌐 **عمل كامل بدون إنترنت:** تخزين كاش محلي للبوسترات والبانرات والترجمات على خادم السيرفر.
 - 🗃️ **محرك نقل موثوق:** نقل محلي للملفات بين الأقراص مع التحقق من سلامة البصمة SHA-256 وإمكانية الإيقاف والاستكمال.
 - 🎨 **واجهة زجاجية فاخرة:** تصميم سينمائي عصري باللون البنفسجي والأزرق الكهربائي مع مؤشرات دقيقة وتنقل سلس.
@@ -219,7 +219,7 @@ The modules below represent the core architectural building blocks of NEXORA.
 | Search Engine (`server/internal/search`) | Meilisearch Integration | Syncs PostgreSQL records into Meilisearch indexes and executes fast typo-tolerant client searches. |
 | Migration Engine (`server/internal/migration`) | File Reorganization & Copy | Previews target drive directory structures, resumes interrupted copies, atomically publishes only SHA-256-verified destinations, and can remove a verified source on request. |
 | Database Layer (`server/internal/db`) | Persistence & Migrations | Manages PostgreSQL connection pooling via `pgx/v5` and executes SQL migrations. |
-| React Client (`client/src`) | User & Admin Web Interface | Single Page Application presenting the dashboard, category views, details modal, Plyr video player, and admin disk console. |
+| React Client (`client/src`) | User & Admin Web Interface | Single Page Application presenting the dashboard, category views, details modal, Video.js player (`NexoraPlayer`), and admin disk console. |
 
 ---
 
@@ -243,7 +243,7 @@ flowchart LR
     E --> G[(PostgreSQL Database)]
     F --> H[Local Hard Disk Storage D:\ / E:\]
     H --> F
-    F -->|Video Chunks + WebVTT Subtitles| I[Plyr HTML5 Player]
+    F -->|Video Chunks + WebVTT Subtitles| I[Video.js HTML5 Player]
 ```
 
 ---
@@ -283,7 +283,7 @@ flowchart LR
 | Build Tool | Vite | ^5.3.4 (`client/package.json`) |
 | Styling & Design | Tailwind CSS & PostCSS | ^3.4.6 / ^8.4.39 |
 | Micro-Animations | Framer Motion | ^11.3.8 |
-| Video Player Engine | Plyr.js | ^3.7.8 |
+| Video Player Engine | Video.js | ^8.24.1 |
 
 ### Backend, Database, and Infrastructure
 
@@ -311,7 +311,7 @@ NEXORA adopts a centralized server with thin-client architecture tailored for lo
 ```mermaid
 flowchart TB
     subgraph Client PCs / Mobile Devices
-        UI[React SPA Client - Plyr Player]
+        UI[React SPA Client - Video.js Player]
     end
 
     subgraph Central LAN Server
@@ -403,7 +403,7 @@ The following performance characteristics are enforced in the codebase design.
 | Design Pattern | Glassmorphic cards (`backdrop-blur-md`), Subtle Neon Borders |
 | Icon Library | Lucide React / Custom SVG Component (`client/src/components/Icon.jsx`) |
 | Animations | Framer Motion v11 micro-animations for card hovers and page transitions |
-| Media Player | Plyr.js HTML5 Video Player |
+| Media Player | Video.js HTML5 Video Player (NEXORA shell) |
 
 ---
 
@@ -525,7 +525,7 @@ NEXORA/
 ├── client/
 │   ├── public/
 │   ├── src/
-│   │   ├── components/      # GlassCard, MediaCard, VideoPlayer, Sidebar, TopBar
+│   │   ├── components/      # GlassCard, MediaCard, NexoraPlayer, Sidebar, TopBar
 │   │   ├── context/         # MediaContext & Auth states
 │   │   ├── pages/           # DashboardPage, CategoryPage, MediaDetailsPage, AdminPage
 │   │   ├── App.jsx

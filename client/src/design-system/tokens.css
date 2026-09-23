@@ -23,6 +23,13 @@
   --color-accent-light: rgba(192, 38, 211, 0.15);
   --color-accent-glow: rgba(192, 38, 211, 0.3);
 
+  /* Channel triplets of the two brand colours, for the places that need an
+     arbitrary alpha (`rgba(var(--accent-rgb), .4)`). A hex token cannot be used
+     inside rgba(), so the channels are stored separately. The watch screen
+     overrides these on its own scope; keep each pair in sync. */
+  --accent-rgb: 192, 38, 211;
+  --primary-rgb: 124, 58, 237;
+
   /* === Semantic Colors (ألوان دلالية) === */
   --color-success: #10B981;
   --color-success-hover: #34D399;

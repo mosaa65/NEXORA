@@ -125,7 +125,7 @@ func (s *Server) handleFilePreview(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) serveMediaPath(w http.ResponseWriter, r *http.Request, path string) {
 	if !s.mediaPathAllowed(path) {
-		writeJSON(w, http.StatusForbidden, map[string]any{"error": "media path is outside configured roots"})
+		writeStreamError(w, http.StatusForbidden, "media path is outside configured roots")
 		return
 	}
 
@@ -149,26 +149,74 @@ func (s *Server) serveMediaFile(w http.ResponseWriter, r *http.Request, path str
 		if errors.Is(err, os.ErrNotExist) {
 			status = http.StatusNotFound
 		}
-		writeJSON(w, status, map[string]any{"error": err.Error()})
+		writeStreamError(w, status, "media file is not available: "+err.Error())
 		return
 	}
 	defer file.Close()
 
 	info, err := file.Stat()
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeStreamError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	if info.IsDir() {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "path must point to a file"})
+		writeStreamError(w, http.StatusBadRequest, "path must point to a file")
 		return
 	}
 
+	// Go's mime table has no entry for several containers a media library really
+	// holds (.mkv, .ts, .m2ts, .avi, .wmv, .flv). Without a type the browser guesses,
+	// and a wrong guess on a media element surfaces as a generic decode failure
+	// instead of a playable stream. TypeByExtension stays authoritative for tab
+	// where it is more specific (the MP4 family), and the known container map
+	// fills the gaps it leaves.
 	if contentType := mime.TypeByExtension(filepath.Ext(path)); contentType != "" {
 		w.Header().Set("Content-Type", contentType)
+	} else if container := mediaContentType(filepath.Ext(path)); container != "" {
+		w.Header().Set("Content-Type", container)
 	}
 	w.Header().Set("Accept-Ranges", "bytes")
+	// http.ServeContent already answers HEAD correctly: it writes the headers,
+	// including Content-Length and the range advertisement, and no body.
 	http.ServeContent(w, r, info.Name(), info.ModTime(), file)
+}
+
+// mediaContentType maps the video containers the scanner indexes to the MIME type
+// a browser needs in order to even try decoding the file.
+func mediaContentType(ext string) string {
+	switch strings.ToLower(ext) {
+	case ".mkv":
+		return "video/x-matroska"
+	case ".mp4", ".m4v":
+		return "video/mp4"
+	case ".webm":
+		return "video/webm"
+	case ".mov":
+		return "video/quicktime"
+	case ".avi":
+		return "video/x-msvideo"
+	case ".wmv":
+		return "video/x-ms-wmv"
+	case ".flv":
+		return "video/x-flv"
+	case ".ts":
+		return "video/mp2t"
+	case ".m2ts", ".mts":
+		return "video/mp2t"
+	}
+	return ""
+}
+
+// writeStreamError answers a media request with the media's own content type.
+//
+// A player or a copy bridge that asks a stream endpoint for bytes and receives a
+// JSON body labelled application/json reports it as an unreadable source, which is
+// a worse diagnosis than no bytes at all. The body is still plain text so curl and
+// the bridge can read the reason, and the status carries the meaning.
+func writeStreamError(w http.ResponseWriter, status int, message string) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	http.Error(w, message, status)
 }
 
 func (s *Server) handleFileSubtitles(w http.ResponseWriter, r *http.Request) {

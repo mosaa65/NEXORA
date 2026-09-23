@@ -33,6 +33,7 @@
 |--------|---------|-------|
 | `/api/media` | `GET` | استعلام الأعمال مع دعم الفلترة (category, sort, q, limit, offset) |
 | `/api/media/:id` | `GET` | جلب التفاصيل الشاملة لعمل ما (المواسم والحلقات والملفات) |
+| `/api/media/:id/playback?file=` | `GET` | جلب خطة التشغيل كاملة بقراءة واحدة: رأس العمل، الملفات المحدبة بترتيب الكتالوج، الحلقات، المواسم، المصدر، الإصدارات البديلة، والحلقة التالية/السابقة. يقبل `file` معرّف ملف فيديو أو معرّف حلقة؛ أي قيمة أخرى ترجع لأول ملف |
 | `/api/media/:id/related?limit=18` | `GET` | توصيات وأعمال مشابهة محفوظة محليًا من TMDB؛ تحدد `local_media_id` و`local` بالـ TMDB ID عند توفر العمل في المكتبة |
 | `/api/media` | `POST` | إنشاء عمل جديد يدوياً |
 | `/api/media/:id` | `PUT` | تعديل بيانات عمل |
@@ -193,7 +194,7 @@ RUNNING ──(pause)──► PAUSING ──(لا worker وسط عنصر)──
 | المسار | الطريقة | الوصف |
 |--------|---------|-------|
 | `/api/stream?path=...` | `GET` | بث ملف بمسار يُقدّمه العميل، ويخضع لفحص `mediaPathAllowed` |
-| `/api/stream/file/:fileId` | `GET` | بث مباشر لملف الفيديو مع دعم HTTP Range؛ يُستخرج المسار من الكتالوج (`serveCataloguePath`) ولا يقبل مسارًا من العميل |
+| `/api/stream/file/:fileId` | `GET/HEAD` | بث مباشر لملف الفيديو مع دعم HTTP Range؛ يُستخرج المسار من الكتالوج (`serveCataloguePath`) ولا يقبل مسارًا من العميل. `HEAD` يعطي Headers (الطول والنوع) بلا body. نوع المحتوى يشمل الحاويات غير المعروفة لجدول Go مثل `.mkv` و`.ts` و`.m2ts`. أي فشل يعود `text/plain` مع `Cache-Control: no-store` وليس JSON |
 | `/api/stream/file/:fileId/subtitles` | `GET` | قائمة الترجمات الخارجية المرافقة للملف |
 | `/api/stream/file/:fileId/subtitles/:index` | `GET` | استخراج وتوفير ملف الترجمة WebVTT |
 | `/api/stream/file/:fileId/preview?at=...` | `GET` | صورة معاينة زمنية (JPEG) للـ timeline |

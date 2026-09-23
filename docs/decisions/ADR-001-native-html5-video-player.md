@@ -1,8 +1,12 @@
 # ADR-001: Native HTML5 Video Player with Custom React Controls
 
 ## Status
+Superseded by [ADR-016](ADR-016-videojs-player-shell.md)
 
-Existing / Verified
+> ملاحظة: هذا الـ ADR يوصف المسار التاريخي (HTML5 `<video>` + React controls في
+> `VideoPlayer.jsx`). استُبدل هذا المشغل بـ Video.js داخل شل NEXORA في ADR-012،
+> وأُزيل `VideoPlayer.jsx`. يبقى هذا السجل لأن ADR-002 ومسارات streaming ما زالت
+> تبني عليه.
 
 ## Context
 

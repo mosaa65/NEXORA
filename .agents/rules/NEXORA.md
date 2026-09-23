@@ -37,7 +37,7 @@ NEXORA is a LAN-first media management and streaming system with:
 ```
 components/
 ├── ui/        → Primitive components (Button, Input, Card, Modal)
-├── media/     → Media-specific (MediaCard, HeroSlider, VideoPlayer)
+├── media/     → Media-specific (MediaCard, HeroSlider, NexoraPlayer)
 ├── layout/    → Structural (Sidebar, TopBar)
 └── admin/     → Admin-specific (DiskCard, IndexerPanel)
 ```

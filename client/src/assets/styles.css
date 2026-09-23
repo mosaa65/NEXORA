@@ -1,5 +1,3 @@
-@config "../../tailwind.config.js";
-
 @font-face { font-family: "NEXORA Arabic"; src: url("/fonts/ibm-plex-arabic-400.ttf") format("truetype"); font-weight: 400; font-style: normal; font-display: swap; }
 @font-face { font-family: "NEXORA Arabic"; src: url("/fonts/ibm-plex-arabic-500.ttf") format("truetype"); font-weight: 500; font-style: normal; font-display: swap; }
 @font-face { font-family: "NEXORA Arabic"; src: url("/fonts/ibm-plex-arabic-600.ttf") format("truetype"); font-weight: 600; font-style: normal; font-display: swap; }
@@ -165,9 +163,25 @@ body::after {
 
 .line-clamp-3 {
   display: -webkit-box;
-  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
   overflow: hidden;
+}
+
+/* Visually hidden but still announced by assistive technology. The player labels
+   its spinner with `.sr-only`, which was referenced but never defined — so the
+   text rendered on screen on top of the indicator. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+  padding: 0;
 }
 
 ::-webkit-scrollbar {
@@ -201,102 +215,10 @@ select {
   font-family: inherit;
 }
 
-.nexora-player {
-  --plyr-color-main: #c084fc;
-  --plyr-video-background: #000;
-  --plyr-control-radius: 12px;
-  --plyr-font-family: var(--font-family);
-}
-
-.nexora-player .plyr {
-  min-height: 100%;
-  background: #000;
-}
-
-.nexora-player .plyr--video {
-  border-radius: 1.5rem;
-}
-
-.nexora-player .plyr__control--overlaid {
-  background: linear-gradient(135deg, #c084fc, #9333ea);
-  box-shadow: 0 0 35px rgba(192, 132, 252, 0.5);
-}
-
-.nexora-player .plyr__controls {
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  background: linear-gradient(180deg, rgba(5, 7, 16, 0.1), rgba(10, 9, 20, 0.95));
-}
-
-.nexora-player:focus-visible {
-  outline: 2px solid #e879f9;
-  outline-offset: 3px;
-}
-
-.nexora-player:fullscreen {
-  width: 100vw;
-  height: 100vh;
-  aspect-ratio: auto;
-  border: 0;
-  border-radius: 0;
-  background: #000;
-}
-
-.nexora-player:fullscreen video {
-  width: 100%;
-  height: 100%;
-}
-
-.nexora-player-button {
-  min-width: 2rem;
-  height: 2rem;
-  border-radius: .5rem;
-  padding: 0 .35rem;
-  font-size: .72rem;
-  font-weight: 800;
-  transition: background-color .16s ease, transform .16s ease;
-}
-
-.nexora-player-button:hover,
-.nexora-player-button:focus-visible {
-  background: rgba(255, 255, 255, .16);
-  outline: none;
-}
-
-.nexora-player-button:active { transform: scale(.94); }
-
-.nexora-player-center-controls {
-  background: radial-gradient(circle at center, rgba(0, 0, 0, .26), transparent 38%);
-}
-
-.nexora-player-center-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid rgba(255, 255, 255, .19);
-  color: #fff;
-  background: rgba(13, 10, 25, .62);
-  box-shadow: 0 12px 34px rgba(0, 0, 0, .34);
-  backdrop-filter: blur(12px);
-  transition: transform .18s ease, background-color .18s ease, border-color .18s ease;
-}
-
-.nexora-player-center-button:hover,
-.nexora-player-center-button:focus-visible {
-  border-color: rgba(244, 114, 182, .82);
-  background: rgba(192, 38, 211, .88);
-  outline: none;
-  transform: scale(1.08);
-}
-
-.nexora-player-main-button {
-  width: 4.8rem;
-  height: 4.8rem;
-  border-radius: 999px;
-  padding-left: .16rem;
-  font-size: 2rem;
-  background: linear-gradient(135deg, rgba(217, 70, 239, .9), rgba(109, 40, 217, .9));
-}
-
+/* `.nexora-player-button`, `.nexora-player-center-*` and `.nexora-player-main/
+   seek-button` belonged to the legacy native-video shell, which NexoraPlayer
+   replaced. `.nexora-player-episodes-*` and `.nexora-player-progress` below are
+   still used by NexoraPlayer, so they stay. */
 .nexora-player-episodes-button {
   display: inline-flex;
   align-items: center;
@@ -314,36 +236,11 @@ select {
 }
 
 .nexora-player-episodes-slot { display: flex; justify-content: center; margin: -.1rem 0 .45rem; }
-.nexora-player-episodes-button span { display: grid; min-width: 1.25rem; height: 1.25rem; place-items: center; border-radius: 999px; background: #d946ef; font-size: .65rem; }
-.nexora-player-episodes-button:hover, .nexora-player-episodes-button:focus-visible { border-color: rgba(244,114,182,.9); background: rgba(192,38,211,.82); outline: none; transform: translateY(-2px); }
+.nexora-player-episodes-button span { display: grid; min-width: 1.25rem; height: 1.25rem; place-items: center; border-radius: 999px; background: var(--color-accent-hover); font-size: .65rem; }
+.nexora-player-episodes-button:hover, .nexora-player-episodes-button:focus-visible { border-color: rgba(var(--accent-rgb),.9); background: rgba(var(--accent-rgb),.82); outline: none; transform: translateY(-2px); }
 
-.nexora-player-seek-button {
-  position: relative;
-  width: 3.15rem;
-  height: 3.15rem;
-  border-radius: 999px;
-  color: rgba(255, 255, 255, .92);
-}
-
-.nexora-player-seek-button small {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -48%);
-  padding: 0;
-  color: currentColor;
-  font-size: .6rem;
-  font-weight: 950;
-  letter-spacing: -.03em;
-  line-height: 1;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, .7);
-}
-
-@media (max-width: 640px) {
-  .nexora-player-main-button { width: 3.9rem; height: 3.9rem; font-size: 1.65rem; }
-  .nexora-player-seek-button { width: 2.65rem; height: 2.65rem; }
-  .nexora-player-seek-button small { font-size: .48rem; }
-}
+/* Active state while the queue rail is open. */
+.nexora-player-episodes-button.is-open { border-color: rgba(var(--accent-rgb),.9); background: rgba(var(--accent-rgb),.9); }
 
 .nexora-player-progress {
   height: .85rem;
@@ -356,7 +253,7 @@ select {
 .nexora-player-progress::-webkit-slider-runnable-track {
   height: .42rem;
   border-radius: 999px;
-  background: linear-gradient(90deg, #d946ef 0%, #a855f7 var(--player-progress, 0%), rgba(255, 255, 255, .23) var(--player-progress, 0%), rgba(255, 255, 255, .23) 100%);
+  background: linear-gradient(90deg, var(--color-accent-hover) 0%, var(--color-primary-hover) var(--player-progress, 0%), rgba(255, 255, 255, .23) var(--player-progress, 0%), rgba(255, 255, 255, .23) 100%);
   box-shadow: inset 0 1px 1px rgba(0,0,0,.45);
 }
 
@@ -368,8 +265,8 @@ select {
   -webkit-appearance: none;
   border: 2px solid #fff;
   border-radius: 999px;
-  background: #d946ef;
-  box-shadow: 0 2px 10px rgba(217, 70, 239, .65);
+  background: var(--color-accent-hover);
+  box-shadow: 0 2px 10px rgba(var(--accent-rgb), .65);
   transition: transform .16s ease;
 }
 
@@ -381,37 +278,2452 @@ select {
   background: rgba(255, 255, 255, .23);
 }
 
-.nexora-player-progress::-moz-range-progress { height: .42rem; border-radius: 999px; background: linear-gradient(90deg, #d946ef, #a855f7); }
-.nexora-player-progress::-moz-range-thumb { width: .8rem; height: .8rem; border: 2px solid white; border-radius: 50%; background: #d946ef; }
+.nexora-player-progress::-moz-range-progress { height: .42rem; border-radius: 999px; background: linear-gradient(90deg, var(--color-accent-hover), var(--color-primary-hover)); }
+.nexora-player-progress::-moz-range-thumb { width: .8rem; height: .8rem; border: 2px solid white; border-radius: 50%; background: var(--color-accent-hover); }
 
-.nexora-fullscreen-episodes {
+/* ---------------------------------------------------------------------------
+   Fullscreen episode queue — YouTube-style thumbnail rail.
+   Sits above the control bar (bottom: 4.75rem) so both stay usable.
+   --------------------------------------------------------------------------- */
+.nexora-queue {
   position: absolute;
   inset-inline: 0;
-  bottom: 0;
-  z-index: 30;
-  transform: translateY(100%);
-  transition: transform .28s cubic-bezier(.2,.8,.2,1);
+  bottom: 4.75rem;
+  z-index: 40;
+  border-top: 1px solid rgba(255, 255, 255, .14);
+  background: linear-gradient(180deg, rgba(18, 14, 30, .97), rgba(5, 5, 9, .99));
+  padding: .7rem max(.85rem, env(safe-area-inset-right)) .85rem max(.85rem, env(safe-area-inset-left));
+  box-shadow: 0 -16px 44px rgba(0, 0, 0, .55);
+  backdrop-filter: blur(18px);
+  animation: nexora-queue-in .24s cubic-bezier(.2, .8, .2, 1);
+}
+
+@keyframes nexora-queue-in {
+  from { transform: translateY(12px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.nexora-queue-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: .6rem;
+}
+
+.nexora-queue-title { font-size: .9rem; font-weight: 900; color: #fff; }
+.nexora-queue-count { font-size: .7rem; color: rgba(255, 255, 255, .55); }
+
+.nexora-queue-close {
+  display: grid;
+  width: 1.8rem;
+  height: 1.8rem;
+  place-items: center;
+  border-radius: .55rem;
+  background: rgba(255, 255, 255, .09);
+  color: rgba(255, 255, 255, .78);
+  font-size: 1.25rem;
+  line-height: 1;
+  transition: background-color .16s ease, color .16s ease;
+}
+
+.nexora-queue-close:hover { background: rgba(var(--accent-rgb), .32); color: #fff; }
+
+/* Grid of tidy episode squares, like the platforms' up-next panel. */
+.nexora-queue-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: .7rem;
+  max-height: min(46vh, 26rem);
+  overflow-y: auto;
+  padding: .2rem .2rem .4rem;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(var(--accent-rgb), .5) transparent;
+}
+
+.nexora-queue-grid::-webkit-scrollbar { width: .4rem; }
+.nexora-queue-grid::-webkit-scrollbar-thumb { border-radius: 999px; background: rgba(var(--accent-rgb), .5); }
+
+/* The fullscreen queue reuses EpisodeCard; only the palette is darkened to sit
+   on the overlay, and the grid is capped so the video stays visible. */
+.nexora-queue-grid .nexora-episode-card {
+  background: rgba(12, 10, 22, .92);
+  border-color: rgba(255, 255, 255, .1);
+}
+
+
+/* ---------------------------------------------------------------------------
+   NexoraPlayer — Video.js shell (migration Phases 2–6)
+   The legacy `.nexora-player` block above belongs to the original player and is
+   removed together with it in Phase 7. Everything below is the new surface.
+   --------------------------------------------------------------------------- */
+
+.nexora-vjs {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: #000;
+}
+
+/* ---- Poster backdrop, before the first frame ----
+   The catalogue's poster is portrait (2:3) while the player frame is 16:9, so
+   the image is overscanned and blurred to fill the frame rather than being
+   letterboxed or stretched. It sits under every control and is removed from the
+   tree as soon as `playing` reports the first visible frame (see NexoraPlayer),
+   so it can never cover the video. */
+.nexora-poster-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  background: #000;
+}
+
+.nexora-poster-backdrop img {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100%;
+  height: 100%;
+  transform: translate(-50%, -50%) scale(1.18);
+  object-fit: cover;
+  /* Two filters, two jobs: the blur hides the upscaling of a portrait poster
+     stretched across a wide frame, and the slight brightness lift keeps the
+     artwork readable under the controls and the scrim below. */
+  filter: blur(22px) brightness(.72) saturate(1.15);
+}
+
+/* A scrim on top of the art so the centred play button keeps its contrast no
+   matter how bright the poster is. */
+.nexora-poster-backdrop::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, rgba(6, 10, 20, .25), rgba(6, 10, 20, .78));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .nexora-poster-backdrop {
+    animation: nexora-backdrop-in .45s ease both;
+  }
+}
+
+@keyframes nexora-backdrop-in {
+  from { opacity: 0; transform: scale(1.06); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* Captions render through Video.js' text-track layer. Lift it above the NEXORA
+   control bar so a two-line cue is never hidden behind the controls. */
+.nexora-vjs .vjs-text-track-display {
+  bottom: 5.5rem;
+}
+
+.nexora-vjs .vjs-text-track-cue > div {
+  background: rgba(0, 0, 0, .72);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .9);
+}
+
+.nexora-vjs:focus-visible {
+  outline: 2px solid var(--color-accent-hover);
+  outline-offset: 3px;
+}
+
+/* Video.js fills the shell; `fluid` alone would fight the fixed aspect ratio. */
+.nexora-vjs .video-js {
+  width: 100%;
+  height: 100%;
+  background: #000;
+}
+
+/* NEXORA draws the only control surface. Video.js can still inject its control
+   bar / big-play button even when disabled at creation, so hide them explicitly
+   to guarantee there is never a second bar or a duplicate play button. */
+.nexora-vjs .vjs-control-bar,
+.nexora-vjs .vjs-big-play-button,
+.nexora-vjs .vjs-poster,
+.nexora-vjs .vjs-loading-spinner {
+  display: none !important;
+}
+
+/* Centre overlay is decorative: the buttons re-enable pointer events.
+   Opacity is driven by the Tailwind classes on the element (opacity-100 /
+   opacity-0), so no opacity is set here — a rule here would be emitted after
+   the utilities and would freeze the overlay at whatever it set. */
+.nexora-center {
+  display: flex;
+}
+
+.nexora-center-button {
+  display: flex;
+  position: relative;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  background: rgba(10, 9, 20, 0.55);
+  color: #fff;
+  backdrop-filter: blur(8px);
+  transition: transform .15s ease, background-color .15s ease, border-color .15s ease;
+}
+
+/* ±10s jump: a compact icon-only circle with the numeral sitting INSIDE it,
+   which is the YouTube convention and reads clearly at every size.
+
+   The SVG is a FIXED 1.5rem box rather than stretched to the button's full
+   width/height: the glyph is drawn for a 24-unit viewBox with a 2px stroke, so
+   stretching it makes the stroke bloat and the ring look deformed. The numeral
+   is absolutely centred on top of the glyph.
+
+   Neither glyph is mirrored for RTL — their meaning is temporal (wind back /
+   wind forward), not spatial. */
+.nexora-center-seek {
+  width: 3.15rem;
+  height: 3.15rem;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.nexora-center-seek svg {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 1.65rem;
+  height: 1.65rem;
+  transform: translate(-50%, -50%);
+  /* The ring is a hairline so the numeral inside it stays unmistakable. At 2px the
+     stroke and the digits merged into one smudge on a phone. */
+  stroke-width: 1.4;
+  opacity: .6;
+}
+
+/* The numeral sits dead centre, ON TOP of the ring and in the full-strength text
+   colour, so the two can never collide at any size. */
+.nexora-center-seek small {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 2;
+  margin: 0;
+  transform: translate(-50%, -50%);
+  color: inherit;
+  font-size: .62rem;
+  font-weight: 900;
+  letter-spacing: -.03em;
+  line-height: 1;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, .9);
+}
+
+/* Play/pause is a bare glyph — no ring, no plate — tinted with the system's
+   fuchsia accent so it reads as the primary action, per the design system. */
+.nexora-center-main {
+  width: 4.2rem;
+  height: 4.2rem;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  color: var(--color-accent-hover);
+  filter: drop-shadow(0 4px 18px rgba(var(--accent-rgb), .55));
+}
+
+.nexora-center-main svg {
+  width: 3.4rem;
+  height: 3.4rem;
+  margin-inline-start: 3px;
+}
+
+.nexora-center-button:hover {
+  transform: scale(1.06);
+  border-color: rgba(var(--accent-rgb), .7);
+  background: rgba(var(--accent-rgb), .4);
+}
+
+.nexora-center-main:hover {
+  background: transparent;
+  border-color: transparent;
+  transform: scale(1.1);
+  color: var(--color-accent-hover);
+}
+
+/* The single NEXORA control bar. Video.js' own bar is disabled, so this is the
+   only control surface and no button or timeline is duplicated. */
+.nexora-bar {
+  background: linear-gradient(to top, rgba(4, 3, 10, .96) 0%, rgba(4, 3, 10, .72) 46%, rgba(4, 3, 10, 0) 100%);
+  color: #fff;
+}
+
+.nexora-time {
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, .1);
+  background: rgba(255, 255, 255, .06);
+  padding: .18rem .6rem;
+  font-size: .72rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, .92);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  backdrop-filter: blur(8px);
+}
+
+/* Round glass buttons with a soft glow on hover/active. */
+.nexora-bar-button {
+  position: relative;
+  display: grid;
+  min-width: 2.2rem;
+  height: 2.2rem;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .05);
+  color: rgba(255, 255, 255, .9);
+  font-size: .64rem;
+  font-weight: 800;
+  transition: background-color .18s ease, color .18s ease, border-color .18s ease, transform .18s ease, box-shadow .18s ease;
+}
+
+.nexora-bar-button:hover,
+.nexora-bar-button:focus-visible {
+  border-color: rgba(var(--accent-rgb), .55);
+  background: linear-gradient(135deg, rgba(var(--accent-rgb), .55), rgba(var(--primary-rgb), .55));
+  color: #fff;
+  outline: none;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(var(--primary-rgb), .45);
+}
+
+.nexora-bar-button:active { transform: translateY(0) scale(.94); }
+
+/* Active (visible) caption track highlights the CC toggle, as in the legacy skin. */
+.nexora-bar-button--active {
+  border-color: rgba(240, 171, 252, .7);
+  background: rgba(var(--accent-rgb), .32);
+  color: var(--color-accent-hover);
+}
+
+.nexora-vol {
+  width: 4.5rem;
+  height: 1.6rem;
+  accent-color: var(--color-accent-hover);
+  cursor: pointer;
+}
+
+/* Idle state hides the NEXORA layers. */
+.nexora-vjs--idle {
+  cursor: none;
+}
+
+.nexora-vjs:fullscreen {
+  aspect-ratio: auto;
+  width: 100vw;
+  height: 100vh;
+}
+
+.nexora-timeline-preview {
   pointer-events: none;
 }
 
-.nexora-fullscreen-episodes.is-open { transform: translateY(0); pointer-events: auto; }
+/* Tighter side volume and controls on small screens so the bar never wraps. */
+@media (max-width: 640px) {
+  .nexora-vol { width: 3rem; }
+  .nexora-time { font-size: .62rem; }
+  .nexora-center-main { width: 3.5rem; height: 3.5rem; }
+  .nexora-center-main svg { width: 2.8rem; height: 2.8rem; }
+  .nexora-center-seek { width: 2.75rem; height: 2.75rem; }
+  .nexora-center-seek svg { width: 1.55rem; height: 1.55rem; }
+  .nexora-center-seek small { font-size: .58rem; }
+}
 
-.nexora-fullscreen-episodes-panel {
-  max-height: min(52vh, 29rem);
+/* ===========================================================================
+   Shared player-surface primitives
+   Used by the watch screen and the player: chips, episode badges, tabs, the
+   about panel, genres, plot and the empty stage. Only rules attached to real
+   elements live here; leftovers from the removed floating modal were deleted.
+   =========================================================================== */
+.nexora-empty-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 16 / 9;
+  padding: 2rem;
+  text-align: center;
+  color: rgba(255, 255, 255, .6);
+}
+
+.nexora-genres { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: .5rem; }
+
+.nexora-genre {
+  border: 1px solid rgba(var(--accent-rgb), .3);
+  border-radius: 999px;
+  background: rgba(var(--accent-rgb), .12);
+  padding: .15rem .6rem;
+  color: var(--color-accent-hover);
+  font-size: .68rem;
+  font-weight: 800;
+}
+
+.nexora-plot {
+  display: -webkit-box;
   overflow: hidden;
-  border-top: 1px solid rgba(255,255,255,.16);
-  border-radius: 1.25rem 1.25rem 0 0;
-  background: linear-gradient(180deg, rgba(24,18,40,.98), rgba(5,5,9,.99));
-  padding: 1rem max(1rem, env(safe-area-inset-right)) calc(1rem + env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
-  box-shadow: 0 -18px 48px rgba(0,0,0,.56);
+  margin: 0;
+  color: rgba(255, 255, 255, .62);
+  font-size: .78rem;
+  line-height: 1.7;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.nexora-plot.is-open { -webkit-line-clamp: unset; line-clamp: unset; }
+
+/* ---- Side-column header: a static label, not a tab set ----
+   The "معلومات" tab was removed: the work's facts now live above the episodes in
+   the page header, and a two-item tab strip whose second item duplicated that was
+   only costing a row of height. ---- */
+.nexora-tabs {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: .3rem;
+  border-bottom: 1px solid rgba(255, 255, 255, .07);
+  padding: .5rem .55rem;
+}
+
+.nexora-tabs-label {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  color: #fff;
+  font-size: .76rem;
+  font-weight: 800;
+}
+
+.nexora-tabs-label > span {
+  display: grid;
+  min-width: 1.15rem;
+  height: 1.15rem;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(var(--accent-rgb), .85);
+  padding: 0 .3rem;
+  font-size: .62rem;
+  color: #fff;
+}
+
+/* ---- Resize handle (bottom-left in RTL) ---- */
+.nexora-resize {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  z-index: 5;
+  width: 1.5rem;
+  height: 1.5rem;
+  cursor: nesw-resize;
+  touch-action: none;
+}
+
+.nexora-resize::after {
+  content: "";
+  position: absolute;
+  bottom: .35rem;
+  left: .35rem;
+  width: .8rem;
+  height: .8rem;
+  border-left: 2px solid rgba(255, 255, 255, .35);
+  border-bottom: 2px solid rgba(255, 255, 255, .35);
+  border-radius: 0 0 0 .3rem;
+}
+
+/* ---- Mini window ---- */
+.nexora-mini {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 60;
+  width: min(26rem, 90vw);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 1rem;
+  background: rgba(12, 10, 20, .96);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, .68), 0 0 30px rgba(var(--primary-rgb), .2);
   backdrop-filter: blur(18px);
 }
 
-.nexora-fullscreen-episodes-list { display: grid; max-height: min(38vh, 20rem); gap: .48rem; overflow-y: auto; padding-inline-start: .15rem; }
-.nexora-fullscreen-episodes-list button { display: grid; grid-template-columns: 1.8rem minmax(0,1fr) auto; align-items: center; gap: .65rem; width: 100%; border: 1px solid rgba(255,255,255,.1); border-radius: .75rem; background: rgba(255,255,255,.055); padding: .7rem .8rem; color: #fff; text-align: right; transition: background-color .16s ease, border-color .16s ease; }
-.nexora-fullscreen-episodes-list button:hover { border-color: rgba(232,121,249,.6); background: rgba(217,70,239,.16); }
-.nexora-fullscreen-episodes-list b { overflow: hidden; font-size: .8rem; text-overflow: ellipsis; white-space: nowrap; }
-.nexora-fullscreen-episodes-list small { color: rgba(255,255,255,.5); font-size: .66rem; font-weight: 700; }
-.nexora-fullscreen-episodes-close { display: grid; width: 1.85rem; height: 1.85rem; place-items: center; border-radius: .55rem; background: rgba(255,255,255,.09); color: rgba(255,255,255,.75); font-size: 1.3rem; line-height: 1; transition: background-color .16s ease, color .16s ease; }
-.nexora-fullscreen-episodes-close:hover { background: rgba(217,70,239,.32); color: #fff; }
+.nexora-mini-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+  padding: .4rem .5rem;
+  cursor: grab;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, 0));
+  user-select: none;
+}
 
+.nexora-mini-head:active { cursor: grabbing; }
+.nexora-mini-title { flex: 1 1 auto; overflow: hidden; color: #fff; font-size: .74rem; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+.nexora-mini-stage { background: #000; }
+
+/* ===========================================================================
+   Episode card (shared by the modal list)
+   =========================================================================== */
+
+.nexora-ep-card {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: .7rem;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, .06);
+  border-radius: .8rem;
+  background: rgba(255, 255, 255, .025);
+  padding: .4rem;
+  color: #fff;
+  text-align: right;
+  transition: background-color .16s ease, border-color .16s ease, transform .16s ease;
+}
+
+.nexora-ep-card:hover,
+.nexora-ep-card:focus-visible {
+  border-color: rgba(var(--accent-rgb), .5);
+  background: rgba(var(--accent-rgb), .13);
+  outline: none;
+  transform: translateX(-2px);
+}
+
+.nexora-ep-card.is-active {
+  border-color: rgba(var(--accent-rgb), .7);
+  background: linear-gradient(90deg, rgba(var(--primary-rgb), .32), rgba(var(--accent-rgb), .18));
+  box-shadow: 0 8px 24px rgba(var(--primary-rgb), .25), inset 3px 0 0 var(--color-accent-hover);
+}
+
+.nexora-ep-thumb {
+  position: relative;
+  flex: 0 0 auto;
+  width: 7.5rem;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: .55rem;
+  background: #000;
+}
+
+.nexora-ep-thumb img { width: 100%; height: 100%; object-fit: cover; }
+
+.nexora-ep-num {
+  position: absolute;
+  top: .2rem;
+  right: .25rem;
+  display: grid;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  place-items: center;
+  border-radius: .3rem;
+  background: rgba(var(--accent-rgb), .92);
+  padding: 0 .3rem;
+  font-size: .64rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+.nexora-ep-duration {
+  position: absolute;
+  bottom: .2rem;
+  left: .25rem;
+  border-radius: .28rem;
+  background: rgba(0, 0, 0, .8);
+  padding: .05rem .3rem;
+  font-size: .62rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.nexora-ep-progress {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 3px;
+  background: rgba(255, 255, 255, .25);
+}
+
+.nexora-ep-progress i { display: block; height: 100%; background: var(--color-accent-hover); }
+
+.nexora-ep-meta { display: flex; min-width: 0; flex-direction: column; gap: .15rem; }
+
+.nexora-ep-title {
+  overflow: hidden;
+  font-size: .78rem;
+  font-weight: 800;
+  color: #fff;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nexora-ep-sub { color: rgba(255, 255, 255, .48); font-size: .66rem; font-weight: 600; }
+.nexora-ep-now { color: var(--color-accent-hover); font-size: .64rem; font-weight: 800; }
+
+/* ===========================================================================
+   Responsive — phone / tablet get a full-screen sheet, no drag.
+   =========================================================================== */
+
+@media (max-width: 1100px) {
+  .nexora-window.is-docked { width: 100%; height: 100%; border-radius: 0; }
+  .nexora-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .nexora-stage-wrap { padding: 0; }
+}
+
+@media (max-width: 768px) {
+  .nexora-cinema { background: #050409; }
+  .nexora-ambient { opacity: .22; filter: blur(50px) saturate(1.2); }
+  .nexora-window { border-radius: 0; border: 0; height: 100%; }
+  .nexora-head { padding: .6rem .75rem; }
+  .nexora-head-title { font-size: .9rem; }
+  .nexora-body { padding: .6rem; gap: .6rem; }
+  .nexora-side { min-height: 0; }
+  .nexora-ep-thumb { width: 6rem; }
+  .nexora-tabs-label { font-size: .72rem; }
+}
+
+@media (max-width: 420px) {
+  .nexora-ep-thumb { width: 4.8rem; }
+  .nexora-ep-title { font-size: .72rem; }
+  .nexora-head-meta { font-size: .66rem; }
+}
+
+
+/* ===========================================================================
+   Playback palette (watch screen + floating dock)
+
+   The playback surfaces carry their own blue + gold identity while the rest of
+   NEXORA keeps the purple/fuchsia system. Overriding the tokens on this scope
+   (not on :root) is what confines the change: every `var(--color-accent)` and
+   `rgba(var(--accent-rgb), …)` inside resolves to these values, and no rule
+   outside these two selectors is affected.
+
+   Declared here rather than in tokens.css because it is a screen theme, not a
+   system token — a second palette in the global layer is how a design system
+   rots. The dock is included so a minimised video keeps the same identity it
+   had on the watch screen.
+   =========================================================================== */
+.nexora-watch,
+.nexora-dock {
+  --color-primary: #2563EB;
+  --color-primary-hover: #3B82F6;
+  --color-primary-light: rgba(37, 99, 235, 0.15);
+  --color-primary-glow: rgba(37, 99, 235, 0.35);
+  --primary-rgb: 37, 99, 235;
+
+  --color-accent: #F59E0B;
+  --color-accent-hover: #FBBF24;
+  --color-accent-light: rgba(245, 158, 11, 0.15);
+  --color-accent-glow: rgba(245, 158, 11, 0.35);
+  --accent-rgb: 245, 158, 11;
+
+  --color-secondary: #0891B2;
+  --color-secondary-hover: #06B6D4;
+  --color-secondary-light: rgba(8, 145, 178, 0.15);
+
+  --color-info: #22D3EE;
+  --color-info-hover: #67E8F9;
+  --color-info-light: rgba(34, 211, 238, 0.15);
+
+  --color-warning: #F59E0B;
+  --color-warning-hover: #FBBF24;
+  --color-warning-light: rgba(245, 158, 11, 0.15);
+}
+
+/* ===========================================================================
+   WatchPage — playback screen inside the customer shell
+   Episodes beside the player on desktop, beneath it on a phone.
+   =========================================================================== */
+.nexora-watch {
+  position: relative;
+  width: 100%;
+  max-width: 108rem;
+  margin: 0 auto;
+}
+
+/* ---- Header ---- */
+.nexora-watch-head {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.nexora-watch-titles { min-width: 0; }
+
+.nexora-watch-title {
+  overflow: hidden;
+  font-size: clamp(1.05rem, 2vw, 1.5rem);
+  font-weight: 900;
+  color: var(--text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nexora-watch-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .55rem;
+  margin-top: .25rem;
+  color: var(--text-muted);
+  font-size: .76rem;
+  font-weight: 700;
+}
+
+/* ---- Grid: episodes column first (right in RTL), player second (left) ---- */
+.nexora-watch-grid {
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: minmax(16rem, 19rem) minmax(0, 1fr);
+  align-items: start;
+}
+
+.nexora-watch-main { display: flex; min-width: 0; flex-direction: column; gap: 1rem; }
+
+.nexora-watch-stage {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--border-default);
+  border-radius: 1.25rem;
+  background: #000;
+  box-shadow: var(--shadow-panel, 0 20px 60px rgba(0, 0, 0, .4)), 0 0 50px rgba(var(--primary-rgb), .1);
+}
+
+/* Fullscreen: the stage owns the whole screen; the player fills it. */
+.nexora-watch-stage.is-fullscreen {
+  border: 0;
+  border-radius: 0;
+  width: 100vw;
+  height: 100vh;
+}
+
+.nexora-watch-stage.is-fullscreen .nexora-vjs { aspect-ratio: auto; height: 100vh; }
+
+/* ---- Episode column ---- */
+.nexora-watch-side {
+  display: flex;
+  position: sticky;
+  top: 1rem;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-default);
+  border-radius: 1.15rem;
+  background: var(--bg-card);
+  box-shadow: var(--shadow-sm, 0 8px 24px rgba(0, 0, 0, .25));
+}
+
+.nexora-watch-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: min(82vh, 52rem);
+  gap: .75rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: .7rem;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(var(--accent-rgb), .5) transparent;
+}
+
+.nexora-watch-list::-webkit-scrollbar { width: .45rem; }
+.nexora-watch-list::-webkit-scrollbar-thumb { border-radius: 999px; background: rgba(var(--accent-rgb), .45); }
+.nexora-watch-list::-webkit-scrollbar-track { background: transparent; }
+
+/* Compact horizontal card: small thumbnail on the leading edge, a title/meta
+   column and two mini actions. `flex: 0 0 auto` keeps the card from being
+   squashed by the scrolling flex column. */
+.nexora-watch-card {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: .7rem;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, .08));
+  border-radius: .9rem;
+  background: var(--bg-elevated);
+  padding: .45rem;
+  cursor: pointer;
+  transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+
+.nexora-watch-card:hover {
+  border-color: rgba(var(--accent-rgb), .45);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .28);
+}
+
+.nexora-watch-card.is-active {
+  border-color: rgba(var(--accent-rgb), .7);
+  background: linear-gradient(180deg, rgba(var(--primary-rgb), .24), rgba(var(--accent-rgb), .1));
+  box-shadow: 0 12px 34px rgba(var(--primary-rgb), .28);
+}
+
+/* Small 16:9 thumbnail — tidy, not a big square. */
+.nexora-watch-thumb {
+  position: relative;
+  display: block;
+  flex: 0 0 auto;
+  width: 6.5rem;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border: 0;
+  border-radius: .55rem;
+  background: #000;
+  padding: 0;
+}
+
+.nexora-watch-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform .3s ease, opacity .2s ease;
+}
+
+.nexora-watch-card:hover .nexora-watch-thumb img { transform: scale(1.05); }
+
+/* Play badge centred on the thumbnail. */
+.nexora-watch-thumb::after {
+  content: "▶";
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-size: 1.1rem;
+  opacity: 0;
+  background: rgba(0, 0, 0, .32);
+  transition: opacity .2s ease;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, .7);
+}
+
+.nexora-watch-card:hover .nexora-watch-thumb::after { opacity: 1; }
+
+.nexora-watch-card-body {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: .25rem;
+  padding: 0 .15rem;
+}
+
+.nexora-watch-card-title {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: .84rem;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nexora-watch-card-sub { color: var(--text-muted); font-size: .68rem; font-weight: 600; }
+
+.nexora-watch-card-actions { display: flex; gap: .35rem; margin-top: .35rem; }
+
+/* Compact action buttons, side by side. */
+.nexora-act {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .3rem;
+  border-radius: .55rem;
+  padding: .34rem .55rem;
+  font-size: .7rem;
+  font-weight: 800;
+  transition: background-color .16s ease, border-color .16s ease, color .16s ease, filter .16s ease, transform .16s ease;
+}
+
+.nexora-act svg { width: .8rem; height: .8rem; }
+
+.nexora-act--ghost {
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+}
+
+.nexora-act--ghost:hover { border-color: rgba(var(--accent-rgb), .5); color: var(--color-accent-hover); }
+
+.nexora-act--play {
+  border: 1px solid rgba(var(--accent-rgb), .5);
+  background: linear-gradient(135deg, var(--color-accent), var(--color-primary));
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(var(--primary-rgb), .3);
+  flex: 1 1 auto;
+}
+
+.nexora-act--play:hover { filter: brightness(1.12); transform: translateY(-1px); }
+
+/* ---- Under-video summary ---- */
+.nexora-watch-summary {
+  border: 1px solid var(--border-default);
+  border-radius: 1.15rem;
+  background: var(--bg-card);
+  padding: 1rem 1.15rem;
+}
+
+.nexora-watch-summary-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: .6rem;
+}
+
+.nexora-watch-now {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  color: var(--text-primary);
+  font-size: .95rem;
+  font-weight: 900;
+}
+
+.nexora-watch-now-dot {
+  width: .5rem;
+  height: .5rem;
+  border-radius: 999px;
+  background: var(--color-accent-hover);
+  box-shadow: 0 0 10px rgba(var(--accent-rgb), .9);
+}
+
+.nexora-watch-len { color: var(--text-muted); font-size: .74rem; font-weight: 700; }
+
+.nexora-watch-plot {
+  margin: 0 0 .6rem;
+  color: var(--text-secondary, rgba(255, 255, 255, .62));
+  font-size: .84rem;
+  line-height: 1.9;
+}
+
+/* ---- Fullscreen chrome (minimise / exit), top-right of the video ---- */
+.nexora-fs-chrome {
+  position: absolute;
+  top: .85rem;
+  right: .85rem;
+  z-index: 50;
+  display: flex;
+  gap: .4rem;
+  opacity: .9;
+  transition: opacity .16s ease;
+}
+
+.nexora-fs-chrome:hover { opacity: 1; }
+
+.nexora-fs-btn {
+  display: grid;
+  width: 2.2rem;
+  height: 2.2rem;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, .18);
+  border-radius: .6rem;
+  background: rgba(10, 8, 18, .6);
+  color: #fff;
+  backdrop-filter: blur(10px);
+  transition: background-color .16s ease, border-color .16s ease;
+}
+
+.nexora-fs-btn svg { width: 1.1rem; height: 1.1rem; }
+.nexora-fs-btn:hover { background: rgba(var(--accent-rgb), .4); border-color: rgba(var(--accent-rgb), .6); }
+.nexora-fs-btn--exit:hover { background: rgba(239, 68, 68, .4); border-color: rgba(248, 113, 113, .6); }
+
+/* ---- Global floating player (survives navigation) ---- */
+.nexora-dock {
+  position: fixed;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  z-index: 60;
+  width: min(33rem, 92vw);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: 1.1rem;
+  background: #070610;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, .72), 0 0 0 1px rgba(var(--primary-rgb), .18), 0 0 44px rgba(var(--primary-rgb), .22);
+}
+
+.nexora-dock-head {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+  padding: .5rem .6rem;
+  cursor: grab;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .07), rgba(255, 255, 255, 0));
+  border-bottom: 1px solid rgba(255, 255, 255, .06);
+  user-select: none;
+}
+
+.nexora-dock-head:active { cursor: grabbing; }
+
+.nexora-dock-title {
+  flex: 1 1 auto;
+  overflow: hidden;
+  color: #fff;
+  font-size: .78rem;
+  font-weight: 800;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nexora-dock-btn {
+  display: grid;
+  flex: 0 0 auto;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .05);
+  color: rgba(255, 255, 255, .9);
+  transition: background-color .16s ease, color .16s ease, border-color .16s ease, transform .16s ease;
+}
+
+.nexora-dock-btn:hover {
+  border-color: rgba(var(--accent-rgb), .6);
+  background: linear-gradient(135deg, rgba(var(--accent-rgb), .55), rgba(var(--primary-rgb), .55));
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.nexora-dock-btn:active { transform: scale(.93); }
+.nexora-dock-btn--exit:hover { border-color: rgba(248, 113, 113, .6); background: rgba(239, 68, 68, .45); }
+
+.nexora-dock-stage { background: #000; }
+
+.nexora-dock-stage .nexora-vjs { border-radius: 0; }
+
+/* Compact the control surface inside the dock so nothing feels cramped. */
+.nexora-dock-stage .nexora-bar { padding: .35rem .7rem .5rem; }
+.nexora-dock-stage .nexora-bar-button { min-width: 2rem; height: 2rem; }
+.nexora-dock-stage .nexora-center-main { width: 3rem; height: 3rem; }
+.nexora-dock-stage .nexora-center-main svg { width: 2.4rem; height: 2.4rem; }
+.nexora-dock-stage .nexora-center-seek { width: 2.4rem; height: 2.4rem; }
+.nexora-dock-stage .nexora-center-seek svg { width: 1.15rem; height: 1.15rem; }
+.nexora-dock-stage .nexora-center-seek small { bottom: .28rem; font-size: .46rem; }
+.nexora-dock-stage .nexora-time { font-size: .66rem; }
+
+/* Note shown on the watch screen while the dock owns playback. */
+.nexora-watch-docked-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  margin-bottom: 1rem;
+  border: 1px solid rgba(var(--accent-rgb), .35);
+  border-radius: .9rem;
+  background: rgba(var(--accent-rgb), .1);
+  padding: .7rem 1rem;
+  color: var(--text-primary);
+  font-size: .8rem;
+  font-weight: 700;
+}
+
+.nexora-watch-docked-note button {
+  border-radius: .6rem;
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  padding: .4rem .85rem;
+  color: var(--text-primary);
+  font-size: .74rem;
+  font-weight: 800;
+}
+
+.nexora-watch-docked-note button:hover { border-color: rgba(var(--accent-rgb), .5); color: var(--color-accent-hover); }
+
+/* ===========================================================================
+   Watch responsive
+   =========================================================================== */
+
+/* The episode rail sits BESIDE the player on tablet and desktop — the desktop
+   reading order (episodes right, player left). On a phone that side column can
+   only be fed by stealing width from the video, so below 768px the layout becomes
+   a single column and the rail turns into a horizontal strip UNDER the video, the
+   way every streaming app does it. The video then owns the full screen width. */
+
+@media (max-width: 1100px) {
+  .nexora-watch-grid { grid-template-columns: minmax(13rem, 15rem) minmax(0, 1fr); }
+  .nexora-watch-side { position: sticky; max-height: min(82vh, 44rem); }
+  .nexora-watch-list { max-height: min(70vh, 38rem); }
+}
+
+@media (max-width: 900px) {
+  .nexora-watch { padding-inline: .5rem; }
+  .nexora-watch-grid { gap: .8rem; grid-template-columns: minmax(10.5rem, 12rem) minmax(0, 1fr); }
+}
+
+@media (max-width: 768px) {
+  /* Single column: player first, episodes beneath it. */
+  .nexora-watch { padding-inline: .4rem; }
+  .nexora-watch-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: .7rem;
+  }
+
+  /* The video leads the page, and the side column is no longer a sidebar. */
+  .nexora-watch-main { order: 1; }
+  .nexora-watch-side {
+    order: 2;
+    position: static;
+    max-height: none;
+    border-radius: .9rem;
+  }
+
+  /* Horizontal rail of artwork tiles, scrolling sideways like a shelf. */
+  .nexora-watch-list {
+    grid-auto-flow: column;
+    grid-auto-columns: 10.5rem;
+    grid-template-columns: none;
+    max-height: none;
+    gap: .55rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    padding: .5rem .55rem .6rem;
+  }
+
+  .nexora-watch-list > * { scroll-snap-align: start; }
+
+  /* A horizontal shelf must not show an empty full-height gutter. */
+  .nexora-watch-list::-webkit-scrollbar { height: .35rem; }
+
+  /* The episodes tab strip and the season chips read better flush to the edges. */
+  .nexora-tabs { padding-inline: .55rem; }
+  .nexora-season-bar { padding: .55rem; }
+}
+
+@media (max-width: 560px) {
+  .nexora-watch-list { grid-auto-columns: 9.5rem; gap: .5rem; }
+  .nexora-tabs { font-size: .72rem; }
+}
+
+@media (max-width: 640px) {
+  .nexora-watch-summary { padding: .8rem .9rem; }
+  .nexora-act { font-size: .72rem; padding: .5rem .4rem; }
+  .nexora-fs-chrome { top: .6rem; right: .6rem; }
+}
+
+/* ===========================================================================
+   Watch Experience (W1–W3) — type-aware header, episode squares, related rail
+   =========================================================================== */
+
+/* ---- Header additions: back button, English title, kind chip, resume chip ---- */
+.nexora-watch-back {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: .3rem;
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  background: var(--bg-surface);
+  padding: .45rem .9rem .45rem .7rem;
+  color: var(--text-primary);
+  font-size: .76rem;
+  font-weight: 800;
+  transition: border-color .16s ease, color .16s ease, background-color .16s ease;
+}
+
+.nexora-watch-back:hover { border-color: rgba(var(--accent-rgb), .55); color: var(--color-accent-hover); }
+.nexora-watch-back svg { width: 1rem; height: 1rem; }
+
+.nexora-watch-title-en {
+  margin: .15rem 0 0;
+  color: var(--text-muted);
+  font-size: .8rem;
+  font-weight: 600;
+  text-align: left;
+}
+
+.nexora-chip-kind {
+  border-radius: 999px;
+  border: 1px solid rgba(var(--accent-rgb), .4);
+  background: rgba(var(--accent-rgb), .16);
+  padding: .05rem .55rem;
+  color: var(--color-accent-hover);
+  font-weight: 800;
+}
+
+.nexora-watch-resume-chip {
+  flex: 0 0 auto;
+  align-self: center;
+  border-radius: 999px;
+  border: 1px solid rgba(16, 185, 129, .4);
+  background: rgba(6, 78, 59, .55);
+  padding: .35rem .8rem;
+  color: #6ee7b7;
+  font-size: .74rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+/* ===========================================================================
+   EpisodeCard — full-bleed artwork tile for the watch rail
+
+   The still IS the card: one rounded rectangle of artwork with every fact laid
+   inside it. Nothing sits below the image, so a narrow rail shows large, readable
+   artwork instead of a stamp with a caption strip. Placement mirrors the
+   catalogue card (`UnifiedMediaCard`) so the two belong to one system.
+   =========================================================================== */
+
+.nexora-episode-card {
+  position: relative;
+  display: block;
+  flex: 0 0 auto;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  border: 1px solid var(--border-default);
+  border-radius: .85rem;
+  background: var(--bg-elevated);
+  cursor: pointer;
+  isolation: isolate;
+  transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+
+.nexora-episode-card:hover {
+  border-color: rgba(var(--accent-rgb), .55);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .4);
+  transform: translateY(-2px);
+}
+
+.nexora-episode-card.is-active {
+  border-color: rgba(var(--accent-rgb), .85);
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb), .4), 0 12px 30px rgba(var(--primary-rgb), .35);
+}
+
+.nexora-episode-card.is-unavailable { cursor: default; }
+
+/* ---- The artwork fills the tile ---- */
+.nexora-episode-still {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  transition: transform .55s cubic-bezier(.2, .7, .3, 1), opacity .2s ease;
+}
+
+.nexora-episode-card:hover .nexora-episode-still { transform: scale(1.06); }
+
+.nexora-episode-card.is-unavailable .nexora-episode-still {
+  opacity: .5;
+  filter: grayscale(1);
+}
+
+/* ---- Scrim: a uniform base tint plus heavier bands top and bottom, so badges
+   stay legible over a bright still without dimming the middle of the frame. ---- */
+.nexora-episode-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(6, 4, 14, .78), rgba(6, 4, 14, 0) 38%),
+    linear-gradient(0deg, rgba(6, 4, 14, .84), rgba(6, 4, 14, 0) 44%),
+    rgba(6, 4, 14, .12);
+}
+
+.nexora-episode-card.is-active .nexora-episode-veil {
+  background:
+    linear-gradient(180deg, rgba(76, 5, 92, .8), rgba(6, 4, 14, 0) 42%),
+    linear-gradient(0deg, rgba(76, 5, 92, .85), rgba(6, 4, 14, 0) 46%),
+    rgba(88, 28, 135, .18);
+}
+
+/* ---- Shared badge chrome: one pill language for every overlay ---- */
+.nexora-episode-duration,
+.nexora-episode-meta,
+.nexora-episode-versions,
+.nexora-episode-missing {
+  position: relative;
+  z-index: 3;
+  border-radius: .4rem;
+  background: rgba(6, 10, 20, .72);
+  padding: .14rem .4rem;
+  color: #fff;
+  font-size: .64rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.35;
+  backdrop-filter: blur(10px);
+}
+
+/* ---- Episode number: large, top-right, the tile's anchor ----
+   Rendered as a bare glowing numeral rather than a chip, so it reads as artwork
+   rather than chrome. The digit pair uses tabular figures so 9 and 10 align. */
+.nexora-episode-number {
+  position: absolute;
+  top: .35rem;
+  inset-inline-end: .5rem;
+  z-index: 3;
+  display: block;
+  color: #fff;
+  font-size: 1.65rem;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.03em;
+  line-height: 1;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, .85), 0 0 22px rgba(0, 0, 0, .6);
+  pointer-events: none;
+}
+
+.nexora-episode-number em {
+  display: block;
+  font-style: normal;
+}
+
+/* "جزء" above the numeral for a part, so a shelf of film files is not mistaken
+   for a shelf of episodes. Tiny and tracked-out: a label, not a badge. */
+.nexora-episode-number-kind {
+  display: block;
+  margin-bottom: .1rem;
+  color: var(--color-accent-hover);
+  font-size: .5rem;
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, .9);
+}
+
+/* A thin accent underline ties the numeral to the brand without a plate. */
+.nexora-episode-number::after {
+  content: "";
+  display: block;
+  width: 1.1rem;
+  height: 3px;
+  margin-top: .18rem;
+  margin-inline-start: auto;
+  border-radius: 999px;
+  background: var(--color-accent);
+  box-shadow: 0 0 10px rgba(var(--accent-rgb), .9);
+}
+
+.nexora-episode-card.is-active .nexora-episode-number { color: var(--color-accent-hover); }
+
+/* ---- Fact strip along the bottom, above the artwork ---- */
+.nexora-episode-facts {
+  position: absolute;
+  inset-inline: .5rem;
+  bottom: .5rem;
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .25rem;
+  pointer-events: none;
+}
+
+/* ---- Duration — reads first in the strip ---- */
+.nexora-episode-duration {
+  background: rgba(var(--primary-rgb), .82);
+  color: #fff;
+}
+
+/* ---- Resolution · size ---- */
+.nexora-episode-meta {
+  background: rgba(255, 255, 255, .16);
+  color: rgba(255, 255, 255, .95);
+  font-size: .58rem;
+  letter-spacing: .01em;
+}
+
+/* ---- Versions badge ---- */
+.nexora-episode-versions {
+  border: 1px solid rgba(34, 211, 238, .35);
+  background: rgba(8, 51, 68, .8);
+  color: #a5f3fc;
+  font-size: .58rem;
+}
+
+/* ---- Completed tick — top-left ---- */
+.nexora-episode-done {
+  position: absolute;
+  top: .45rem;
+  inset-inline-start: .45rem;
+  z-index: 3;
+  display: grid;
+  width: 1.35rem;
+  height: 1.35rem;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, .92);
+  color: #fff;
+  box-shadow: 0 3px 10px rgba(6, 78, 59, .55);
+}
+
+/* ---- Unavailable marker — centred, replaces the play affordance ---- */
+.nexora-episode-missing {
+  top: 50%;
+  left: 50%;
+  inset-inline: auto;
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(255, 255, 255, .18);
+  background: rgba(8, 6, 16, .82);
+  color: rgba(255, 255, 255, .82);
+  font-size: .62rem;
+  white-space: nowrap;
+}
+
+/* ---- Resume bar along the bottom edge ---- */
+.nexora-episode-progress {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 4;
+  height: 3px;
+  background: rgba(255, 255, 255, .22);
+}
+
+.nexora-episode-progress i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--color-accent), var(--color-accent-hover));
+  box-shadow: 0 0 8px rgba(var(--accent-rgb), .8);
+}
+
+/* ---- Play affordance: the whole tile is the click target, so this button is
+   a pure overlay that appears on hover (and stays on the active episode) ---- */
+.nexora-episode-play {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: rgba(6, 4, 14, .38);
+  opacity: 0;
+  transition: opacity .2s ease;
+}
+
+.nexora-episode-card:hover .nexora-episode-play,
+.nexora-episode-card.is-active .nexora-episode-play { opacity: 1; }
+
+.nexora-episode-play span {
+  display: grid;
+  width: 2.6rem;
+  height: 2.6rem;
+  place-items: center;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--color-accent), var(--color-primary));
+  color: #fff;
+  box-shadow: 0 8px 22px rgba(var(--primary-rgb), .55);
+}
+
+.nexora-episode-play svg { width: 1rem; height: 1rem; }
+
+/* ===========================================================================
+   RelatedRail — "watch next" beneath the player
+   =========================================================================== */
+
+.nexora-related {
+  margin-top: 1.5rem;
+  border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, .08));
+  padding-top: 1.1rem;
+}
+
+.nexora-related-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: .8rem;
+}
+
+.nexora-related-title { font-size: 1.05rem; font-weight: 900; color: var(--text-primary); }
+
+.nexora-related-count {
+  border-radius: 999px;
+  background: var(--bg-surface);
+  padding: .15rem .6rem;
+  color: var(--text-muted);
+  font-size: .7rem;
+  font-weight: 800;
+}
+
+.nexora-related-rail {
+  display: flex;
+  gap: .9rem;
+  overflow-x: auto;
+  padding-bottom: .5rem;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(var(--accent-rgb), .5) transparent;
+}
+
+.nexora-related-rail::-webkit-scrollbar { height: .45rem; }
+.nexora-related-rail::-webkit-scrollbar-thumb { border-radius: 999px; background: rgba(var(--accent-rgb), .45); }
+
+.nexora-related-item { position: relative; flex: 0 0 auto; width: 11rem; }
+.nexora-related-item.is-muted { opacity: .7; }
+
+.nexora-related-flag {
+  position: absolute;
+  inset-inline: .5rem;
+  bottom: 3.4rem;
+  border-radius: .35rem;
+  background: rgba(0, 0, 0, .78);
+  padding: .15rem .4rem;
+  color: rgba(255, 255, 255, .8);
+  font-size: .6rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.nexora-related-skeleton {
+  flex: 0 0 auto;
+  width: 11rem;
+  aspect-ratio: 4 / 5;
+  border-radius: .6rem;
+  background: linear-gradient(90deg, rgba(255,255,255,.04), rgba(255,255,255,.09), rgba(255,255,255,.04));
+  background-size: 200% 100%;
+  animation: nexora-skel 1.2s ease-in-out infinite;
+}
+
+@keyframes nexora-skel {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+/* ===========================================================================
+   Watch responsive (episode squares + related)
+   =========================================================================== */
+
+@media (max-width: 1024px) {
+  .nexora-related-item, .nexora-related-skeleton { width: 9.5rem; }
+}
+
+@media (max-width: 640px) {
+  .nexora-watch-head { flex-wrap: wrap; gap: .6rem; }
+  .nexora-watch-resume-chip { display: none; }
+  .nexora-related-item, .nexora-related-skeleton { width: 8.5rem; }
+}
+
+/* ===========================================================================
+   Player popovers, toast and next-episode countdown (W4)
+   =========================================================================== */
+
+.nexora-popover-host { position: relative; display: inline-flex; }
+
+.nexora-bar-button--text {
+  min-width: 2.4rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.nexora-popover {
+  position: absolute;
+  bottom: calc(100% + .5rem);
+  inset-inline-end: 0;
+  z-index: 60;
+  min-width: 10rem;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: .7rem;
+  background: rgba(14, 12, 24, .96);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, .6);
+  backdrop-filter: blur(16px);
+  animation: nexora-pop .16s ease;
+}
+
+@keyframes nexora-pop {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.nexora-popover-title {
+  margin: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, .08);
+  padding: .5rem .7rem;
+  color: rgba(255, 255, 255, .55);
+  font-size: .68rem;
+  font-weight: 800;
+}
+
+.nexora-popover-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: .6rem;
+  padding: .55rem .7rem;
+  color: rgba(255, 255, 255, .85);
+  font-size: .76rem;
+  font-weight: 700;
+  text-align: right;
+  transition: background-color .14s ease, color .14s ease;
+}
+
+.nexora-popover-item:hover { background: rgba(var(--accent-rgb), .22); color: #fff; }
+.nexora-popover-item.is-on { color: var(--color-accent-hover); }
+.nexora-popover-item.is-on svg { color: var(--color-accent-hover); }
+
+.nexora-toast {
+  position: absolute;
+  top: 1rem;
+  inset-inline-start: 50%;
+  transform: translateX(50%);
+  z-index: 60;
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 999px;
+  background: rgba(10, 8, 18, .85);
+  padding: .4rem 1rem;
+  color: #fff;
+  font-size: .78rem;
+  font-weight: 800;
+  backdrop-filter: blur(12px);
+  animation: nexora-toast-in .18s ease;
+  pointer-events: none;
+}
+
+@keyframes nexora-toast-in {
+  from { opacity: 0; transform: translateX(50%) translateY(-6px); }
+  to { opacity: 1; transform: translateX(50%) translateY(0); }
+}
+
+.nexora-next {
+  position: absolute;
+  inset-inline-end: 1rem;
+  bottom: 5.5rem;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: .6rem;
+  width: min(18rem, 70vw);
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 1rem;
+  background: rgba(12, 10, 20, .94);
+  padding: .9rem;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .6);
+  backdrop-filter: blur(16px);
+  animation: nexora-pop .2s ease;
+}
+
+.nexora-next-label { margin: 0; color: #fff; font-size: .85rem; font-weight: 900; }
+
+.nexora-next-actions { display: flex; gap: .5rem; }
+
+.nexora-next-play {
+  display: inline-flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  gap: .4rem;
+  border-radius: .6rem;
+  background: linear-gradient(135deg, var(--color-accent), var(--color-primary));
+  padding: .5rem .7rem;
+  color: #fff;
+  font-size: .76rem;
+  font-weight: 800;
+  transition: filter .15s ease;
+}
+
+.nexora-next-play:hover { filter: brightness(1.12); }
+
+.nexora-next-cancel {
+  border-radius: .6rem;
+  border: 1px solid rgba(255, 255, 255, .2);
+  background: rgba(255, 255, 255, .06);
+  padding: .5rem .8rem;
+  color: rgba(255, 255, 255, .85);
+  font-size: .74rem;
+  font-weight: 800;
+}
+
+.nexora-next-cancel:hover { background: rgba(255, 255, 255, .14); color: #fff; }
+
+/* ===========================================================================
+   Timeline preview polish (W5) — instant frame placeholder + cursor line
+   =========================================================================== */
+
+.nexora-preview-frame {
+  display: block;
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000;
+}
+
+.nexora-preview-loading {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, rgba(255,255,255,.04) 30%, rgba(255,255,255,.12) 50%, rgba(255,255,255,.04) 70%);
+  background-size: 200% 100%;
+  animation: nexora-skel 1.1s ease-in-out infinite;
+}
+
+.nexora-timeline-cursor {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  transform: translateX(-1px);
+  background: rgba(255, 255, 255, .85);
+  box-shadow: 0 0 8px rgba(var(--accent-rgb), .8);
+  pointer-events: none;
+}
+
+/* Centred time readout (platforms-style control bar). */
+.nexora-time--center {
+  position: absolute;
+  inset-inline-start: 50%;
+  transform: translateX(-50%);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .nexora-time--center { display: none; }
+}
+
+/* ===========================================================================
+   NEXORA scrub bar — YouTube-style play / load / hover layers
+   =========================================================================== */
+
+.nexora-scrub {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 1.35rem;
+  cursor: pointer;
+}
+
+.nexora-scrub-track {
+  position: absolute;
+  inset-inline: 0;
+  top: 50%;
+  height: .4rem;
+  transform: translateY(-50%);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .28);
+  overflow: hidden;
+  transition: height .14s ease;
+}
+
+/* Loaded (buffered) portion — a translucent band ahead of the play head. */
+.nexora-scrub-loaded {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: var(--loaded, 0%);
+  background: rgba(255, 255, 255, .38);
+  transition: width .2s linear;
+}
+
+/* Played portion — the gradient fill. */
+.nexora-scrub-played {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: var(--played, 0%);
+  background: linear-gradient(90deg, var(--color-primary-hover), var(--color-accent-hover));
+  box-shadow: 0 0 12px rgba(var(--accent-rgb), .6);
+}
+
+.nexora-scrub:hover .nexora-scrub-track { height: .58rem; }
+
+/* The real control is an invisible range input stretched over the bar. */
+.nexora-scrub-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+/* Play-head knob, drawn on the played layer's edge. */
+.nexora-scrub::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: var(--played, 0%);
+  width: .85rem;
+  height: .85rem;
+  transform: translate(-50%, -50%) scale(.85);
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 0 10px rgba(var(--accent-rgb), .8);
+  opacity: 0;
+  transition: opacity .14s ease, transform .14s ease;
+  pointer-events: none;
+}
+
+.nexora-scrub:hover::after { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+
+@media (max-width: 640px) {
+  .nexora-scrub { height: 1.1rem; }
+  .nexora-scrub-track { height: .3rem; }
+}
+
+/* ===========================================================================
+   Player module — refactor surface (controls, settings, overlays, seasons)
+
+   The rules above are the migrated player's original skin. What follows is what
+   the split components need: the settings surface, the corner indicators, the
+   player's error state, the season selector and the watch-screen action row.
+   =========================================================================== */
+
+/* ---- Time row under the scrub bar ---- */
+.nexora-time-row {
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.nexora-time.is-seeking { color: var(--color-accent-hover); }
+
+/* ---- Volume: the slider only takes space while it is being used ---- */
+.nexora-volume-host {
+  display: flex;
+  align-items: center;
+  gap: .25rem;
+}
+
+.nexora-vol {
+  width: 0;
+  opacity: 0;
+  transition: width .18s ease, opacity .18s ease;
+}
+
+.nexora-vol.is-open,
+.nexora-volume-host:focus-within .nexora-vol {
+  width: 4.5rem;
+  opacity: 1;
+}
+
+/* ---- Primary transport button ---- */
+.nexora-bar-button--primary {
+  border-color: rgba(var(--accent-rgb), .5);
+  background: linear-gradient(135deg, rgba(var(--accent-rgb), .75), rgba(var(--primary-rgb), .75));
+  color: #fff;
+}
+
+/* Exit is tinted at rest, not only on hover: sitting next to the neutral
+   "minimise" button in fullscreen, two identical glyph rings read as a pair and
+   the destructive one becomes easy to hit by mistake. */
+.nexora-bar-button--danger {
+  border-color: rgba(248, 113, 113, .35);
+  color: #fca5a5;
+}
+
+.nexora-bar-button--danger:hover {
+  border-color: rgba(248, 113, 113, .7);
+  background: rgba(239, 68, 68, .45);
+  color: #fff;
+}
+
+.nexora-bar-button:disabled {
+  opacity: .35;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* ---- Settings surface ---- */
+.nexora-popover--settings {
+  min-width: 16rem;
+  max-height: min(70vh, 26rem);
+  overflow-y: auto;
+  inset-inline-end: .25rem;
+  bottom: calc(100% + .6rem);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(var(--accent-rgb), .5) transparent;
+}
+
+.nexora-popover--settings::-webkit-scrollbar { width: .35rem; }
+.nexora-popover--settings::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(var(--accent-rgb), .45);
+}
+
+.nexora-popover-head {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, .08);
+  padding: .45rem .6rem;
+}
+
+.nexora-popover-title--inline {
+  margin: 0;
+  border: 0;
+  padding: 0;
+  color: rgba(255, 255, 255, .75);
+  font-size: .74rem;
+  font-weight: 800;
+}
+
+.nexora-popover-back {
+  display: inline-flex;
+  align-items: center;
+  gap: .25rem;
+  border-radius: .45rem;
+  background: rgba(255, 255, 255, .06);
+  padding: .2rem .5rem;
+  color: rgba(255, 255, 255, .8);
+  font-size: .68rem;
+  font-weight: 800;
+}
+
+.nexora-popover-back:hover { background: rgba(var(--accent-rgb), .3); color: #fff; }
+
+.nexora-popover-item-label {
+  display: inline-flex;
+  align-items: center;
+  gap: .45rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nexora-popover-item-value {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  flex: 0 0 auto;
+  color: rgba(255, 255, 255, .5);
+  font-size: .68rem;
+  font-weight: 700;
+}
+
+.nexora-popover-item:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+.nexora-popover-badge {
+  display: inline-grid;
+  min-width: 1.1rem;
+  height: 1.1rem;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(var(--accent-rgb), .8);
+  padding: 0 .3rem;
+  color: #fff;
+  font-size: .6rem;
+}
+
+.nexora-popover-empty,
+.nexora-popover-foot {
+  margin: 0;
+  border-top: 1px solid rgba(255, 255, 255, .07);
+  padding: .55rem .7rem;
+  color: rgba(255, 255, 255, .5);
+  font-size: .7rem;
+  font-weight: 600;
+  line-height: 1.6;
+}
+
+.nexora-popover-foot--warn { color: #fcd34d; }
+
+.nexora-popover-styles {
+  border-top: 1px solid rgba(255, 255, 255, .08);
+  padding-top: .35rem;
+}
+
+.nexora-popover-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .3rem;
+  padding: 0 .7rem .55rem;
+}
+
+.nexora-popover-chip {
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .05);
+  padding: .22rem .6rem;
+  color: rgba(255, 255, 255, .75);
+  font-size: .68rem;
+  font-weight: 800;
+}
+
+.nexora-popover-chip.is-on {
+  border-color: rgba(var(--accent-rgb), .65);
+  background: rgba(var(--accent-rgb), .3);
+  color: #fff;
+}
+
+.nexora-popover-info {
+  display: grid;
+  gap: .35rem;
+  margin: 0;
+  padding: .55rem .7rem;
+}
+
+.nexora-popover-info > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px dashed rgba(255, 255, 255, .07);
+  padding-bottom: .3rem;
+}
+
+.nexora-popover-info dt { color: rgba(255, 255, 255, .5); font-size: .68rem; font-weight: 700; }
+.nexora-popover-info dd {
+  margin: 0;
+  color: #fff;
+  font-size: .72rem;
+  font-weight: 800;
+  text-align: left;
+  direction: ltr;
+}
+
+/* ---- Corner buffering indicator (a short buffer must not black the screen) ---- */
+.nexora-buffering {
+  position: absolute;
+  inset-inline-end: 1rem;
+  top: 1rem;
+  z-index: 35;
+  display: flex;
+  align-items: center;
+  gap: .3rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, .14);
+  background: rgba(8, 7, 16, .7);
+  padding: .35rem .6rem;
+  backdrop-filter: blur(10px);
+}
+
+.nexora-buffering-dot {
+  width: .35rem;
+  height: .35rem;
+  border-radius: 999px;
+  background: var(--color-accent-hover);
+  animation: nexora-buffer-bounce .9s ease-in-out infinite;
+}
+
+.nexora-buffering-dot:nth-child(2) { animation-delay: .15s; }
+.nexora-buffering-dot:nth-child(3) { animation-delay: .3s; }
+
+@keyframes nexora-buffer-bounce {
+  0%, 100% { transform: translateY(0); opacity: .5; }
+  50% { transform: translateY(-.25rem); opacity: 1; }
+}
+
+/* ---- Resume prompt card ---- */
+.nexora-resume-card {
+  border: 1px solid rgba(255, 255, 255, .15);
+  border-radius: 1rem;
+  background: rgba(21, 18, 37, .95);
+  padding: 1.25rem;
+  text-align: center;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .6);
+}
+
+.nexora-resume-primary {
+  border-radius: .75rem;
+  background: linear-gradient(135deg, var(--color-accent), var(--color-primary));
+  padding: .5rem 1rem;
+  color: #fff;
+  font-size: .78rem;
+  font-weight: 900;
+}
+
+.nexora-resume-primary:hover { filter: brightness(1.12); }
+
+.nexora-resume-ghost {
+  border-radius: .75rem;
+  background: rgba(255, 255, 255, .1);
+  padding: .5rem 1rem;
+  color: #fff;
+  font-size: .78rem;
+  font-weight: 800;
+}
+
+.nexora-resume-ghost:hover { background: rgba(255, 255, 255, .18); }
+
+/* ---- Player error state ---- */
+.nexora-player-error {
+  position: absolute;
+  inset: 0;
+  z-index: 45;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+  background: linear-gradient(180deg, rgba(8, 7, 16, .96), rgba(8, 7, 16, .99));
+  padding: 1.5rem;
+  text-align: center;
+}
+
+.nexora-player-error-icon {
+  display: grid;
+  width: 3rem;
+  height: 3rem;
+  place-items: center;
+  border-radius: 999px;
+  border: 1px solid rgba(248, 113, 113, .4);
+  background: rgba(127, 29, 29, .35);
+  color: #fca5a5;
+}
+
+.nexora-player-error-title { color: #fff; font-size: 1rem; font-weight: 900; }
+
+.nexora-player-error-text {
+  max-width: 28rem;
+  margin: 0;
+  color: rgba(255, 255, 255, .7);
+  font-size: .82rem;
+  line-height: 1.8;
+}
+
+.nexora-player-error-tech {
+  margin: 0;
+  color: rgba(255, 255, 255, .45);
+  font-size: .72rem;
+  font-weight: 700;
+  direction: ltr;
+}
+
+.nexora-player-error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: .5rem;
+  margin-top: .5rem;
+}
+
+/* ---- Next-episode card: header row, code, progress, end-of-work variant ---- */
+.nexora-next-head {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  color: var(--color-accent-hover);
+}
+
+.nexora-next-kicker { font-size: .72rem; font-weight: 900; }
+
+.nexora-next-code {
+  margin-inline-start: auto;
+  border-radius: .35rem;
+  background: rgba(0, 0, 0, .6);
+  padding: .1rem .4rem;
+  color: #fbbf24;
+  font-size: .66rem;
+  font-weight: 900;
+  direction: ltr;
+}
+
+.nexora-next-title {
+  margin: 0;
+  overflow: hidden;
+  color: #fff;
+  font-size: .92rem;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nexora-next-meta { margin: 0; color: rgba(255, 255, 255, .5); font-size: .7rem; font-weight: 700; }
+
+.nexora-next-progress {
+  display: block;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .16);
+}
+
+.nexora-next-progress i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--color-primary-hover), var(--color-accent-hover));
+  transition: width .9s linear;
+}
+
+.nexora-next--end { border-color: rgba(16, 185, 129, .3); }
+.nexora-next--end .nexora-next-head { color: #6ee7b7; }
+
+/* ---- Subtitle appearance: custom properties set on the player root ---- */
+.nexora-vjs .vjs-text-track-cue > div {
+  background: var(--nx-caption-bg, rgba(0, 0, 0, .62)) !important;
+  font-size: var(--nx-caption-size, 1.05rem);
+  line-height: 1.5;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, .95);
+  padding: .1rem .4rem;
+  border-radius: .25rem;
+}
+
+/* ===========================================================================
+   Watch screen — season selector and the summary action row
+   =========================================================================== */
+
+.nexora-season-bar {
+  display: flex;
+  flex-shrink: 0;
+  gap: .4rem;
+  overflow-x: auto;
+  border-bottom: 1px solid rgba(255, 255, 255, .07);
+  padding: .6rem;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(var(--accent-rgb), .5) transparent;
+}
+
+.nexora-season-bar::-webkit-scrollbar { height: .35rem; }
+.nexora-season-bar::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(var(--accent-rgb), .45);
+}
+
+.nexora-season-chip {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: .5rem;
+  border: 1px solid var(--border-default);
+  border-radius: .7rem;
+  background: var(--bg-surface);
+  padding: .35rem .6rem;
+  text-align: right;
+  transition: border-color .16s ease, background-color .16s ease, color .16s ease;
+}
+
+.nexora-season-chip-art {
+  width: 2.1rem;
+  height: 3.1rem;
+  flex: 0 0 auto;
+  border-radius: .35rem;
+  object-fit: cover;
+  background: #000;
+}
+
+.nexora-season-chip-body {
+  display: flex;
+  flex-direction: column;
+  gap: .1rem;
+  min-width: 0;
+}
+
+.nexora-season-chip-name {
+  color: var(--text-primary);
+  font-size: .74rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.nexora-season-chip-count { color: var(--text-muted); font-size: .64rem; font-weight: 700; }
+
+.nexora-season-chip:hover { border-color: rgba(var(--accent-rgb), .45); }
+
+.nexora-season-chip.is-active {
+  border-color: rgba(var(--accent-rgb), .7);
+  background: linear-gradient(135deg, rgba(var(--accent-rgb), .32), rgba(var(--primary-rgb), .22));
+}
+
+.nexora-season-chip.is-active .nexora-season-chip-name { color: #fff; }
+
+.nexora-watch-summary-actions {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+
+.nexora-watch-summary-actions .nexora-act { flex: 0 0 auto; }
+
+/* ---- RTL: mirror the directional icons that would otherwise point inward ----
+   In `dir="rtl"` the transport row reads right-to-left: "previous" sits on the
+   right. The skip glyphs are drawn for LTR, so their arrows point back at the
+   centre and the pair reads inverted — as documented, "next" looked like
+   "previous". The fullscreen corner brackets have the same problem: the enter
+   pair (pointing out) and the exit pair (pointing in) swap meaning once the
+   layout direction flips, which is why the exit icon looked mirrored. */
+[dir="rtl"] .nexora-next-play svg { transform: scaleX(-1); }
+/* The fullscreen pair, the ±10s rings and the minimise arrow are deliberately
+   NOT mirrored:
+   - fullscreen: the corner brackets are horizontally symmetrical, so a flip
+     produces a glyph indistinguishable from the other state;
+   - ±10s rings: their meaning is temporal, not spatial;
+   - minimise: its arrow points DOWN, and a horizontal flip of a vertical glyph
+     only distorts it. */
+
+/* ===========================================================================
+   Player module responsive rules
+   =========================================================================== */
+
+@media (max-width: 768px) {
+  /* Touch targets: the transport stays ≥36px on a tablet, where a thumb is still
+     aiming precisely, and tightens again on a phone so seven controls fit in one
+     row without crowding. */
+  .nexora-bar-button { min-width: 2.25rem; height: 2.25rem; }
+  .nexora-vol.is-open { width: 3rem; }
+  .nexora-center-main { width: 3.7rem; height: 3.7rem; }
+  .nexora-center-main svg { width: 3rem; height: 3rem; }
+  .nexora-center-seek { width: 2.9rem; height: 2.9rem; }
+  .nexora-center-seek svg { width: 1.6rem; height: 1.6rem; }
+  .nexora-next { inset-inline: .5rem; bottom: 6.5rem; width: auto; }
+  .nexora-popover--settings {
+    inset-inline: 0;
+    bottom: calc(100% + .4rem);
+    min-width: 0;
+    max-height: 60vh;
+  }
+}
+
+@media (max-width: 560px) {
+  /* The bar has five controls plus volume and time; below ~560px they must be
+     eased apart rather than crammed. The volume slider moves into settings
+     (mute stays as a button) and the gaps tighten. */
+  .nexora-bar { padding-inline: .45rem; }
+  .nexora-bar-button { min-width: 2rem; height: 2rem; }
+  .nexora-bar > div { gap: .25rem; }
+  .nexora-vol { display: none; }
+  .nexora-time { font-size: .58rem; }
+  .nexora-center-main { width: 3.25rem; height: 3.25rem; }
+  .nexora-center-main svg { width: 2.6rem; height: 2.6rem; }
+  .nexora-center-seek { width: 2.6rem; height: 2.6rem; }
+  .nexora-center-seek svg { width: 1.45rem; height: 1.45rem; }
+  .nexora-center-seek small { font-size: .54rem; }
+  .nexora-center { gap: .6rem; }
+}
+
+@media (max-width: 400px) {
+  /* Narrowest phones: keep the transport, drop the ornament. */
+  .nexora-bar { padding-inline: .35rem; }
+  .nexora-bar-button { min-width: 1.8rem; height: 1.8rem; }
+  .nexora-time { display: none; }
+  .nexora-center-main { width: 2.9rem; height: 2.9rem; }
+  .nexora-center-main svg { width: 2.3rem; height: 2.3rem; }
+  .nexora-center-seek { width: 2.35rem; height: 2.35rem; }
+  .nexora-center-seek svg { width: 1.3rem; height: 1.3rem; }
+  .nexora-center-seek small { font-size: .5rem; }
+  .nexora-center { gap: .45rem; }
+}
+
+@media (max-width: 480px) {
+  /* On a phone the bar keeps only what a thumb needs; the rest is in settings. */
+  .nexora-bar-button--hide-sm { display: none; }
+  .nexora-time--center { display: none; }
+  .nexora-season-chip-name { font-size: .7rem; }
+}
+
+/* Respect a viewer who asked the system not to animate things. */
+@media (prefers-reduced-motion: reduce) {
+  .nexora-buffering-dot { animation: none; }
+  .nexora-next-progress i { transition: none; }
+  .nexora-episode-card:hover { transform: none; }
+  .nexora-episode-card:hover .nexora-episode-still { transform: none; }
+  .nexora-related-item { transition: none; }
+}
+
+/* ===========================================================================
+   Watch — phone episode rail (must be LAST in the file)
+
+   These rules override the base `.nexora-episode-*` block defined above, so
+   they have to sit after it: an equal-specificity rule inside a media query
+   still loses to one declared later outside it.
+   =========================================================================== */
+
+@media (max-width: 768px) {
+  /* Narrower rail tiles: the numeral scales down with the tile, and the fact strip
+     keeps one line by tightening its chips. */
+  .nexora-episode-card { border-radius: .7rem; }
+  .nexora-episode-number { font-size: 1.35rem; }
+  .nexora-episode-number::after { width: .9rem; height: 2.5px; }
+
+  .nexora-episode-duration,
+  .nexora-episode-meta,
+  .nexora-episode-versions {
+    padding: .11rem .32rem;
+    font-size: .55rem;
+  }
+
+  .nexora-episode-facts { inset-inline: .4rem; bottom: .4rem; }
+  .nexora-episode-done { width: 1.2rem; height: 1.2rem; }
+  .nexora-episode-play span { width: 2.1rem; height: 2.1rem; }
+
+  /* A phone has no hover, so the play affordance must be reachable without one:
+     it stays visible on the active episode and the whole tile is the target. */
+  .nexora-episode-play { background: transparent; }
+}
+
+/* ===========================================================================
+   Touch gestures (phone): vertical drag for volume / brightness
+
+   The gesture must be observable before the browser claims the drag for page
+   scrolling, so the shell opts into `pan-y`. Horizontal panning is left to the
+   browser (the episode rail under the player scrolls sideways), and a tap is
+   untouched so click-to-pause and double-tap-fullscreen keep working.
+   =========================================================================== */
+
+.nexora-vjs--touch {
+  touch-action: pan-y;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* The readout for a volume/brightness swipe. Kept near the middle because the
+   finger is on the edge of the screen and would hide a corner widget. */
+.nexora-gesture-hud {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: .9rem;
+  background: rgba(6, 10, 20, .82);
+  padding: .55rem .8rem;
+  color: #fff;
+  backdrop-filter: blur(14px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .5);
+  pointer-events: none;
+  animation: nexora-hud-in .16s ease both;
+}
+
+.nexora-gesture-icon {
+  width: 1.1rem;
+  height: 1.1rem;
+  flex: 0 0 auto;
+  color: var(--color-accent-hover);
+}
+
+/* A vertical meter: filling upward matches "swipe up to increase". */
+.nexora-gesture-meter {
+  position: relative;
+  width: .4rem;
+  height: 3.4rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .18);
+}
+
+.nexora-gesture-meter i {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  display: block;
+  border-radius: 999px;
+  background: linear-gradient(0deg, var(--color-primary), var(--color-accent));
+  transition: height .08s linear;
+}
+
+.nexora-gesture-value {
+  font-size: .76rem;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+@keyframes nexora-hud-in {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(.94); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nexora-gesture-hud { animation: none; }
+  .nexora-gesture-meter i { transition: none; }
+}
