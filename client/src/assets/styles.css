@@ -845,10 +845,50 @@ select {
 
 
 /* ===========================================================================
-   WatchPage — playback screen inside the customer shell
-   Episodes on the right, player on the left, synopsis underneath.
-   =========================================================================== */
+   Playback palette (watch screen + floating dock)
 
+   The playback surfaces carry their own blue + gold identity while the rest of
+   NEXORA keeps the purple/fuchsia system. Overriding the tokens on this scope
+   (not on :root) is what confines the change: every `var(--color-accent)` and
+   `rgba(var(--accent-rgb), …)` inside resolves to these values, and no rule
+   outside these two selectors is affected.
+
+   Declared here rather than in tokens.css because it is a screen theme, not a
+   system token — a second palette in the global layer is how a design system
+   rots. The dock is included so a minimised video keeps the same identity it
+   had on the watch screen.
+   =========================================================================== */
+.nexora-watch,
+.nexora-dock {
+  --color-primary: #2563EB;
+  --color-primary-hover: #3B82F6;
+  --color-primary-light: rgba(37, 99, 235, 0.15);
+  --color-primary-glow: rgba(37, 99, 235, 0.35);
+  --primary-rgb: 37, 99, 235;
+
+  --color-accent: #F59E0B;
+  --color-accent-hover: #FBBF24;
+  --color-accent-light: rgba(245, 158, 11, 0.15);
+  --color-accent-glow: rgba(245, 158, 11, 0.35);
+  --accent-rgb: 245, 158, 11;
+
+  --color-secondary: #0891B2;
+  --color-secondary-hover: #06B6D4;
+  --color-secondary-light: rgba(8, 145, 178, 0.15);
+
+  --color-info: #22D3EE;
+  --color-info-hover: #67E8F9;
+  --color-info-light: rgba(34, 211, 238, 0.15);
+
+  --color-warning: #F59E0B;
+  --color-warning-hover: #FBBF24;
+  --color-warning-light: rgba(245, 158, 11, 0.15);
+}
+
+/* ===========================================================================
+   WatchPage — playback screen inside the customer shell
+   Episodes beside the player on desktop, beneath it on a phone.
+   =========================================================================== */
 .nexora-watch {
   position: relative;
   width: 100%;
