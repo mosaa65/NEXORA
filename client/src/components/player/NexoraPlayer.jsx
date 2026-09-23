@@ -134,6 +134,8 @@ export default function NexoraPlayer({
   const [ended, setEnded] = useState(false);
   const [episodeDrawerOpen, setEpisodeDrawerOpen] = useState(false);
   const [error, setError] = useState(null);
+  // Whether the first frame has been displayed; drives the poster backdrop.
+  const [started, setStarted] = useState(false);
 
   // Touch-only: a vertical drag on the right half sets volume, on the left half
   // dims the picture (a CSS filter — a page cannot change the panel backlight).
@@ -368,6 +370,9 @@ export default function NexoraPlayer({
     setShowNextCard(false);
     setNextCountdown(null);
     setEpisodeDrawerOpen(false);
+    // A new source has not painted a frame yet, so the backdrop must come back
+    // for the episode the viewer just picked.
+    setStarted(false);
     resetForNewSource();
     player.src({ src, type: "video/mp4" });
     if (poster) player.poster(poster);
@@ -441,7 +446,12 @@ export default function NexoraPlayer({
     };
     const onRateChange = () => setRate(player.playbackRate() || 1);
     const onWaiting = () => setBuffering(true);
-    const onPlaying = () => setBuffering(false);
+    // `playing` is the first frame the viewer actually sees, so it is what retires
+    // the poster backdrop. `canplay` fires earlier, while the frame is still black.
+    const onPlaying = () => {
+      setBuffering(false);
+      setStarted(true);
+    };
     const onCanPlay = () => setBuffering(false);
 
     const onEnded = () => {
@@ -882,6 +892,19 @@ export default function NexoraPlayer({
       onDoubleClick={onShellDoubleClick}
       onTouchStart={showControls}
     >
+      {/* Poster backdrop, shown until the first frame is displayed.
+
+          It is rendered OUTSIDE the error/playing branch on purpose: the error
+          state used to be a bare black panel, and a screen that fails to start
+          is exactly when artwork helps most. It also covers a 16:9 frame nicely
+          while the catalogue's poster is portrait, so the image is blurred and
+          overscanned rather than stretched or letterboxed. */}
+      {poster && !started && (
+        <div className="nexora-poster-backdrop" aria-hidden="true">
+          <img src={poster} alt="" />
+        </div>
+      )}
+
       {error ? (
         <PlayerErrorState error={error} technical={technicalInfo} onRetry={retry} onBack={onExit} />
       ) : (

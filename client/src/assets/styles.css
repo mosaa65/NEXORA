@@ -365,6 +365,54 @@ select {
   background: #000;
 }
 
+/* ---- Poster backdrop, before the first frame ----
+   The catalogue's poster is portrait (2:3) while the player frame is 16:9, so
+   the image is overscanned and blurred to fill the frame rather than being
+   letterboxed or stretched. It sits under every control and is removed from the
+   tree as soon as `playing` reports the first visible frame (see NexoraPlayer),
+   so it can never cover the video. */
+.nexora-poster-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  background: #000;
+}
+
+.nexora-poster-backdrop img {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100%;
+  height: 100%;
+  transform: translate(-50%, -50%) scale(1.18);
+  object-fit: cover;
+  /* Two filters, two jobs: the blur hides the upscaling of a portrait poster
+     stretched across a wide frame, and the slight brightness lift keeps the
+     artwork readable under the controls and the scrim below. */
+  filter: blur(22px) brightness(.72) saturate(1.15);
+}
+
+/* A scrim on top of the art so the centred play button keeps its contrast no
+   matter how bright the poster is. */
+.nexora-poster-backdrop::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, rgba(6, 10, 20, .25), rgba(6, 10, 20, .78));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .nexora-poster-backdrop {
+    animation: nexora-backdrop-in .45s ease both;
+  }
+}
+
+@keyframes nexora-backdrop-in {
+  from { opacity: 0; transform: scale(1.06); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
 /* Captions render through Video.js' text-track layer. Lift it above the NEXORA
    control bar so a two-line cue is never hidden behind the controls. */
 .nexora-vjs .vjs-text-track-display {
