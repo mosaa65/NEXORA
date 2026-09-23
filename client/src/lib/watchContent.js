@@ -38,13 +38,17 @@ export function listTitle(type) {
   return "الملفات";
 }
 
-/** Title of the "watch next" (related) section, by kind. */
-export function relatedTitle(type) {
-  if (type === "movie") return "أفلام مشابهة";
-  if (type === "anime") return "أنمي مشابه";
-  if (type === "series") return "مسلسلات مشابهة";
-  if (type === "documentary") return "وثائقيات مشابهة";
-  return "أعمال ذات صلة";
+/**
+ * Title of the "watch next" rail below the player, by kind.
+ *
+ * The wording is deliberately one phrase for every kind: the rail is fed by the
+ * metadata provider's own recommendation/similar list, so "قد تعجبك" describes
+ * the real relationship. Per-kind headings ("مسلسلات مشابهة") are used by the
+ * catalogue's related shelves, which are built from the local relationship graph
+ * instead.
+ */
+export function relatedTitle() {
+  return "قد تعجبك";
 }
 
 /** Word used for a single playable item, by kind. */
@@ -91,18 +95,6 @@ export function episodeLabel(item, index, type) {
   if (en) return en;
   if (item?.episode_number) return `الحلقة ${item.episode_number}`;
   return `${itemNoun(type)} ${index + 1}`;
-}
-
-/** The smart one-line meta string for an episode card (per card_plan rules). */
-export function episodeFacts(item) {
-  const facts = [];
-  if (item?.air_date) facts.push(item.air_date);
-  const runtime = formatRuntime(item?.runtime || item?.duration, Boolean(item?.duration && !item?.runtime));
-  if (runtime) facts.push(runtime);
-  if (item?.resolution) facts.push(item.resolution);
-  const size = formatSize(item?.file_size);
-  if (size) facts.push(size);
-  return facts;
 }
 
 /** Read the locally saved playback progress for a file id. Returns null or a ratio. */

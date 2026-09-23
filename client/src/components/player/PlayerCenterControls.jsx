@@ -19,6 +19,7 @@ function PlayerCenterControls({ visible, playing, onTogglePlay, onSeekBy, onToas
       aria-hidden={!visible}
     >
       <div className="pointer-events-auto flex items-center gap-4 sm:gap-6">
+        {/* The numeral is a child of the button and is centred inside the ring. */}
         <button
           type="button"
           className="nexora-center-button nexora-center-seek"
@@ -29,7 +30,7 @@ function PlayerCenterControls({ visible, playing, onTogglePlay, onSeekBy, onToas
           aria-label="رجوع 10 ثوانٍ"
           tabIndex={visible ? 0 : -1}
         >
-          <PlayerIcon name="rewind" className="h-7 w-7" />
+          <PlayerIcon name="rewind" />
           <small>10</small>
         </button>
 
@@ -53,7 +54,7 @@ function PlayerCenterControls({ visible, playing, onTogglePlay, onSeekBy, onToas
           aria-label="تقديم 10 ثوانٍ"
           tabIndex={visible ? 0 : -1}
         >
-          <PlayerIcon name="forward" className="h-7 w-7" />
+          <PlayerIcon name="forward" />
           <small>10</small>
         </button>
       </div>

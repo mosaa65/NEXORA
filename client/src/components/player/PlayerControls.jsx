@@ -19,7 +19,6 @@ function PlayerControls({
   duration,
   muted,
   volume,
-  rate,
   isFullscreen,
   supportsPiP,
   captionsAvailable,
@@ -81,17 +80,20 @@ function PlayerControls({
       )}
 
       <div className="relative flex items-center justify-between gap-2">
-        {/* Transport (leading edge in RTL) */}
+        {/* Transport (leading edge in RTL). In RTL the row reads right-to-left,
+            so the FIRST child sits furthest right. “Next” therefore comes first
+            and “previous” last: the viewer's thumb meets التالي on the right and
+            the pair points away from the play button, never across it. */}
         <div className="flex items-center gap-1.5">
           <button
             type="button"
-            className="nexora-bar-button"
-            onClick={onPrevious}
-            disabled={!hasPrevious}
-            aria-label="الحلقة السابقة"
-            title="الحلقة السابقة"
+            className="nexora-bar-button nexora-skip-next"
+            onClick={onNext}
+            disabled={!hasNext}
+            aria-label="الحلقة التالية"
+            title="الحلقة التالية"
           >
-            <PlayerIcon name="skipPrev" className="h-4 w-4" />
+            <PlayerIcon name="skipNext" className="h-4 w-4" />
           </button>
 
           <button
@@ -106,13 +108,13 @@ function PlayerControls({
 
           <button
             type="button"
-            className="nexora-bar-button"
-            onClick={onNext}
-            disabled={!hasNext}
-            aria-label="الحلقة التالية"
-            title="الحلقة التالية"
+            className="nexora-bar-button nexora-skip-prev"
+            onClick={onPrevious}
+            disabled={!hasPrevious}
+            aria-label="الحلقة السابقة"
+            title="الحلقة السابقة"
           >
-            <PlayerIcon name="skipNext" className="h-4 w-4" />
+            <PlayerIcon name="skipPrev" className="h-4 w-4" />
           </button>
 
           {/* Volume — expands on hover/focus so the bar stays short on mobile. */}
@@ -159,10 +161,6 @@ function PlayerControls({
             </button>
           )}
 
-          <span className="nexora-rate-chip" title="سرعة التشغيل">
-            {Number(rate).toFixed(rate % 1 === 0 ? 0 : 2).replace(/0$/, "")}×
-          </span>
-
           {supportsPiP && (
             <button
               type="button"
@@ -192,7 +190,7 @@ function PlayerControls({
 
           <button
             type="button"
-            className="nexora-bar-button"
+            className="nexora-bar-button nexora-fs-toggle"
             onClick={onToggleFullscreen}
             aria-label={isFullscreen ? "الخروج من ملء الشاشة" : "ملء الشاشة"}
             title={`ملء الشاشة (F)`}
@@ -203,7 +201,7 @@ function PlayerControls({
             <>
               <button
                 type="button"
-                className="nexora-bar-button"
+                className="nexora-bar-button nexora-minimize"
                 onClick={onMinimize}
                 aria-label="تصغير"
                 title="تصغير"

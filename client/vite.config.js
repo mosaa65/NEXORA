@@ -20,6 +20,12 @@ export default defineConfig({
     }
   },
   build: {
+    // The `player` chunk is video.js, which is ~690 kB minified on its own and
+    // cannot be meaningfully reduced. It is already split out of the app bundle
+    // and loaded lazily with the watch screen, so the size is expected rather
+    // than a regression. The default 500 kB limit produced a warning on every
+    // build for a known, accepted cost, which trains people to ignore the report.
+    chunkSizeWarningLimit: 750,
     rollupOptions: {
       output: {
         manualChunks: {

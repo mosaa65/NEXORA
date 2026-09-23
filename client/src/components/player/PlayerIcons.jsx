@@ -77,14 +77,20 @@ const SHAPES = {
       <rect x="12.5" y="12" width="5" height="4" rx=".7" fill="currentColor" stroke="none" />
     </Base>
   ),
+  // Fullscreen pair. Square corner brackets (equal 5-unit arms) with a diagonal
+  // pair that carries the meaning: OUTWARD for enter, INWARD for exit. The
+  // brackets alone are horizontally symmetrical, so without the diagonals the two
+  // states render identically.
   fullscreen: (className) => (
     <Base className={className}>
-      <path d="M8 3H3v5m13-5h5v5M8 21H3v-5m13 5h5v-5" />
+      <path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" />
+      <path d="M8.5 8.5L5 5M15.5 8.5L19 5M15.5 15.5L19 19M8.5 15.5L5 19" />
     </Base>
   ),
   fullscreenExit: (className) => (
     <Base className={className}>
-      <path d="M3 8h5V3m8 5h5V3M3 16h5v5m8-5h5v5" />
+      <path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" />
+      <path d="M9 9L5 5M15 9l4-4M15 15l4 4M9 15l-4 4" />
     </Base>
   ),
   captions: (className) => (
@@ -117,7 +123,9 @@ const SHAPES = {
   ),
   minimize: (className) => (
     <Base className={className}>
-      <path d="M5 12h14" />
+      <path d="M12 4v10" />
+      <path d="M8 10.5l4 4 4-4" />
+      <path d="M5 19h14" />
     </Base>
   ),
   quality: (className) => (

@@ -233,20 +233,36 @@ export default function NexoraPlayer({
   const goNext = useCallback(() => {
     setNextCountdown(null);
     setShowNextCard(false);
+    // Guarded the same way as `goPrevious`: no next entry means no step, and the
+    // button is disabled — this keeps a keyboard or remote call from going silent.
     if (hasNext) onNext?.();
   }, [hasNext, onNext]);
 
-  /** Platform convention: restart when barely started, otherwise step back. */
+  /**
+   * Previous: step back to the previous episode when the viewer is near the
+   * start, otherwise restart the current one — the convention every streaming
+   * platform uses, so a stray tap does not lose the episode.
+   *
+   * `hasPrevious` is checked BEFORE anything else: with no earlier entry there is
+   * nothing to step to, and the button is disabled anyway, but a guard here keeps
+   * a programmatic call (keyboard, remote) from doing nothing silently.
+   */
   const goPrevious = useCallback(() => {
     const player = playerRef.current;
     if (!player || player.isDisposed()) return;
-    if ((player.currentTime() || 0) < 10) {
-      onPlayPrevious?.();
-    } else {
+    const atStart = (player.currentTime() || 0) < 10;
+    if (!atStart) {
       player.currentTime(0);
       showToast("من البداية");
+      return;
     }
-  }, [onPlayPrevious, showToast]);
+    if (hasPrevious) {
+      onPlayPrevious?.();
+      return;
+    }
+    player.currentTime(0);
+    showToast("من البداية");
+  }, [hasPrevious, onPlayPrevious, showToast]);
 
   // ---------------------------------------------------------------------------
   // Subtitle track selection
@@ -906,7 +922,6 @@ export default function NexoraPlayer({
               duration={duration}
               muted={muted}
               volume={volume}
-              rate={rate}
               isFullscreen={isFullscreen}
               supportsPiP={supportsPiP}
               captionsAvailable={(tracks || []).length}

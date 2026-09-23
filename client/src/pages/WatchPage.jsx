@@ -9,6 +9,20 @@ import { getMediaPlayback, getFileSubtitles, resolveAPIURL } from "../lib/api.js
 import { clock, itemNoun, kindLabel, listTitle, formatSize } from "../lib/watchContent.js";
 
 /**
+ * The identifier of a playable file row.
+ *
+ * The playback API names this field `video_file_id` on `files`, `source`, `next`
+ * and `previous` (the repository's `PlaybackFile` type). Older callers pass an
+ * `id`, so both are accepted and compared as strings: the field arrives as a
+ * number from JSON but as a string in a URL query, and a strict comparison would
+ * silently drop the match.
+ */
+function fileKey(row) {
+  const value = row?.video_file_id ?? row?.id;
+  return value === undefined || value === null || value === "" ? null : String(value);
+}
+
+/**
  * WatchPage — the playback screen for every kind of work in the library.
  *
  * One request (`getMediaPlayback`) supplies the critical path: the work header, the
@@ -121,7 +135,8 @@ export default function WatchPage() {
   const fileCards = useMemo(
     () =>
       files.map((file) => ({
-        id: file.id,
+        id: file.video_file_id ?? file.id,
+        video_file_id: file.video_file_id ?? file.id,
         episode_id: file.episode_id,
         episode_number: file.episode_number || file.part_number,
         season_number: file.season_number,
@@ -132,7 +147,6 @@ export default function WatchPage() {
         file_size: file.file_size,
         file_count: 1,
         has_local_file: true,
-        video_file_id: file.id,
       })),
     [files]
   );
@@ -142,33 +156,57 @@ export default function WatchPage() {
     (target) => {
       if (!target) return;
       // Accept an episode row or a playable file row from either list.
-      const fileId = target.video_file_id || target.id;
-      if (!fileId || String(fileId) === String(currentFile?.video_file_id)) return;
-      const file = files.find((item) => item.id === fileId);
+      const wanted = fileKey(target);
+      if (!wanted || wanted === fileKey(currentFile)) return;
+      // Match on the file id, then on the episode id: the side list hands over an
+      // episode whose `video_file_id` may be absent while its `episode_id` is not.
+      const file =
+        files.find((item) => fileKey(item) === wanted) ||
+        (target.episode_id ? files.find((item) => String(item.episode_id) === String(target.episode_id)) : null);
       if (!file) return;
       setPlan((current) => (current ? { ...current, source: file } : current));
       if (file.season_number) setSeasonFilter(file.season_number);
     },
-    [files, currentFile?.video_file_id]
+    [files, currentFile]
   );
 
   /** Playing an episode starts from its catalogue-selected (lowest id) release. */
   const playEpisode = useCallback(
     (episode) => {
-      if (!episode?.video_file_id) return;
-      selectFile({ video_file_id: episode.video_file_id });
+      if (!episode || fileKey(episode) === null) return;
+      selectFile(episode);
     },
     [selectFile]
   );
 
-  const nextFile = plan?.next || null;
-  const previousFile = plan?.previous || null;
+  // Next / previous are derived from the ORDERED file list against the CURRENT
+  // source, not read from `plan.next` / `plan.previous`.
+  //
+  // The server computes those two once, for the file the page opened with. The
+  // client then swaps `plan.source` locally on every episode click, so a cached
+  // `plan.next` kept pointing at the entry that followed the ORIGINAL file — the
+  // "next" button walked back to an already-watched episode. Deriving the pair
+  // from `files` keeps them correct however many times the source changes.
+  const { nextFile, previousFile } = useMemo(() => {
+    const index = files.findIndex((file) => fileKey(file) === fileKey(currentFile));
+    if (index < 0) {
+      // The current file is not in the list (a film opened by an unknown id): fall
+      // back to the server's answer, which is still meaningful for the first play.
+      return { nextFile: plan?.next || null, previousFile: plan?.previous || null };
+    }
+    return {
+      nextFile: files[index + 1] || null,
+      previousFile: files[index - 1] || null,
+    };
+  }, [files, currentFile, plan?.next, plan?.previous]);
 
   // The next-episode card shows the catalogue's own episode copy when the work has
   // episodes, and falls back to the file's title for a film with several parts.
   const nextEpisode = useMemo(() => {
     if (!nextFile) return null;
-    const episode = episodes.find((item) => item.video_file_id === nextFile.id || item.episode_id === nextFile.episode_id);
+    const episode = episodes.find(
+      (item) => fileKey(item) === fileKey(nextFile) || (item.episode_id && String(item.episode_id) === String(nextFile.episode_id))
+    );
     return {
       ...(episode || {}),
       season_number: nextFile.season_number,
@@ -188,7 +226,7 @@ export default function WatchPage() {
     if (previousFile) selectFile(previousFile);
   }, [previousFile, selectFile]);
 
-  const currentIndex = files.findIndex((file) => file.id === currentFile?.video_file_id);
+  const currentIndex = files.findIndex((file) => fileKey(file) === fileKey(currentFile));
   const currentLabel = currentFile
     ? currentFile.title_ar ||
       currentFile.title_en ||
@@ -336,57 +374,6 @@ export default function WatchPage() {
       )}
 
       <div className="nexora-watch-grid">
-        {/* Player column (right in RTL, and first when the grid stacks). */}
-        <main className="nexora-watch-main">
-          <div
-            ref={stageRef}
-            className={`nexora-watch-stage ${fullscreen ? "is-fullscreen" : ""} ${dockActive ? "is-docked-out" : ""}`}
-          >
-            <div className="nexora-watch-player">
-              {dockActive ? (
-                <div className="nexora-empty-stage">
-                  <p className="text-sm font-bold">الفيديو يعمل في النافذة العائمة</p>
-                  <button type="button" className="nexora-act nexora-act--play mt-3" onClick={closeDock}>
-                    إعادة التشغيل هنا
-                  </button>
-                </div>
-              ) : (
-                playerNode
-              )}
-            </div>
-          </div>
-
-          <section className="nexora-watch-summary">
-            <div className="nexora-watch-summary-head">
-              <span className="nexora-watch-now">
-                <span className="nexora-watch-now-dot" />
-                {currentLabel || "—"}
-              </span>
-              <div className="nexora-watch-summary-actions">
-                {currentFile?.duration ? <span className="nexora-watch-len">{clock(currentFile.duration)}</span> : null}
-                {previousFile && (
-                  <button type="button" className="nexora-act nexora-act--ghost" onClick={playPrevious}>
-                    السابق
-                  </button>
-                )}
-                {nextFile && (
-                  <button type="button" className="nexora-act nexora-act--play" onClick={playNext}>
-                    التالي
-                  </button>
-                )}
-              </div>
-            </div>
-            {plot ? <p className="nexora-watch-plot">{plot}</p> : null}
-            {genres.length > 0 && (
-              <div className="nexora-genres">
-                {genres.map((genre) => (
-                  <span key={genre} className="nexora-genre">{genre}</span>
-                ))}
-              </div>
-            )}
-          </section>
-        </main>
-
         {/* Side column: seasons + episodes/parts/files, then about. */}
         <aside className="nexora-watch-side">
           <div className="nexora-tabs">
@@ -437,11 +424,11 @@ export default function WatchPage() {
               <div className="nexora-watch-list">
                 {(episodic ? visibleEpisodes : fileCards).map((item, idx) => (
                   <EpisodeCard
-                    key={item.episode_id || item.video_file_id || item.id || idx}
-                    episode={{ ...item, streamId: item.video_file_id || item.id }}
+                    key={item.episode_id || fileKey(item) || idx}
+                    episode={{ ...item, streamId: fileKey(item) }}
                     index={idx}
                     type={type}
-                    active={(item.video_file_id || item.id) === currentFile?.video_file_id}
+                    active={fileKey(item) !== null && fileKey(item) === fileKey(currentFile)}
                     onPlay={playEpisode}
                   />
                 ))}
@@ -480,6 +467,57 @@ export default function WatchPage() {
             </div>
           )}
         </aside>
+
+        {/* Player column (left in RTL). */}
+        <main className="nexora-watch-main">
+          <div
+            ref={stageRef}
+            className={`nexora-watch-stage ${fullscreen ? "is-fullscreen" : ""} ${dockActive ? "is-docked-out" : ""}`}
+          >
+            <div className="nexora-watch-player">
+              {dockActive ? (
+                <div className="nexora-empty-stage">
+                  <p className="text-sm font-bold">الفيديو يعمل في النافذة العائمة</p>
+                  <button type="button" className="nexora-act nexora-act--play mt-3" onClick={closeDock}>
+                    إعادة التشغيل هنا
+                  </button>
+                </div>
+              ) : (
+                playerNode
+              )}
+            </div>
+          </div>
+
+          <section className="nexora-watch-summary">
+            <div className="nexora-watch-summary-head">
+              <span className="nexora-watch-now">
+                <span className="nexora-watch-now-dot" />
+                {currentLabel || "—"}
+              </span>
+              <div className="nexora-watch-summary-actions">
+                {currentFile?.duration ? <span className="nexora-watch-len">{clock(currentFile.duration)}</span> : null}
+                {previousFile && (
+                  <button type="button" className="nexora-act nexora-act--ghost" onClick={playPrevious}>
+                    السابق
+                  </button>
+                )}
+                {nextFile && (
+                  <button type="button" className="nexora-act nexora-act--play" onClick={playNext}>
+                    التالي
+                  </button>
+                )}
+              </div>
+            </div>
+            {plot ? <p className="nexora-watch-plot">{plot}</p> : null}
+            {genres.length > 0 && (
+              <div className="nexora-genres">
+                {genres.map((genre) => (
+                  <span key={genre} className="nexora-genre">{genre}</span>
+                ))}
+              </div>
+            )}
+          </section>
+        </main>
       </div>
 
       {/* Loaded in the background; playback never waits for it. */}

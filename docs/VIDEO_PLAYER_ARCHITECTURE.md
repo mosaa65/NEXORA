@@ -24,9 +24,33 @@ direction only and is not part of the running system.
 | Episode index | separate Meilisearch index `media_episodes` | `server/internal/search/episode_projection.go` |
 
 The migration branch already delivered the engine, the watch screen, the type-aware
-shell, the square episode cards, the related rail, the caption/speed pickers, the
+shell, the episode cards, the related rail, the caption/speed pickers, the
 next-episode countdown and the fullscreen queue. This document covers the gaps that
 remained and how they were closed.
+
+### Episode tile
+`EpisodeCard` renders a **full-bleed artwork tile**: the still fills the whole card
+and every fact is laid inside it on a gradient, so a narrow rail shows large
+readable artwork instead of a stamp with a caption strip underneath. Placement
+reuses the catalogue card's vocabulary (`UnifiedMediaCard`) so the two read as one
+system:
+
+```text
+┌───────────────────────────┐
+│  ✓              [ 12 ]    │   top-left completed · top-right episode number
+│                           │
+│         (artwork)         │
+│                           │
+│ 1080p · 1.2 GB    [42:10] │   bottom-left resolution·size · bottom-right duration
+├───────────────────────────┤   resume bar along the bottom edge
+```
+
+The title is not printed on the tile: at rail width a readable line would take
+three of them and shrink the artwork to a stamp. The rail's job is picking an
+episode, and the number plus the still do that; the running title is shown in full
+by the summary under the player, and the complete set of facts (title, air date,
+runtime) travels in the element's `title` tooltip. Nothing is fabricated — if the
+catalogue has no duration the badge is simply absent.
 
 ## 2. Gaps closed in this round
 
@@ -142,6 +166,11 @@ catalogue really holds:
 No "Auto 2160p / 1080p / 720p" ladder is invented. An ABR ladder would require
 multiple rendered representations, which do not exist.
 
+The bottom bar also carries **no playback-speed chip**. Speed is chosen in the
+settings surface (`player.playbackRate`), and a read-only badge next to the
+working transport controls looked like a broken button. One control surface owns
+speed; the bar stays for transport only.
+
 ## 7. Audio tracks
 
 Video.js exposes `player.audioTracks()` for tracks it can see. `NexoraPlayer`
@@ -186,11 +215,66 @@ row follow the same rule. `next` is `null` at the end of a season, of a movie an
 a work — the player then shows "انتهى الموسم / انتهى العمل" next to the related rail
 instead of jumping somewhere that does not exist.
 
+**These two fields describe the file the request opened with, and only that one.**
+The client swaps `plan.source` locally on every episode click instead of refetching
+the plan, so the server's `next`/`previous` go stale after the first step: pressing
+"next" twice bounced back to the entry that followed the *original* file.
+`WatchPage` therefore **derives** the pair from the ordered `files` list against the
+current source, and falls back to the server's answer only when the current file is
+not in that list (a work opened by an id the catalogue does not know).
+
 The last 30 seconds of a video show `PlayerNextOverlay`: poster, `S02E06`, title,
 duration, "تشغيل الآن" and a 10→0 countdown with cancel.
 
-`previous` restarts the current episode when the position is under 10 s, otherwise it
-goes to the previous episode (platform convention).
+## 9b. The "قد تعجبك" rail under the player
+
+`RelatedRail` is fed by **TMDB's own recommendation/similar lists**, already
+persisted locally by the metadata sync into `media_related_titles`
+(`repository_related.go`). Browsing never calls TMDB: the relationship graph is read
+from PostgreSQL and each entry is resolved to a local work by
+`metadata_provider` + `metadata_external_id` + kind (ADR-007).
+
+The rail therefore mixes two kinds of card:
+
+- **locally available** — resolved to a `media_items` row, opens straight into
+  `/watch/{id}`. The rail exists to keep watching, so a click starts playback and
+  never detours through the work-details page;
+- **provider-only** — no local copy yet. It is shown dimmed with a "غير متوفر محليًا"
+  flag instead of being hidden, because seeing what is missing is useful, and it is
+  not clickable.
+
+Playable cards are sorted ahead of provider-only ones so the viewer does not have to
+hunt for something they can actually open. A heading of "قد تعجبك" is used for every
+kind, because that is what the provider list actually means.
+
+When the provider returned fewer than 8 entries the catalogue tops the rail up with
+same-kind top-rated local titles. This matters because the graph is only populated
+for works whose metadata sync already ran: without the top-up the rail would be
+empty — or nearly empty — for most of the library, which is how it behaved before.
+
+`previous` restarts the current episode once it is past the first 10 seconds, and
+otherwise steps back to the previous episode when one exists (platform convention).
+With no earlier entry it restarts rather than doing nothing, and `goNext` /
+`goPrevious` both check their `hasNext` / `hasPrevious` flag first so a keyboard or
+remote call can never fail silently.
+
+### RTL layout of the transport row
+
+The bar is `dir="rtl"`, so the first DOM child renders furthest **right**. The row
+is therefore ordered التالي → تشغيل → السابق, which puts "next" under the thumb of
+a right-to-left reader instead of across the play button.
+
+Directional glyphs are mirrored with `scaleX(-1)` for the two spatial skip icons
+only (`skipPrev`, `skipNext`). Three groups are deliberately **not** mirrored:
+
+- the ±10s wind-back / wind-forward rings — their meaning is temporal, and
+  flipping the back arrow would make the pair look identical;
+- **the fullscreen pair** — the corner brackets are horizontally symmetrical, so a
+  flip produces a glyph indistinguishable from the *other* state. "Enter" and
+  "exit" are instead told apart by diagonals pointing out or in, which is why the
+  button stopped looking mirrored;
+- the minimise arrow — it points down, and a horizontal flip of a vertical glyph
+  only distorts it.
 
 ## 10. Performance
 

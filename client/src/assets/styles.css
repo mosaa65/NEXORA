@@ -1,5 +1,3 @@
-@config "../../tailwind.config.js";
-
 @font-face { font-family: "NEXORA Arabic"; src: url("/fonts/ibm-plex-arabic-400.ttf") format("truetype"); font-weight: 400; font-style: normal; font-display: swap; }
 @font-face { font-family: "NEXORA Arabic"; src: url("/fonts/ibm-plex-arabic-500.ttf") format("truetype"); font-weight: 500; font-style: normal; font-display: swap; }
 @font-face { font-family: "NEXORA Arabic"; src: url("/fonts/ibm-plex-arabic-600.ttf") format("truetype"); font-weight: 600; font-style: normal; font-display: swap; }
@@ -165,9 +163,25 @@ body::after {
 
 .line-clamp-3 {
   display: -webkit-box;
-  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
   overflow: hidden;
+}
+
+/* Visually hidden but still announced by assistive technology. The player labels
+   its spinner with `.sr-only`, which was referenced but never defined — so the
+   text rendered on screen on top of the indicator. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+  padding: 0;
 }
 
 ::-webkit-scrollbar {
@@ -336,9 +350,6 @@ select {
   border-color: rgba(255, 255, 255, .1);
 }
 
-.nexora-queue-grid .nexora-episode-facts { color: rgba(255, 255, 255, .55); }
-.nexora-queue-grid .nexora-episode-facts span { background: rgba(255, 255, 255, .08); }
-
 
 /* ---------------------------------------------------------------------------
    NexoraPlayer — Video.js shell (migration Phases 2–6)
@@ -408,36 +419,72 @@ select {
   transition: transform .15s ease, background-color .15s ease, border-color .15s ease;
 }
 
-/* ±10s jump: the arrow sits slightly high, the number tucked beneath it —
-   aligned as a unit, never spilling past the ring. */
+/* ±10s jump: a compact icon-only circle with the numeral sitting INSIDE it,
+   which is the YouTube convention and reads clearly at every size.
+
+   The SVG is a FIXED 1.5rem box rather than stretched to the button's full
+   width/height: the glyph is drawn for a 24-unit viewBox with a 2px stroke, so
+   stretching it makes the stroke bloat and the ring look deformed. The numeral
+   is absolutely centred on top of the glyph.
+
+   Neither glyph is mirrored for RTL — their meaning is temporal (wind back /
+   wind forward), not spatial. */
 .nexora-center-seek {
-  width: 3.4rem;
-  height: 3.4rem;
-  flex-direction: column;
-  gap: 0;
+  width: 3.15rem;
+  height: 3.15rem;
+  align-items: center;
+  justify-content: center;
   line-height: 1;
 }
 
-.nexora-center-seek svg { transform: translateY(-1px); }
+.nexora-center-seek svg {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 1.9rem;
+  height: 1.9rem;
+  transform: translate(-50%, -50%);
+  /* A thinner ring: at 2px the stroke collided with the numeral and the two read
+     as one smudge. */
+  stroke-width: 1.6;
+  opacity: .55;
+}
 
+/* The numeral sits dead centre, ON TOP of the ring and in the full-strength text
+   colour, so it stays legible against the dimmed circle behind it. */
 .nexora-center-seek small {
-  position: static;
-  margin-top: 1px;
-  font-size: .62rem;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 2;
+  margin: 0;
+  transform: translate(-50%, -50%);
+  color: #fff;
+  font-size: .64rem;
   font-weight: 900;
-  letter-spacing: -.02em;
-  opacity: .9;
+  letter-spacing: -.03em;
+  line-height: 1;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, .9);
 }
 
+/* Play/pause is a bare glyph — no ring, no plate — tinted with the system's
+   fuchsia accent so it reads as the primary action, per the design system. */
 .nexora-center-main {
-  width: 4.6rem;
-  height: 4.6rem;
-  border-color: rgba(232, 121, 249, 0.55);
-  background: linear-gradient(135deg, #c026d3, #7c3aed);
-  box-shadow: 0 0 40px rgba(192, 132, 252, .5);
+  width: 4.2rem;
+  height: 4.2rem;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  color: #e879f9;
+  filter: drop-shadow(0 4px 18px rgba(192, 38, 211, .55));
 }
 
-.nexora-center-main svg { margin-inline-start: 2px; }
+.nexora-center-main svg {
+  width: 3.4rem;
+  height: 3.4rem;
+  margin-inline-start: 3px;
+}
 
 .nexora-center-button:hover {
   transform: scale(1.06);
@@ -445,7 +492,12 @@ select {
   background: rgba(217, 70, 239, .4);
 }
 
-.nexora-center-main:hover { background: linear-gradient(135deg, #d030e0, #8b5cf6); }
+.nexora-center-main:hover {
+  background: transparent;
+  border-color: transparent;
+  transform: scale(1.1);
+  color: #f0abfc;
+}
 
 /* The single NEXORA control bar. Video.js' own bar is disabled, so this is the
    only control surface and no button or timeline is duplicated. */
@@ -528,9 +580,11 @@ select {
 @media (max-width: 640px) {
   .nexora-vol { width: 3rem; }
   .nexora-time { font-size: .62rem; }
-  .nexora-bar-button { min-width: 1.9rem; height: 1.9rem; }
-  .nexora-center-main { width: 3.4rem; height: 3.4rem; }
-  .nexora-center-seek { width: 2.7rem; height: 2.7rem; }
+  .nexora-center-main { width: 3.5rem; height: 3.5rem; }
+  .nexora-center-main svg { width: 2.8rem; height: 2.8rem; }
+  .nexora-center-seek { width: 2.75rem; height: 2.75rem; }
+  .nexora-center-seek svg { width: 1.55rem; height: 1.55rem; }
+  .nexora-center-seek small { font-size: .58rem; }
 }
 
 /* ===========================================================================
@@ -571,9 +625,10 @@ select {
   line-height: 1.7;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
-.nexora-plot.is-open { -webkit-line-clamp: unset; }
+.nexora-plot.is-open { -webkit-line-clamp: unset; line-clamp: unset; }
 
 /* ---- Tabs (watch screen: episodes / about) ---- */
 .nexora-tabs {
@@ -844,15 +899,11 @@ select {
   font-weight: 700;
 }
 
-/* ---- Grid: player column first, episode list second ----
-   In RTL the first column is the right-hand one, so the player sits on the right
-   and the episode list on the left. Source order is player-then-list on purpose:
-   it is also the stacked order, which keeps the video ABOVE the episodes on
-   narrow screens instead of pushing the picture below a long list. */
+/* ---- Grid: episodes column first (right in RTL), player second (left) ---- */
 .nexora-watch-grid {
   display: grid;
   gap: 1.25rem;
-  grid-template-columns: minmax(19rem, 23rem) minmax(0, 1fr);
+  grid-template-columns: minmax(16rem, 19rem) minmax(0, 1fr);
   align-items: start;
 }
 
@@ -1175,8 +1226,11 @@ select {
 /* Compact the control surface inside the dock so nothing feels cramped. */
 .nexora-dock-stage .nexora-bar { padding: .35rem .7rem .5rem; }
 .nexora-dock-stage .nexora-bar-button { min-width: 2rem; height: 2rem; }
-.nexora-dock-stage .nexora-center-main { width: 3.4rem; height: 3.4rem; }
-.nexora-dock-stage .nexora-center-seek { width: 2.6rem; height: 2.6rem; }
+.nexora-dock-stage .nexora-center-main { width: 3rem; height: 3rem; }
+.nexora-dock-stage .nexora-center-main svg { width: 2.4rem; height: 2.4rem; }
+.nexora-dock-stage .nexora-center-seek { width: 2.4rem; height: 2.4rem; }
+.nexora-dock-stage .nexora-center-seek svg { width: 1.15rem; height: 1.15rem; }
+.nexora-dock-stage .nexora-center-seek small { bottom: .28rem; font-size: .46rem; }
 .nexora-dock-stage .nexora-time { font-size: .66rem; }
 
 /* Note shown on the watch screen while the dock owns playback. */
@@ -1212,11 +1266,33 @@ select {
    Watch responsive
    =========================================================================== */
 
+/* The episode rail lives BESIDE the player at every width — the desktop reading
+   order (episodes right, player left) is the only layout. As the viewport
+   shrinks the rail narrows and, on phones, its cards drop to a thumbnail-only
+   "icon" form, so the player keeps the largest share of the screen. */
+
 @media (max-width: 1100px) {
-  /* Same reading order as the desktop layout: player first, episodes after. */
-  .nexora-watch-grid { grid-template-columns: minmax(0, 1fr); }
-  .nexora-watch-side { position: static; max-height: none; }
-  .nexora-watch-list { max-height: 58vh; }
+  .nexora-watch-grid { grid-template-columns: minmax(13rem, 15rem) minmax(0, 1fr); }
+  .nexora-watch-side { position: sticky; max-height: min(82vh, 44rem); }
+  .nexora-watch-list { max-height: min(70vh, 38rem); }
+}
+
+@media (max-width: 900px) {
+  .nexora-watch { padding-inline: .5rem; }
+  .nexora-watch-grid { gap: .8rem; grid-template-columns: minmax(10.5rem, 12rem) minmax(0, 1fr); }
+}
+
+@media (max-width: 720px) {
+  .nexora-watch { padding-inline: .35rem; }
+  .nexora-watch-grid { gap: .6rem; grid-template-columns: 9.5rem minmax(0, 1fr); }
+  .nexora-watch-side { border-radius: .85rem; }
+  .nexora-watch-list { max-height: 58vh; gap: .45rem; padding: .4rem; }
+}
+
+@media (max-width: 560px) {
+  .nexora-watch-grid { gap: .5rem; grid-template-columns: 8.5rem minmax(0, 1fr); }
+  .nexora-watch-list { gap: .4rem; padding: .35rem; }
+  .nexora-tabs { font-size: .72rem; }
 }
 
 @media (max-width: 640px) {
@@ -1279,145 +1355,146 @@ select {
 }
 
 /* ===========================================================================
-   EpisodeCard — the square episode tile (mirrors the work-details card)
+   EpisodeCard — full-bleed artwork tile for the watch rail
+
+   The still IS the card: one rounded rectangle of artwork with every fact laid
+   inside it. Nothing sits below the image, so a narrow rail shows large, readable
+   artwork instead of a stamp with a caption strip. Placement mirrors the
+   catalogue card (`UnifiedMediaCard`) so the two belong to one system.
    =========================================================================== */
 
 .nexora-episode-card {
   position: relative;
-  display: flex;
+  display: block;
   flex: 0 0 auto;
-  flex-direction: column;
   width: 100%;
+  aspect-ratio: 16 / 10;
   overflow: hidden;
   border: 1px solid var(--border-default);
-  border-radius: 1rem;
+  border-radius: .85rem;
   background: var(--bg-elevated);
-  text-align: right;
   cursor: pointer;
+  isolation: isolate;
   transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
 }
 
 .nexora-episode-card:hover {
-  border-color: rgba(232, 121, 249, .5);
-  box-shadow: 0 14px 34px rgba(0, 0, 0, .34);
+  border-color: rgba(232, 121, 249, .55);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .4);
   transform: translateY(-2px);
 }
 
 .nexora-episode-card.is-active {
-  border-color: rgba(232, 121, 249, .75);
-  box-shadow: 0 0 0 2px rgba(232, 121, 249, .35), 0 14px 34px rgba(147, 51, 234, .3);
+  border-color: rgba(232, 121, 249, .85);
+  box-shadow: 0 0 0 2px rgba(232, 121, 249, .4), 0 12px 30px rgba(147, 51, 234, .35);
 }
 
-.nexora-episode-card.is-unavailable { opacity: .72; }
+.nexora-episode-card.is-unavailable { cursor: default; }
 
-/* ---- Still frame ---- */
-.nexora-episode-thumb {
-  position: relative;
-  display: block;
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  overflow: hidden;
-  background: #000;
-}
-
-.nexora-episode-thumb img {
+/* ---- The artwork fills the tile ---- */
+.nexora-episode-still {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform .5s ease, opacity .2s ease;
+  object-position: center;
+  transition: transform .55s cubic-bezier(.2, .7, .3, 1), opacity .2s ease;
 }
 
-.nexora-episode-card:hover .nexora-episode-thumb img { transform: scale(1.05); }
+.nexora-episode-card:hover .nexora-episode-still { transform: scale(1.06); }
 
-.nexora-episode-card.is-unavailable .nexora-episode-thumb img {
-  opacity: .55;
+.nexora-episode-card.is-unavailable .nexora-episode-still {
+  opacity: .5;
   filter: grayscale(1);
 }
 
-.nexora-episode-thumb::after {
-  content: "";
+/* ---- Scrim: a uniform base tint plus heavier bands top and bottom, so badges
+   stay legible over a bright still without dimming the middle of the frame. ---- */
+.nexora-episode-veil {
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, rgba(5, 4, 12, .32), transparent 42%, rgba(5, 4, 12, .12));
+  z-index: 1;
   pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(6, 4, 14, .78), rgba(6, 4, 14, 0) 38%),
+    linear-gradient(0deg, rgba(6, 4, 14, .84), rgba(6, 4, 14, 0) 44%),
+    rgba(6, 4, 14, .12);
 }
 
-/* ---- Episode number — a bare numeral, top right, elegant and out of the way ---- */
-.nexora-episode-number {
+.nexora-episode-card.is-active .nexora-episode-veil {
+  background:
+    linear-gradient(180deg, rgba(76, 5, 92, .8), rgba(6, 4, 14, 0) 42%),
+    linear-gradient(0deg, rgba(76, 5, 92, .85), rgba(6, 4, 14, 0) 46%),
+    rgba(88, 28, 135, .18);
+}
+
+/* ---- Shared badge chrome: one pill language for every overlay ---- */
+.nexora-episode-number,
+.nexora-episode-duration,
+.nexora-episode-meta,
+.nexora-episode-versions,
+.nexora-episode-missing {
   position: absolute;
-  top: .5rem;
-  inset-inline-end: .5rem;
-  z-index: 2;
-  display: grid;
-  min-width: 1.6rem;
-  height: 1.6rem;
-  place-items: center;
-  border: 1px solid rgba(255, 255, 255, .18);
-  border-radius: 999px;
-  background: rgba(8, 6, 16, .62);
-  padding: 0 .4rem;
+  z-index: 3;
+  border-radius: .45rem;
+  background: rgba(8, 6, 16, .72);
+  padding: .16rem .42rem;
   color: #fff;
-  font-size: .78rem;
+  font-size: .66rem;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
+  line-height: 1.35;
+  backdrop-filter: blur(10px);
+}
+
+/* ---- Episode number — top-right, the tile's anchor ---- */
+.nexora-episode-number {
+  top: .45rem;
+  inset-inline-end: .45rem;
+  border: 1px solid rgba(255, 255, 255, .16);
+  font-size: .72rem;
   letter-spacing: .01em;
-  line-height: 1;
-  text-shadow: 0 1px 6px rgba(0, 0, 0, .75);
-  backdrop-filter: blur(8px);
 }
 
 .nexora-episode-card.is-active .nexora-episode-number {
-  border-color: rgba(232, 121, 249, .75);
-  background: linear-gradient(135deg, rgba(192, 38, 211, .9), rgba(124, 58, 237, .9));
+  border-color: rgba(240, 171, 252, .8);
+  background: linear-gradient(135deg, #c026d3, #7c3aed);
+  box-shadow: 0 4px 14px rgba(192, 38, 211, .5);
 }
 
-/* Completed state as text in the strip (the still keeps only the number). */
-.nexora-episode-done-text {
-  display: inline-flex;
-  align-items: center;
-  gap: .25rem;
-  border-radius: .3rem;
-  border: 1px solid rgba(16, 185, 129, .35);
-  background: rgba(6, 78, 59, .5);
-  padding: .08rem .42rem;
-  color: #6ee7b7;
-  font-size: .62rem;
-  font-weight: 800;
-}
-
+/* ---- Duration — bottom-right ---- */
 .nexora-episode-duration {
-  position: absolute;
-  bottom: .5rem;
-  inset-inline-start: .5rem;
-  z-index: 2;
-  border-radius: .4rem;
-  background: rgba(0, 0, 0, .82);
-  padding: .08rem .4rem;
-  color: #fff;
-  font-size: .64rem;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
+  bottom: .45rem;
+  inset-inline-end: .45rem;
 }
 
+/* ---- Resolution · size — bottom-left ---- */
+.nexora-episode-meta {
+  bottom: .45rem;
+  inset-inline-start: .45rem;
+  background: rgba(8, 6, 16, .6);
+  color: rgba(255, 255, 255, .82);
+  font-size: .6rem;
+  letter-spacing: .01em;
+}
+
+/* ---- Versions badge — bottom-left (replaces the meta line) ---- */
 .nexora-episode-versions {
-  position: absolute;
-  bottom: .5rem;
-  inset-inline-end: .5rem;
-  z-index: 2;
-  border-radius: .4rem;
-  border: 1px solid rgba(34, 211, 238, .3);
-  background: rgba(8, 51, 68, .85);
-  padding: .08rem .4rem;
+  bottom: .45rem;
+  inset-inline-start: .45rem;
+  border: 1px solid rgba(34, 211, 238, .35);
+  background: rgba(8, 51, 68, .8);
   color: #a5f3fc;
   font-size: .6rem;
-  font-weight: 800;
 }
 
+/* ---- Completed tick — top-left ---- */
 .nexora-episode-done {
   position: absolute;
-  top: .5rem;
-  inset-inline-start: .5rem;
-  z-index: 2;
+  top: .45rem;
+  inset-inline-start: .45rem;
+  z-index: 3;
   display: grid;
   width: 1.35rem;
   height: 1.35rem;
@@ -1425,28 +1502,49 @@ select {
   border-radius: 999px;
   background: rgba(16, 185, 129, .92);
   color: #fff;
+  box-shadow: 0 3px 10px rgba(6, 78, 59, .55);
 }
 
+/* ---- Unavailable marker — centred, replaces the play affordance ---- */
+.nexora-episode-missing {
+  top: 50%;
+  left: 50%;
+  inset-inline: auto;
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(255, 255, 255, .18);
+  background: rgba(8, 6, 16, .82);
+  color: rgba(255, 255, 255, .82);
+  font-size: .62rem;
+  white-space: nowrap;
+}
+
+/* ---- Resume bar along the bottom edge ---- */
 .nexora-episode-progress {
   position: absolute;
   inset-inline: 0;
   bottom: 0;
-  z-index: 2;
+  z-index: 4;
   height: 3px;
-  background: rgba(255, 255, 255, .25);
+  background: rgba(255, 255, 255, .22);
 }
 
-.nexora-episode-progress i { display: block; height: 100%; background: #e879f9; }
+.nexora-episode-progress i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #c026d3, #e879f9);
+  box-shadow: 0 0 8px rgba(232, 121, 249, .8);
+}
 
-/* Play overlay button */
+/* ---- Play affordance: the whole tile is the click target, so this button is
+   a pure overlay that appears on hover (and stays on the active episode) ---- */
 .nexora-episode-play {
   position: absolute;
   inset: 0;
-  z-index: 3;
+  z-index: 5;
   display: grid;
   place-items: center;
   border: 0;
-  background: rgba(0, 0, 0, .34);
+  background: rgba(6, 4, 14, .38);
   opacity: 0;
   transition: opacity .2s ease;
 }
@@ -1454,53 +1552,18 @@ select {
 .nexora-episode-card:hover .nexora-episode-play,
 .nexora-episode-card.is-active .nexora-episode-play { opacity: 1; }
 
-.nexora-episode-play span { display: grid; width: 2.6rem; height: 2.6rem; place-items: center; border-radius: 999px; background: linear-gradient(135deg, #c026d3, #7c3aed); color: #fff; box-shadow: 0 8px 22px rgba(147, 51, 234, .5); }
+.nexora-episode-play span {
+  display: grid;
+  width: 2.6rem;
+  height: 2.6rem;
+  place-items: center;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #c026d3, #7c3aed);
+  color: #fff;
+  box-shadow: 0 8px 22px rgba(147, 51, 234, .55);
+}
+
 .nexora-episode-play svg { width: 1rem; height: 1rem; }
-
-/* ---- Data strip under the still ---- */
-.nexora-episode-body {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  gap: .3rem;
-  padding: .45rem .55rem .5rem;
-}
-
-.nexora-episode-marks {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: .3rem;
-}
-
-.nexora-episode-facts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: .3rem;
-  font-size: .64rem;
-  font-weight: 700;
-  color: var(--text-muted);
-}
-
-.nexora-episode-facts span {
-  border-radius: .3rem;
-  background: var(--bg-surface);
-  padding: .08rem .42rem;
-  font-variant-numeric: tabular-nums;
-}
-
-.nexora-episode-soon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: .3rem;
-  border: 1px solid var(--border-subtle);
-  background: var(--bg-card);
-  padding: .08rem .45rem;
-  color: var(--text-muted);
-  font-size: .62rem;
-  font-weight: 800;
-}
 
 /* ===========================================================================
    RelatedRail — "watch next" beneath the player
@@ -1882,22 +1945,6 @@ select {
   opacity: 1;
 }
 
-/* ---- Rate chip ---- */
-.nexora-rate-chip {
-  display: inline-grid;
-  min-width: 2.4rem;
-  height: 2.2rem;
-  place-items: center;
-  border: 1px solid rgba(255, 255, 255, .08);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, .05);
-  padding: 0 .45rem;
-  color: rgba(255, 255, 255, .85);
-  font-size: .68rem;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-}
-
 /* ---- Primary transport button ---- */
 .nexora-bar-button--primary {
   border-color: rgba(232, 121, 249, .5);
@@ -1905,9 +1952,18 @@ select {
   color: #fff;
 }
 
+/* Exit is tinted at rest, not only on hover: sitting next to the neutral
+   "minimise" button in fullscreen, two identical glyph rings read as a pair and
+   the destructive one becomes easy to hit by mistake. */
+.nexora-bar-button--danger {
+  border-color: rgba(248, 113, 113, .35);
+  color: #fca5a5;
+}
+
 .nexora-bar-button--danger:hover {
-  border-color: rgba(248, 113, 113, .6);
+  border-color: rgba(248, 113, 113, .7);
   background: rgba(239, 68, 68, .45);
+  color: #fff;
 }
 
 .nexora-bar-button:disabled {
@@ -2322,8 +2378,22 @@ select {
 
 .nexora-watch-summary-actions .nexora-act { flex: 0 0 auto; }
 
-/* ---- RTL: mirror the directional icons that would otherwise point inward ---- */
+/* ---- RTL: mirror the directional icons that would otherwise point inward ----
+   In `dir="rtl"` the transport row reads right-to-left: "previous" sits on the
+   right. The skip glyphs are drawn for LTR, so their arrows point back at the
+   centre and the pair reads inverted — as documented, "next" looked like
+   "previous". The fullscreen corner brackets have the same problem: the enter
+   pair (pointing out) and the exit pair (pointing in) swap meaning once the
+   layout direction flips, which is why the exit icon looked mirrored. */
 [dir="rtl"] .nexora-next-play svg { transform: scaleX(-1); }
+[dir="rtl"] .nexora-skip-prev svg,
+[dir="rtl"] .nexora-skip-next svg { transform: scaleX(-1); }
+/* NOT mirrored:
+   - `.nexora-fs-toggle` — the corner brackets are horizontally symmetrical, so a
+     flip produces a glyph indistinguishable from the enter icon;
+   - `.nexora-minimize` — its arrow points DOWN, and flipping a vertical glyph on
+     the horizontal axis only distorts it;
+   - the ±10s wind-back / wind-forward rings — temporal, not spatial. */
 
 /* ===========================================================================
    Player module responsive rules
@@ -2332,10 +2402,11 @@ select {
 @media (max-width: 768px) {
   /* Touch targets: every control stays at least ~44px in one dimension. */
   .nexora-bar-button { min-width: 2.5rem; height: 2.5rem; }
-  .nexora-rate-chip { min-width: 2.5rem; height: 2.5rem; }
   .nexora-vol.is-open { width: 3rem; }
-  .nexora-center-main { width: 3.8rem; height: 3.8rem; }
-  .nexora-center-seek { width: 3rem; height: 3rem; }
+  .nexora-center-main { width: 3.7rem; height: 3.7rem; }
+  .nexora-center-main svg { width: 3rem; height: 3rem; }
+  .nexora-center-seek { width: 2.9rem; height: 2.9rem; }
+  .nexora-center-seek svg { width: 1.6rem; height: 1.6rem; }
   .nexora-next { inset-inline: .5rem; bottom: 6.5rem; width: auto; }
   .nexora-popover--settings {
     inset-inline: 0;
@@ -2343,6 +2414,36 @@ select {
     min-width: 0;
     max-height: 60vh;
   }
+}
+
+@media (max-width: 560px) {
+  /* The bar has five controls plus volume and time; below ~560px they must be
+     eased apart rather than crammed. The volume slider moves into settings
+     (mute stays as a button) and the gaps tighten. */
+  .nexora-bar { padding-inline: .5rem; }
+  .nexora-bar-button { min-width: 2.25rem; height: 2.25rem; gap: 0; }
+  .nexora-bar > div { gap: .25rem; }
+  .nexora-vol { display: none; }
+  .nexora-time { font-size: .58rem; }
+  .nexora-center-main { width: 3.25rem; height: 3.25rem; }
+  .nexora-center-main svg { width: 2.6rem; height: 2.6rem; }
+  .nexora-center-seek { width: 2.6rem; height: 2.6rem; }
+  .nexora-center-seek svg { width: 1.45rem; height: 1.45rem; }
+  .nexora-center-seek small { font-size: .54rem; }
+  .nexora-center { gap: .6rem; }
+}
+
+@media (max-width: 400px) {
+  /* Narrowest phones: keep the transport, drop the ornament. */
+  .nexora-bar { padding-inline: .4rem; }
+  .nexora-bar-button { min-width: 2rem; height: 2rem; }
+  .nexora-time { display: none; }
+  .nexora-center-main { width: 2.9rem; height: 2.9rem; }
+  .nexora-center-main svg { width: 2.3rem; height: 2.3rem; }
+  .nexora-center-seek { width: 2.35rem; height: 2.35rem; }
+  .nexora-center-seek svg { width: 1.3rem; height: 1.3rem; }
+  .nexora-center-seek small { font-size: .5rem; }
+  .nexora-center { gap: .45rem; }
 }
 
 @media (max-width: 480px) {
@@ -2357,6 +2458,37 @@ select {
   .nexora-buffering-dot { animation: none; }
   .nexora-next-progress i { transition: none; }
   .nexora-episode-card:hover { transform: none; }
-  .nexora-episode-card:hover .nexora-episode-thumb img { transform: none; }
+  .nexora-episode-card:hover .nexora-episode-still { transform: none; }
   .nexora-related-item { transition: none; }
+}
+
+/* ===========================================================================
+   Watch — phone episode rail (must be LAST in the file)
+
+   These rules override the base `.nexora-episode-*` block defined above, so
+   they have to sit after it: an equal-specificity rule inside a media query
+   still loses to one declared later outside it.
+   =========================================================================== */
+
+@media (max-width: 720px) {
+  /* Narrower phone rail: the artwork tile keeps its 16:10 frame, so only the
+     badges need tightening to stay clear of each other. */
+  .nexora-episode-card { border-radius: .7rem; }
+
+  .nexora-episode-number,
+  .nexora-episode-duration,
+  .nexora-episode-meta,
+  .nexora-episode-versions,
+  .nexora-episode-missing {
+    padding: .12rem .34rem;
+    font-size: .58rem;
+  }
+
+  .nexora-episode-number { font-size: .64rem; }
+
+  .nexora-episode-play span { width: 2.1rem; height: 2.1rem; }
+
+  /* A phone has no hover, so the play affordance must be reachable without one:
+     it stays visible on the active episode and the whole tile is the target. */
+  .nexora-episode-play { background: transparent; }
 }
