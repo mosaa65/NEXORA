@@ -121,6 +121,18 @@ const SHAPES = {
       <path d="M6 6l12 12M18 6L6 18" />
     </Base>
   ),
+  sun: (className) => (
+    <Base className={className}>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 3v2M12 19v2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M3 12h2M19 12h2M5.6 18.4L7 17M17 7l1.4-1.4" />
+    </Base>
+  ),
+  brightness: (className) => (
+    <Base className={className}>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 3v2M12 19v2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M3 12h2M19 12h2M5.6 18.4L7 17M17 7l1.4-1.4" />
+    </Base>
+  ),
   minimize: (className) => (
     <Base className={className}>
       <path d="M12 4v10" />

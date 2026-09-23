@@ -6,6 +6,8 @@ import PlayerControls from "./PlayerControls.jsx";
 import PlayerCenterControls from "./PlayerCenterControls.jsx";
 import PlayerSettingsMenu from "./PlayerSettingsMenu.jsx";
 import { PlayerNextOverlay, EndOfWorkNotice } from "./PlayerNextOverlay.jsx";
+import PlayerGestureHud from "./PlayerGestureHud.jsx";
+import useTouchGestures, { clamp01 } from "./useTouchGestures.js";
 import {
   ResumePrompt,
   BufferingIndicator,
@@ -14,6 +16,12 @@ import {
 } from "./PlayerStaticOverlays.jsx";
 import { usePlayerProgress, usePlayerProgressWriters } from "./usePlayerProgress.js";
 import { clock } from "../../lib/watchContent.js";
+
+/** True on a device whose primary input is a finger. */
+const isTouchDevice = () => {
+  if (typeof window === "undefined") return false;
+  return window.matchMedia?.("(hover: none) and (pointer: coarse)")?.matches ?? false;
+};
 
 const SEEK_SECONDS = 10;
 const NEXT_PROMPT_SECONDS = 30;
@@ -126,6 +134,11 @@ export default function NexoraPlayer({
   const [ended, setEnded] = useState(false);
   const [episodeDrawerOpen, setEpisodeDrawerOpen] = useState(false);
   const [error, setError] = useState(null);
+
+  // Touch-only: a vertical drag on the right half sets volume, on the left half
+  // dims the picture (a CSS filter — a page cannot change the panel backlight).
+  const [brightness, setBrightness] = useState(1);
+  const touchEnabled = useMemo(() => isTouchDevice(), []);
   const [subtitleStyle, setSubtitleStyle] = useState(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(SUBTITLE_STYLE_KEY) || "null");
@@ -219,9 +232,22 @@ export default function NexoraPlayer({
   const setVolumeTo = useCallback((value) => {
     const player = playerRef.current;
     if (!player || player.isDisposed()) return;
-    player.volume(value);
-    player.muted(value === 0);
+    const next = clamp01(value);
+    player.volume(next);
+    // Raising the volume from a gesture should also lift a mute, otherwise the
+    // HUD promises sound the viewer cannot hear.
+    player.muted(next === 0);
   }, []);
+
+  // Touch gestures (volume on the right half, brightness on the left half) are
+  // attached to the player shell, so the whole video area is the surface.
+  const { ref: gestureRef, hud } = useTouchGestures({
+    enabled: touchEnabled && !error,
+    volume,
+    brightness,
+    onVolume: setVolumeTo,
+    onBrightness: setBrightness,
+  });
 
   const toggleMute = useCallback(() => {
     const player = playerRef.current;
@@ -832,14 +858,22 @@ export default function NexoraPlayer({
 
   const overlayVisible = visible && !askResume && !error;
 
+  // The gesture surface is the shell itself, so the ref is attached to the root
+  // element and the brightness filter rides on the same node.
+  const shellStyle = brightness < 1 ? { filter: `brightness(${brightness})` } : undefined;
+
   return (
     <div
-      ref={containerRef}
+      ref={(node) => {
+        containerRef.current = node;
+        gestureRef.current = node;
+      }}
+      style={shellStyle}
       tabIndex={0}
       dir="rtl"
       role="region"
       aria-label={title || "مشغل الفيديو"}
-      className={`nexora-vjs group relative aspect-video overflow-hidden bg-black ${visible ? "" : "nexora-vjs--idle"}`}
+      className={`nexora-vjs group relative aspect-video overflow-hidden bg-black ${visible ? "" : "nexora-vjs--idle"} ${touchEnabled ? "nexora-vjs--touch" : ""}`}
       onMouseMove={showControls}
       onMouseEnter={showControls}
       onMouseLeave={hideControls}
@@ -858,6 +892,9 @@ export default function NexoraPlayer({
             onTogglePlay={togglePlay}
             onSeekBy={seekBy}
             onToast={showToast}
+            // The ±10s rings need a known length to seek through; before the
+            // player reports one there is nothing to jump across.
+            seekable={Number.isFinite(duration) && duration > 0}
           />
 
           {askResume && (
@@ -913,6 +950,7 @@ export default function NexoraPlayer({
 
           <BufferingIndicator visible={buffering} />
           <PlayerToast message={toast} />
+          <PlayerGestureHud hud={hud} />
 
           {overlayVisible && (
             <PlayerControls

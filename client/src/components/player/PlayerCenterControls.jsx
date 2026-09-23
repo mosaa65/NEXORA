@@ -10,7 +10,7 @@ const SEEK_SECONDS = 10;
  * (single click toggles play, double click toggles fullscreen). Only the buttons
  * re-enable pointer events for themselves.
  */
-function PlayerCenterControls({ visible, playing, onTogglePlay, onSeekBy, onToast }) {
+function PlayerCenterControls({ visible, playing, onTogglePlay, onSeekBy, onToast, seekable = true }) {
   return (
     <div
       dir="ltr"
@@ -19,20 +19,25 @@ function PlayerCenterControls({ visible, playing, onTogglePlay, onSeekBy, onToas
       aria-hidden={!visible}
     >
       <div className="pointer-events-auto flex items-center gap-4 sm:gap-6">
-        {/* The numeral is a child of the button and is centred inside the ring. */}
-        <button
-          type="button"
-          className="nexora-center-button nexora-center-seek"
-          onClick={() => {
-            onSeekBy(-SEEK_SECONDS);
-            onToast("−10 ثوانٍ");
-          }}
-          aria-label="رجوع 10 ثوانٍ"
-          tabIndex={visible ? 0 : -1}
-        >
-          <PlayerIcon name="rewind" />
-          <small>10</small>
-        </button>
+        {/* The ±10s pair only makes sense while something is actually playable:
+            with no duration there is nothing to seek through, and the rings just
+            crowd the tile (which is what made them collide with the numeral on a
+            phone). They are hidden until the media is seekable. */}
+        {seekable && (
+          <button
+            type="button"
+            className="nexora-center-button nexora-center-seek"
+            onClick={() => {
+              onSeekBy(-SEEK_SECONDS);
+              onToast("−10 ثوانٍ");
+            }}
+            aria-label="رجوع 10 ثوانٍ"
+            tabIndex={visible ? 0 : -1}
+          >
+            <PlayerIcon name="rewind" />
+            <small>10</small>
+          </button>
+        )}
 
         <button
           type="button"
@@ -41,22 +46,24 @@ function PlayerCenterControls({ visible, playing, onTogglePlay, onSeekBy, onToas
           aria-label={playing ? "إيقاف مؤقت" : "تشغيل"}
           tabIndex={visible ? 0 : -1}
         >
-          <PlayerIcon name={playing ? "pause" : "play"} className="h-9 w-9" />
+          <PlayerIcon name={playing ? "pause" : "play"} />
         </button>
 
-        <button
-          type="button"
-          className="nexora-center-button nexora-center-seek"
-          onClick={() => {
-            onSeekBy(SEEK_SECONDS);
-            onToast("+10 ثوانٍ");
-          }}
-          aria-label="تقديم 10 ثوانٍ"
-          tabIndex={visible ? 0 : -1}
-        >
-          <PlayerIcon name="forward" />
-          <small>10</small>
-        </button>
+        {seekable && (
+          <button
+            type="button"
+            className="nexora-center-button nexora-center-seek"
+            onClick={() => {
+              onSeekBy(SEEK_SECONDS);
+              onToast("+10 ثوانٍ");
+            }}
+            aria-label="تقديم 10 ثوانٍ"
+            tabIndex={visible ? 0 : -1}
+          >
+            <PlayerIcon name="forward" />
+            <small>10</small>
+          </button>
+        )}
       </div>
     </div>
   );

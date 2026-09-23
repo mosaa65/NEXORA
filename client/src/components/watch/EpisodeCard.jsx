@@ -36,7 +36,15 @@ export default function EpisodeCard({
   const available = episode?.has_local_file !== false;
   const versions = Number(episode?.file_count || 0);
   const progress = readProgress(episode?.streamId || episode?.file_id || episode?.id);
-  const number = episode?.episode_number || index + 1;
+
+  // A part is a different chapter of one work (a two-part film); an episode is a
+  // chapter of a season. The tile labels them differently so a shelf of film
+  // files never reads as a shelf of episodes. `episode_number` wins when both are
+  // present, because that is the stronger identity.
+  const partNumber = Number(episode?.part_number || 0);
+  const episodeNumber = Number(episode?.episode_number || 0);
+  const isPart = !episodeNumber && partNumber > 0;
+  const number = episodeNumber || (isPart ? partNumber : index + 1);
 
   // Duration first (what a viewer scans for), then the technical extras.
   const seconds = episode?.duration || (episode?.runtime ? episode.runtime * 60 : 0);
@@ -80,8 +88,12 @@ export default function EpisodeCard({
       {/* Gradient plate that makes every overlay legible on any artwork. */}
       <span className="nexora-episode-veil" aria-hidden="true" />
 
-      {/* Top-right: the episode number. */}
-      <span className="nexora-episode-number">{number}</span>
+      {/* The episode/part number leads the tile: large, glowing, top-right. It is
+          the one fact a viewer scans for when picking an entry. */}
+      <span className="nexora-episode-number" aria-label={isPart ? `الجزء ${number}` : `الحلقة ${number}`}>
+        {isPart && <b className="nexora-episode-number-kind">جزء</b>}
+        <em>{number}</em>
+      </span>
 
       {/* Top-left: completed tick. */}
       {progress?.completed && (
@@ -90,15 +102,15 @@ export default function EpisodeCard({
         </span>
       )}
 
-      {/* Bottom-right: duration. */}
-      {duration && <span className="nexora-episode-duration">{duration}</span>}
-
-      {/* Bottom-left: resolution and size, or the versions badge. */}
-      {versions > 1 ? (
-        <span className="nexora-episode-versions">{versions} إصدارات</span>
-      ) : meta.length > 0 ? (
-        <span className="nexora-episode-meta" dir="ltr">{meta.join(" · ")}</span>
-      ) : null}
+      {/* Bottom strip: the facts the catalogue actually holds, above the artwork.
+          Duration, resolution and size reuse the work-details card's vocabulary. */}
+      {(duration || meta.length > 0 || versions > 1) && (
+        <span className="nexora-episode-facts" dir="ltr">
+          {duration && <span className="nexora-episode-duration">{duration}</span>}
+          {versions > 1 && <span className="nexora-episode-versions">{versions} editions</span>}
+          {versions <= 1 && meta.map((fact) => <span key={fact} className="nexora-episode-meta">{fact}</span>)}
+        </span>
+      )}
 
       {/* Unavailable marker replaces the play affordance. */}
       {!available && <span className="nexora-episode-missing">غير متوفرة</span>}

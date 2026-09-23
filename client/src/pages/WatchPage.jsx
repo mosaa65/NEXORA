@@ -6,7 +6,7 @@ import RelatedRail from "../components/watch/RelatedRail.jsx";
 import Icon from "../components/Icon.jsx";
 import { usePlayback } from "../context/PlaybackContext.jsx";
 import { getMediaPlayback, getFileSubtitles, resolveAPIURL } from "../lib/api.js";
-import { clock, itemNoun, kindLabel, listTitle, formatSize } from "../lib/watchContent.js";
+import { clock, itemNoun, kindLabel, listTitle } from "../lib/watchContent.js";
 
 /**
  * The identifier of a playable file row.
@@ -45,7 +45,6 @@ export default function WatchPage() {
   const [seasonFilter, setSeasonFilter] = useState(null);
   const [subtitles, setSubtitles] = useState([]);
   const [fullscreen, setFullscreen] = useState(false);
-  const [tab, setTab] = useState("episodes");
 
   const { minimize, close: closeDock, isActive: dockActive } = usePlayback();
 
@@ -286,7 +285,8 @@ export default function WatchPage() {
 
   const sideTitle = listTitle(type);
 
-  // Technical facts of the current source: badges and the info tab read these.
+  // Technical facts of the current source: the badges and the player's technical
+  // panel read these.
   const technical = {
     resolution: currentFile?.resolution || "",
     video_codec: currentFile?.video_codec || "",
@@ -374,19 +374,15 @@ export default function WatchPage() {
       )}
 
       <div className="nexora-watch-grid">
-        {/* Side column: seasons + episodes/parts/files, then about. */}
+        {/* Side column: seasons + episodes/parts/files. */}
         <aside className="nexora-watch-side">
           <div className="nexora-tabs">
-            <button type="button" className={tab === "episodes" ? "is-active" : ""} onClick={() => setTab("episodes")}>
+            <span className="nexora-tabs-label">
               {sideTitle} <span>{episodic ? episodes.length : files.length}</span>
-            </button>
-            <button type="button" className={tab === "about" ? "is-active" : ""} onClick={() => setTab("about")}>
-              معلومات
-            </button>
+            </span>
           </div>
 
-          {tab === "episodes" ? (
-            <>
+          <>
               {/* Season selector: switching seasons swaps the grid without a page
                   reload, so a work with 20 seasons never renders 500 cards at once. */}
               {episodic && seasons.length > 1 && (
@@ -438,34 +434,7 @@ export default function WatchPage() {
                   </div>
                 )}
               </div>
-            </>
-          ) : (
-            <div className="nexora-about">
-              <dl>
-                <div><dt>النوع</dt><dd>{kindLabel(type)}</dd></div>
-                <div><dt>السنة</dt><dd>{plan?.release_year || "—"}</dd></div>
-                <div><dt>التقييم</dt><dd>{plan?.rating ? `★ ${Number(plan.rating).toFixed(1)}` : "—"}</dd></div>
-                {plan?.status ? <div><dt>الحالة</dt><dd>{plan.status}</dd></div> : null}
-                <div><dt>{episodic ? "المواسم" : `عدد ${itemNoun(type)}ات`}</dt><dd>{episodic ? seasons.length : files.length}</dd></div>
-                <div><dt>الدقة الحالية</dt><dd>{technical.resolution || "—"}</dd></div>
-                <div><dt>ترميز الفيديو</dt><dd>{technical.video_codec ? technical.video_codec.toUpperCase() : "—"}</dd></div>
-                <div><dt>المدة</dt><dd>{technical.duration ? clock(technical.duration) : "—"}</dd></div>
-                <div><dt>الحجم</dt><dd>{technical.file_size ? formatSize(technical.file_size) : "—"}</dd></div>
-                {technical.audio_track_count > 1 ? (
-                  <div><dt>مسارات الصوت</dt><dd>{technical.audio_track_count}</dd></div>
-                ) : null}
-                {technical.subtitle_count > 0 ? (
-                  <div><dt>ترجمات مدمجة</dt><dd>{technical.subtitle_count}</dd></div>
-                ) : null}
-              </dl>
-              {plot && <p className="nexora-plot is-open">{plot}</p>}
-              {genres.length > 0 && (
-                <div className="nexora-genres">
-                  {genres.map((genre) => <span key={genre} className="nexora-genre">{genre}</span>)}
-                </div>
-              )}
-            </div>
-          )}
+          </>
         </aside>
 
         {/* Player column (left in RTL). */}
@@ -494,19 +463,14 @@ export default function WatchPage() {
                 <span className="nexora-watch-now-dot" />
                 {currentLabel || "—"}
               </span>
-              <div className="nexora-watch-summary-actions">
-                {currentFile?.duration ? <span className="nexora-watch-len">{clock(currentFile.duration)}</span> : null}
-                {previousFile && (
-                  <button type="button" className="nexora-act nexora-act--ghost" onClick={playPrevious}>
-                    السابق
-                  </button>
-                )}
-                {nextFile && (
-                  <button type="button" className="nexora-act nexora-act--play" onClick={playNext}>
-                    التالي
-                  </button>
-                )}
-              </div>
+              {/* The transport already owns jumping between episodes: the player
+                  bar carries next/previous next to play. A second pair here was
+                  redundant, so the summary is purely descriptive. */}
+              {currentFile?.duration ? (
+                <div className="nexora-watch-summary-actions">
+                  <span className="nexora-watch-len">{clock(currentFile.duration)}</span>
+                </div>
+              ) : null}
             </div>
             {plot ? <p className="nexora-watch-plot">{plot}</p> : null}
             {genres.length > 0 && (

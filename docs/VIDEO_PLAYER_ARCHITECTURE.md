@@ -37,20 +37,60 @@ system:
 
 ```text
 ┌───────────────────────────┐
-│  ✓              [ 12 ]    │   top-left completed · top-right episode number
-│                           │
+│  ✓              [ 12 ]    │   top-left completed · top-right LARGE episode number
+│                           │   (bare glowing numeral + accent underline)
 │         (artwork)         │
 │                           │
-│ 1080p · 1.2 GB    [42:10] │   bottom-left resolution·size · bottom-right duration
+│ 42:10  1080p  1.2 GB      │   fact strip along the bottom, above the artwork
 ├───────────────────────────┤   resume bar along the bottom edge
 ```
 
+A tile whose entry is a **part** of a film rather than an episode of a season
+labels itself `جزء` above the numeral, so a shelf of film files is never mistaken
+for a shelf of episodes (`episode_number` wins when both are present).
+
 The title is not printed on the tile: at rail width a readable line would take
 three of them and shrink the artwork to a stamp. The rail's job is picking an
-episode, and the number plus the still do that; the running title is shown in full
+entry, and the number plus the still do that; the running title is shown in full
 by the summary under the player, and the complete set of facts (title, air date,
 runtime) travels in the element's `title` tooltip. Nothing is fabricated — if the
-catalogue has no duration the badge is simply absent.
+catalogue has no duration the chip is simply absent.
+
+### Responsive layout of the watch screen
+
+The episode rail sits **beside** the player on tablet and desktop, which is the
+desktop reading order (episodes right, player left). On a phone that side column
+can only be fed by taking width from the video, so below **768px** the grid
+collapses to a single column and the rail becomes a **horizontal shelf under the
+video**, the way every streaming app does it. The video then owns the full screen
+width:
+
+| Width | Layout | Video |
+|---|---|---|
+| ≥ 1100px | two columns, 19rem rail | rest of the row |
+| 768–1100px | two columns, narrowing rail | rest of the row |
+| < 768px | one column: video, then a sideways shelf | **full width** |
+
+The work's descriptive facts (kind, year, rating, codec, size) live in the page
+header, so the side column carries a single static label and no longer offers an
+“معلومات” tab that duplicated them.
+
+## 1b. Touch gestures
+
+On a touch device a vertical drag on the **right half** of the video sets volume
+and on the **left half** sets brightness, with a centred HUD reporting the value.
+This is `useTouchGestures` plus `PlayerGestureHud`.
+
+Three properties are load-bearing:
+
+- **Brightness is a CSS filter on the player element.** A web page cannot change
+the panel backlight; dimming the content is the only honest thing it can do.
+- **The gesture first has to prove vertical intent** (clear a 14px vertical
+threshold with the horizontal axis smaller). Until then the touch is untouched, so
+tap-to-pause, double-tap-fullscreen and any future horizontal scrub keep working,
+and the browser still scrolls the page normally.
+- **The shell opts into `touch-action: pan-y`** only on touch devices, so the
+browser does not claim the drag for scrolling before the hook sees it.
 
 ## 2. Gaps closed in this round
 
